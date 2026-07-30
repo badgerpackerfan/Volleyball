@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>6-2 Rotation 1 Flow (Back Row Darker)</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #1e1e2e;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px 60px;
+  }
+  h2 { margin-bottom: 5px; text-align: center; }
+  p { color: #aaa; margin-top: 0; font-size: 14px; text-align: center; max-width: 560px; }
+  
+  .court {
+    position: relative;
+    width: 360px;
+    height: 360px;
+    background: #e09f58;
+    border: 4px solid #ffffff;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    overflow: visible;
+  }
+
+  .net {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    z-index: 20;
+  }
+
+  .ten-foot-line {
+    position: absolute;
+    top: 120px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    border-top: 2px dashed #ffffff;
+  }
+  
+  /* Base Player Dot Styling */
+  .player {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 11px;
+    color: white;
+    transition: all 1.2s ease-in-out;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  
+  /* Color Families: Back Row = Darker | Front Row = Lighter */
+  /* Red Family: Setters / Right Sides */
+  .s  { background: #c62828; } /* Back Row S (Darker Red) */
+  .rs { background: #e53935; } /* Front Row RS (Lighter Red) */
+
+  /* Blue Family: Outside Hitters */
+  .oh2 { background: #1565c0; } /* Back Row OH2 (Darker Blue) */
+  .oh1 { background: #1e88e5; } /* Front Row OH1 (Lighter Blue) */
+
+  /* Green Family: Middles */
+  .m2 { background: #2e7d32; } /* Back Row M2 (Darker Green) */
+  .m1 { background: #43a047; } /* Front Row M1 (Lighter Green) */
+
+  #phase-label {
+    margin-top: 15px;
+    font-weight: bold;
+    font-size: 14px;
+    background: #333;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #555;
+    text-align: center;
+    min-width: 380px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .btn {
+    background: #34495e;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+  }
+
+  .btn:hover { background: #4e657e; }
+  .btn:active { transform: scale(0.96); }
+  .btn-pause { background: #e74c3c; min-width: 90px; }
+  .btn-pause.paused { background: #2ecc71; }
+</style>
+</head>
+<body>
+
+  <h2>Rotation 1 (Option 1) Complete Flow</h2>
+  <p>Back Row = Darker | Front Row = Lighter (Subtle 15% Contrast Shift)</p>
+
+  <div class="court">
+    <div class="net"></div>
+    <div class="ten-foot-line"></div>
+
+    <!-- Players -->
+    <div id="S"   class="player s">S</div>
+    <div id="RS"  class="player rs">RS</div>
+    <div id="M1"  class="player m1">M1</div>
+    <div id="OH1" class="player oh1">OH1</div>
+    <div id="OH2" class="player oh2">OH2</div>
+    <div id="M2"  class="player m2">M2</div>
+  </div>
+
+  <div id="phase-label">0. Official Rotational Position (Rotation 1 Line-up)</div>
+
+  <div class="controls">
+    <button id="prev-btn" class="btn">◄ Prev</button>
+    <button id="pause-btn" class="btn btn-pause">❚❚ Pause</button>
+    <button id="next-btn" class="btn">Next ►</button>
+  </div>
+
+<script>
+  const S   = document.getElementById('S');
+  const RS  = document.getElementById('RS');
+  const M1  = document.getElementById('M1');
+  const OH1 = document.getElementById('OH1');
+  const OH2 = document.getElementById('OH2');
+  const M2  = document.getElementById('M2');
+  const label    = document.getElementById('phase-label');
+  const pauseBtn = document.getElementById('pause-btn');
+  const prevBtn  = document.getElementById('prev-btn');
+  const nextBtn  = document.getElementById('next-btn');
+
+  // Exact coordinates [Left Offset, Top Offset]
+  const phases = [
+    {
+      name: "0. Official Rotational Position (Rotation 1 Line-up)",
+      RS:  [43,  43],   M1:  [163, 43],   OH1: [283, 43],
+      OH2: [43,  253],  M2:  [163, 253],  S:   [283, 253]
+    },
+    {
+      name: "1. Pre-Serve Stack: S & OH1 hugged right, S behind OH1",
+      RS:  [43,  193],  M1:  [127, 79],   OH1: [278, 1],
+      OH2: [163, 241],  M2:  [242, 241],  S:   [278, 38]
+    },
+    {
+      name: "2. After Receive Contact: RS & OH1 loaded 2ft outside court",
+      RS:  [-41, 127],  M1:  [127, 127],  OH1: [367, 127],
+      OH2: [130, 200],  M2:  [210, 200],  S:   [223, 10]
+    },
+    {
+      name: "3. Set, Attack & Coverage: RS swings in Zone 4 while team forms cup",
+      RS:  [25,  1],    OH2: [25,  75],   M1:  [85,  25],
+      S:   [145, 55],   M2:  [120, 225],  OH1: [260, 150]
+    },
+    {
+      name: "4. BASE DEFENSE: S & LB on 10ft Line (7ft in)",
+      RS:  [283, 1],    M1:  [163, 1],    OH1: [25,  1],
+      OH2: [67,  103],  M2:  [163, 271],  S:   [259, 103]
+    }
+  ];
+
+  let currentPhase = 0;
+  let isPaused = false;
+  let timer = null;
+
+  function renderPhase(index) {
+    const p = phases[index];
+    label.innerText = p.name;
+
+    S.style.left   = p.S[0]   + 'px'; S.style.top   = p.S[1]   + 'px';
+    RS.style.left  = p.RS[0]  + 'px'; RS.style.top  = p.RS[1]  + 'px';
+    M1.style.left  = p.M1[0]  + 'px'; M1.style.top  = p.M1[1]  + 'px';
+    OH1.style.left = p.OH1[0] + 'px'; OH1.style.top = p.OH1[1] + 'px';
+    OH2.style.left = p.OH2[0] + 'px'; OH2.style.top = p.OH2[1] + 'px';
+    M2.style.left  = p.M2[0]  + 'px'; M2.style.top  = p.M2[1]  + 'px';
+  }
+
+  function nextPhase() {
+    currentPhase = (currentPhase + 1) % phases.length;
+    renderPhase(currentPhase);
+  }
+
+  function prevPhase() {
+    currentPhase = (currentPhase - 1 + phases.length) % phases.length;
+    renderPhase(currentPhase);
+  }
+
+  function startAutoPlay() { timer = setInterval(nextPhase, 3200); }
+  function stopAutoPlay() { clearInterval(timer); }
+
+  pauseBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    if (isPaused) {
+      stopAutoPlay();
+      pauseBtn.innerText = "▶ Resume";
+      pauseBtn.classList.add('paused');
+    } else {
+      nextPhase();
+      startAutoPlay();
+      pauseBtn.innerText = "❚❚ Pause";
+      pauseBtn.classList.remove('paused');
+    }
+  });
+
+  prevBtn.addEventListener('click', () => {
+    if (!isPaused) {
+      isPaused = true;
+      stopAutoPlay();
+      pauseBtn.innerText = "▶ Resume";
+      pauseBtn.classList.add('paused');
+    }
+    prevPhase();
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (!isPaused) {
+      isPaused = true;
+      stopAutoPlay();
+      pauseBtn.innerText = "▶ Resume";
+      pauseBtn.classList.add('paused');
+    }
+    nextPhase();
+  });
+
+  renderPhase(0);
+  startAutoPlay();
+</script>
+</body>
+</html>
