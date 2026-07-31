@@ -486,9 +486,18 @@
   body.focus .summary,
   body.focus .picker,
   body.focus .scrim,
-  body.focus .hint,
   body.focus .legend,
   body.focus #phase-tip { display: none; }
+
+  /* Gestures are the only way to change anything in full screen, so the hint
+     earns its space - but only where there's a finger to do them with. */
+  @media (pointer: coarse) {
+    body.focus .hint {
+      display: block;
+      margin-top: 6px;
+      font-size: clamp(0.72rem, 1.7vmin, 0.92rem);
+    }
+  }
 
   /* With this padding the stage is 0.96x as tall as it is wide, so dividing
      the leftover height by that sizes the court to whichever viewport axis
@@ -499,6 +508,15 @@
     width: min(100vw, calc((100dvh - 172px) * 1.04));
     margin: 0;
     padding: 6% 12% 14%;
+  }
+
+  /* Must follow the rule above: same specificity, so source order decides.
+     Reserves the gesture hint's line only where the hint is shown. */
+  @media (pointer: coarse) {
+    body.focus .stage {
+      width: min(100vw, calc((100vh - 200px) * 1.04));
+      width: min(100vw, calc((100dvh - 200px) * 1.04));
+    }
   }
 
   body.focus .step { margin-top: 0; }
