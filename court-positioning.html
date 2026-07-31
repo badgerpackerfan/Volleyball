@@ -938,7 +938,11 @@
     dset:    { title: function (v) { return v.def.setTitle; },
                tip:   function (v) { return v.def.setTip; } },
     serve:   { title: "Serving",
-               tip: "Server steps behind the end line. The other five cover the court." }
+               tip: "Server steps behind the end line. The other five cover the court." },
+    away:    { title: "Serve is up",
+               tip: "Ball's away. The server steps in across the end line." },
+    over:    { title: "Over the net",
+               tip: "As the ball crosses, all six move to their base defense spots." }
   };
 
   function resolve(x, v) { return typeof x === "function" ? x(v) : x; }
@@ -969,12 +973,36 @@
         };
       });
     });
+    /* Watch the serve travel. The front-row pair trade sides along the net
+       during this, crossing at roughly t=0.15..0.45, so the keyframes stay
+       clear of that band - otherwise a step would rest with two dots on top
+       of each other. */
+    const sv = rot.serving;
+    const server = PLAYERS.filter(function (id) { return sv[1][id][1] > 300; })[0];
+
+    function blend(t, only) {
+      const f = {};
+      PLAYERS.forEach(function (id) {
+        const k = (only && id !== only) ? 0 : t;
+        f[id] = [sv[1][id][0] + (sv[2][id][0] - sv[1][id][0]) * k,
+                 sv[1][id][1] + (sv[2][id][1] - sv[1][id][1]) * k];
+      });
+      return f;
+    }
+
+    const away = blend(0.3, server);   // only the server has moved yet
+    const over = blend(0.8);
+    away.ball = [240, 168, 1];         // mid-court, still climbing
+    over.ball = [200, -30, 1];         // past the net; base fades it in place
+
     plays.serving = {
       short: "Serving",
       phases: [
-        { k: "start", f: rot.serving[0] },
-        { k: "serve", f: rot.serving[1] },
-        { k: "base",  f: rot.serving[2] }
+        { k: "start", f: sv[0] },
+        { k: "serve", f: sv[1] },
+        { k: "away",  f: away },
+        { k: "over",  f: over },
+        { k: "base",  f: sv[2] }
       ]
     };
     return plays;
