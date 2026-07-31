@@ -326,7 +326,7 @@
 
   /* ---------- Collapsed picker (phones) ---------- */
 
-  .summary, .scrim, .picker-done, .hint, .picker .legend { display: none; }
+  .summary, .scrim, .picker-done, .picker .legend { display: none; }
 
   .hint {
     margin: 8px auto 0;
@@ -354,7 +354,6 @@
     }
 
     h1 { font-size: 1.2rem; margin-bottom: 8px; }
-    .hint { display: block; }
 
     /* The key moves into the sheet; the footer copy would push us to scroll. */
     .wrap > .legend { display: none; }
@@ -490,33 +489,21 @@
   body.focus #phase-tip { display: none; }
 
   /* Gestures are the only way to change anything in full screen, so the hint
-     earns its space - but only where there's a finger to do them with. */
-  @media (pointer: coarse) {
-    body.focus .hint {
-      display: block;
-      margin-top: 6px;
-      font-size: clamp(0.72rem, 1.7vmin, 0.92rem);
-    }
+     stays visible there and scales with the viewport. */
+  body.focus .hint {
+    margin-top: 6px;
+    font-size: clamp(0.72rem, 1.7vmin, 0.92rem);
   }
 
   /* With this padding the stage is 0.96x as tall as it is wide, so dividing
      the leftover height by that sizes the court to whichever viewport axis
-     runs out first. The 172px reserve covers the state line, dots, step title
-     and controls. */
+     runs out first. The 200px reserve covers the state line, dots, step title,
+     controls and the gesture hint. */
   body.focus .stage {
-    width: min(100vw, calc((100vh - 172px) * 1.04));
-    width: min(100vw, calc((100dvh - 172px) * 1.04));
+    width: min(100vw, calc((100vh - 200px) * 1.04));
+    width: min(100vw, calc((100dvh - 200px) * 1.04));
     margin: 0;
     padding: 6% 12% 14%;
-  }
-
-  /* Must follow the rule above: same specificity, so source order decides.
-     Reserves the gesture hint's line only where the hint is shown. */
-  @media (pointer: coarse) {
-    body.focus .stage {
-      width: min(100vw, calc((100vh - 200px) * 1.04));
-      width: min(100vw, calc((100dvh - 200px) * 1.04));
-    }
   }
 
   body.focus .step { margin-top: 0; }
