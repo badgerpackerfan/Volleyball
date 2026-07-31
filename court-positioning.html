@@ -449,7 +449,21 @@
      even where element fullscreen is unsupported (notably Safari on iOS).
      Native fullscreen is requested on top of it when available. */
 
-  .exit-focus { display: none; }
+  .exit-focus, .focus-title { display: none; }
+
+  /* In full screen the picker and the summary bar are both hidden, so this
+     is the only thing saying what you're looking at. */
+  body.focus .focus-title {
+    display: block;
+    margin: 0 0 8px;
+    padding: 0 60px;
+    color: var(--ink-dim);
+    font-size: clamp(0.8rem, 2vmin, 1.05rem);
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-align: center;
+    text-wrap: balance;
+  }
 
   body.focus {
     height: 100vh;
@@ -478,10 +492,11 @@
 
   /* With this padding the stage is 0.96x as tall as it is wide, so dividing
      the leftover height by that sizes the court to whichever viewport axis
-     runs out first. The 146px reserve covers the dots, title and controls. */
+     runs out first. The 172px reserve covers the state line, dots, step title
+     and controls. */
   body.focus .stage {
-    width: min(100vw, calc((100vh - 146px) * 1.04));
-    width: min(100vw, calc((100dvh - 146px) * 1.04));
+    width: min(100vw, calc((100vh - 172px) * 1.04));
+    width: min(100vw, calc((100dvh - 172px) * 1.04));
     margin: 0;
     padding: 6% 12% 14%;
   }
@@ -563,6 +578,8 @@
     <button class="picker-done" id="picker-done" type="button">Done</button>
   </div>
 
+  <p class="focus-title" id="focus-title"></p>
+
   <div class="stage">
     <div class="court">
       <div class="net"></div>
@@ -639,6 +656,12 @@
   // pair is which is conveyed by the back-row ring, not by a 1/2 suffix.
   const ROLE       = { S: "S", RS: "RS", M1: "M", M2: "M", OH1: "OH", OH2: "OH" };
   const ROLE_CLASS = { S: "s", RS: "rs", M1: "m", M2: "m", OH1: "oh", OH2: "oh" };
+
+  /* The three states below are only half a lap. After all three, every player
+     has rotated three spots, which lands each on their partner's old role -
+     the two setters have swapped ends. Flipping this pairing on the wrap makes
+     3 & 6 -> 1 & 4 a single clockwise step instead of jumping backwards. */
+  const PARTNER = { S: "RS", RS: "S", M1: "M2", M2: "M1", OH1: "OH2", OH2: "OH1" };
 
   // Where the set goes. Order matters: pills read left-to-right across the net.
   const SETS = {
@@ -976,6 +999,7 @@
   const scrim       = $("scrim");
   const doneBtn     = $("picker-done");
   const hintEl      = $("hint");
+  const focusTitle  = $("focus-title");
   const rotBox    = $("rotation-pills");
   const passBox   = $("passer-pills");
   const playBox   = $("play-pills");
@@ -991,6 +1015,7 @@
   let slotKey = "left";      // which back-court spot passes - likewise
   let defKey  = "free";      // which defensive scenario - chosen from the pills
   let freeKey = "backL";     // which non-setter passes the free ball
+  let swapped = false;       // true on the second lap: partners have traded roles
   let current = null;        // the play being shown, built by rebuild()
   let step    = 0;
   let playing = true;
@@ -998,6 +1023,10 @@
   let timer   = null;
 
   const pct = function (v) { return (v / GRID * 100) + "%"; };
+
+  // Which role this dot is playing right now. Defense has its own fixed
+  // line-up, so the lap swap doesn't apply there.
+  function roleOf(id) { return (swapped && !defending()) ? PARTNER[id] : id; }
 
   function rotation() { return ROTATIONS[rotKey]; }
   function defending() { return topic === "defense"; }
@@ -1154,8 +1183,12 @@
       return;
     }
     const keys = Object.keys(ROTATIONS);
+    const n = keys.length;
     const i = keys.indexOf(rotKey);
-    selectRotation(keys[((i + dir) % keys.length + keys.length) % keys.length]);
+    const j = ((i + dir) % n + n) % n;
+    // Wrapping past either end completes a lap, so the partners trade roles.
+    if ((dir > 0 && j < i) || (dir < 0 && j > i)) { swapped = !swapped; }
+    selectRotation(keys[j]);
   }
 
   // Defense has no second axis, so a sideways swipe does nothing there.
@@ -1217,10 +1250,11 @@
     const target = rotation().liberoTarget;
     const start = rotation().start;
     PLAYERS.forEach(function (id) {
-      const isLib  = libero && id === target;
-      const isBack = start[id][1] > GRID / 2;
-      els[id].className = "player " + (isLib ? "lib" : ROLE_CLASS[id]) + (isBack ? " back" : "");
-      els[id].textContent = isLib ? "L" : ROLE[id];
+      const r      = roleOf(id);
+      const isLib  = libero && r === target;
+      const isBack = start[r][1] > GRID / 2;
+      els[id].className = "player " + (isLib ? "lib" : ROLE_CLASS[r]) + (isBack ? " back" : "");
+      els[id].textContent = isLib ? "L" : ROLE[r];
     });
     liberoBtn.textContent = "Libero: " + (libero ? "in" : "out");
     liberoBtn.setAttribute("aria-pressed", String(libero));
@@ -1246,8 +1280,9 @@
     const f = ph.f;
 
     PLAYERS.forEach(function (id) {
-      els[id].style.left = pct(f[id][0]);
-      els[id].style.top  = pct(f[id][1]);
+      const r = roleOf(id);
+      els[id].style.left = pct(f[r][0]);
+      els[id].style.top  = pct(f[r][1]);
     });
 
     ball.style.left    = pct(f.ball[0]);
@@ -1381,6 +1416,21 @@
     }
     summaryText.textContent = bits.join("  ·  ");
 
+    // Fuller version for full screen, where there's room and no other clue.
+    const full = [];
+    if (defending()) {
+      full.push("Defense", DEFENSE[defKey].short);
+    } else {
+      full.push("Rotation " + rotation().label);
+      if (!serving()) {
+        full.push(rotation().passing[passKey].short + " passes", "Serve receive");
+      } else {
+        full.push("Serving");
+      }
+    }
+    if (libero) { full.push("Libero in"); }
+    focusTitle.textContent = full.join("  ·  ");
+
     // Don't advertise the tap where this rotation has no passer to swap to.
     hintEl.textContent = defending()
       ? "Swipe up or down to change the situation"
@@ -1501,6 +1551,7 @@
   liberoBtn.addEventListener("click", function () {
     libero = !libero;
     renderRoster();
+    updateSummary();   // the full-screen state line names the libero
   });
 
   document.addEventListener("keydown", function (e) {
