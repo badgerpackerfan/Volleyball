@@ -63,6 +63,7 @@
 
   body {
     margin: 0;
+    overscroll-behavior: none;
     padding: 12px 14px calc(20px + env(safe-area-inset-bottom));
     background: var(--bg);
     color: var(--ink);
@@ -72,6 +73,1650 @@
     letter-spacing: -0.006em;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 560px; margin: 0 auto; }
+
+  h1 {
+    font-size: 1.3rem;
+    margin: 0 0 10px;
+    text-align: center;
+    letter-spacing: -0.015em;
+  }
+
+  /* ---------- Pill selectors ---------- */
+
+  .pill-label {
+    margin: 11px 0 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .pill-label:first-of-type { margin-top: 0; }
+
+  .pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 0;
+  }
+
+  /* min-width lets a long pill row wrap on a phone and sit on one
+     row once there's space, with no media query. */
+  .pill {
+    flex: 1 1 auto;
+    min-width: 6.2em;
+    min-height: 44px;
+    padding: 6px 4px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .pill[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* The passer choice doesn't apply while serving. */
+  .muted { opacity: .38; pointer-events: none; }
+
+  /* ---------- Court ---------- */
+
+  .stage {
+    width: 100%;
+    /* Padding leaves room for players who step off-court (server, wide hitters) */
+    padding: 7% 13% 16%;
+    margin-top: 4px;
+  }
+
+  .court {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    container-type: inline-size;
+    background: linear-gradient(var(--court), var(--court-2));
+    border: 3px solid var(--chalk);
+    border-radius: 3px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+
+  .net {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1.7%;
+    background: var(--chalk);
+    z-index: 20;
+  }
+
+  .attack-line {
+    position: absolute;
+    top: 33.333%;
+    left: 0;
+    width: 100%;
+    border-top: 2px dashed rgba(255,255,255,.75);
+  }
+
+  .mark {
+    position: absolute;
+    font-size: 3.2cqw;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--ink-dim);
+  }
+  .mark-net    { bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 2%; }
+  .mark-attack { top: 33.333%; right: 100%; margin-right: 2%; transform: translateY(-50%); white-space: nowrap; }
+
+  /* ---------- Players ---------- */
+
+  .player {
+    position: absolute;
+    width: 13.333%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4.6cqw;
+    font-weight: 700;
+    color: #fff;
+    box-shadow: 0 2px 7px rgba(0,0,0,.4);
+    transition: left 1.1s ease-in-out, top 1.1s ease-in-out;
+    z-index: 10;
+  }
+
+  .s,
+  .rs  { background: var(--c-set); }
+  .oh  { background: var(--c-oh); }
+  .m   { background: var(--c-mid); }
+
+  /* Ring = back-row player. Order matters: .lib must win over .back. */
+  .player.back { box-shadow: 0 2px 7px rgba(0,0,0,.4), inset 0 0 0 0.9cqw rgba(255,255,255,.92); }
+  .player.lib  { background: #fff; color: #111; box-shadow: 0 2px 7px rgba(0,0,0,.4), inset 0 0 0 0.9cqw #111; }
+
+  .ball {
+    position: absolute;
+    width: 8.333%;
+    aspect-ratio: 1 / 1;
+    background: #fff;
+    border-radius: 50%;
+    color: #1a1a1a;
+    box-shadow: 0 3px 9px rgba(0,0,0,.45);
+    transition: left 1.1s ease-in-out, top 1.1s ease-in-out, opacity .5s;
+    z-index: 15;
+    pointer-events: none;
+  }
+  .ball svg { width: 100%; height: 100%; display: block; }
+
+  /* ---------- Step readout ---------- */
+
+  .step { text-align: center; margin-top: 2px; }
+
+  .dots {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    margin-bottom: 4px;
+  }
+  .dot {
+    width: 30px; height: 30px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .dot::after {
+    content: "";
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--line);
+    transition: background .2s, transform .2s;
+  }
+  .dot[aria-current="true"]::after { background: var(--accent); transform: scale(1.45); }
+
+  #phase-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  #phase-tip {
+    margin: 4px auto 0;
+    max-width: 34em;
+    color: var(--ink-dim);
+    font-size: 0.94rem;
+    min-height: 2.8em;
+  }
+
+  /* ---------- Controls ---------- */
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    min-height: 54px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, transform .08s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-play { flex: 1.4; background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .controls-secondary { margin-top: 8px; }
+  .controls-secondary .btn { min-height: 50px; }
+
+  .btn-libero[aria-pressed="true"] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--bg);
+  }
+
+  /* ---------- Legend ---------- */
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 14px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
+    color: var(--ink-dim);
+  }
+  .legend li { display: flex; align-items: center; gap: 6px; list-style: none; }
+  .swatch {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .swatch.lib  { border: 3px solid #111; background: #fff; box-shadow: none; }
+  .swatch.ring { background: var(--ink-dim); box-shadow: inset 0 0 0 3px #fff; }
+
+  /* Rotation and passer mean nothing in defense; the situation row means
+     nothing outside it. Swapped by a body class rather than inline styles. */
+  #lbl-defense, #defense-pills { display: none; }
+  body.mode-defense #lbl-defense  { display: block; }
+  body.mode-defense #defense-pills { display: flex; }
+  body.mode-defense #lbl-rotation,
+  body.mode-defense #rotation-pills,
+  body.mode-defense #lbl-passer,
+  body.mode-defense #passer-pills,
+  body.mode-defense #lbl-play,
+  body.mode-defense #play-pills { display: none; }
+
+  /* ---------- Collapsed picker (phones) ---------- */
+
+  .summary, .scrim, .picker-done, .picker .legend { display: none; }
+
+  .hint {
+    margin: 8px auto 0;
+    max-width: 30em;
+    color: var(--ink-dim);
+    font-size: 0.78rem;
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  @media (max-width: 700px) {
+    /* Gestures need both axes, so the court can't also be a scroll surface.
+       The rest of the layout is sized to fit without scrolling.
+       Full bleed with side padding trimmed to the minimum the off-court
+       players need (14.2% of court width) buys ~13% more court. */
+    .stage {
+      touch-action: none;
+      /* Full bleed, but never taller than the room left over - otherwise
+         landscape would overflow and there'd be nothing left to scroll with. */
+      width: min(calc(100% + 28px), calc((100dvh - 272px) * 1.02));
+      position: relative;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 7% 11.5% 14%;
+    }
+
+    h1 { font-size: 1.2rem; margin-bottom: 8px; }
+
+    /* The key moves into the sheet; the footer copy would push us to scroll. */
+    .wrap > .legend { display: none; }
+    .picker .legend {
+      display: flex;
+      margin-top: 14px;
+      padding-top: 12px;
+      font-size: 0.8rem;
+    }
+
+    .step { margin-top: 0; }
+    #phase-tip { min-height: 2.4em; font-size: 0.88rem; }
+    .controls { margin-top: 8px; }
+
+    .summary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 46px;
+      padding: 6px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--ink);
+      font: inherit;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    /* Border triangle rather than a glyph, so it can't render as tofu. */
+    .summary::after {
+      content: "";
+      width: 0; height: 0;
+      border: 5px solid transparent;
+      border-top-color: currentColor;
+      margin-top: 4px;
+      flex: none;
+    }
+
+    .picker {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 60;
+      max-height: 86dvh;
+      overflow-y: auto;
+      padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+      background: var(--card);
+      border-radius: 18px 18px 0 0;
+      box-shadow: 0 -10px 34px rgba(0,0,0,.28);
+      transform: translateY(101%);
+      transition: transform .25s ease;
+    }
+    body.picker-open .picker { transform: translateY(0); }
+
+    .scrim {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      background: rgba(0,0,0,.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+    body.picker-open .scrim { opacity: 1; pointer-events: auto; }
+    body.picker-open { overflow: hidden; }
+
+    .picker-done {
+      display: block;
+      width: 100%;
+      min-height: 50px;
+      margin-top: 14px;
+      border: 0;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  }
+
+  @media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+    .picker, .scrim { transition: none; }
+  }
+
+  /* ---------- Two columns on a wide landscape screen ----------
+     Single column wastes most of the width here and still needs scrolling.
+     Selectors go in a sidebar; the court takes the rest. */
+  @media (min-width: 900px) and (orientation: landscape) {
+    .wrap {
+      max-width: 1180px;
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+      grid-template-areas:
+        "title  court"
+        "picker court"
+        "picker step"
+        "picker controls"
+        "picker hint";
+      column-gap: 32px;
+      align-items: start;
+    }
+
+    h1        { grid-area: title;    text-align: left; margin: 2px 0 12px; }
+    .picker   { grid-area: picker; }
+    .stage    { grid-area: court;    margin: 0 auto; }
+    .step     { grid-area: step; }
+    .controls { grid-area: controls; }
+    .hint     { grid-area: hint; }
+
+    /* Still height-bound, so cap the court by the room left under it.
+       224px covers the step block, controls, hint and body padding. */
+    .stage {
+      width: min(100%, calc((100vh - 224px) * 1.03));
+      width: min(100%, calc((100dvh - 224px) * 1.03));
+    }
+
+    /* Safe here: this layout fits without scrolling, so the court can own
+       its drags instead of handing them to the browser. */
+    .stage { touch-action: none; }
+
+    /* Narrower than the default 6.2em so three rotation pills share a row
+       in a 288px column instead of wrapping to two. */
+    .picker .pill { min-width: 5.8em; }
+
+    /* The key reads better stacked in a narrow column than wrapped. */
+    .wrap > .legend { display: none; }
+    .picker .legend {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 7px;
+      margin-top: 16px;
+      padding-top: 14px;
+    }
+  }
+
+  /* ---------- Full-screen focus mode ----------
+     Driven by a body class, not the Fullscreen API, so it fills the window
+     even where element fullscreen is unsupported (notably Safari on iOS).
+     Native fullscreen is requested on top of it when available. */
+
+  .exit-focus, .focus-title { display: none; }
+
+  /* In full screen the picker and the summary bar are both hidden, so this
+     is the only thing saying what you're looking at. */
+  body.focus .focus-title {
+    display: block;
+    margin: 0 0 8px;
+    padding: 0 60px;
+    color: var(--ink-dim);
+    font-size: clamp(0.8rem, 2vmin, 1.05rem);
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  body.focus {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.focus .wrap {
+    max-width: none;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  body.focus h1,
+  body.focus .summary,
+  body.focus .picker,
+  body.focus .scrim,
+  body.focus .legend,
+  body.focus #phase-tip { display: none; }
+
+  /* Gestures are the only way to change anything in full screen, so the hint
+     stays visible there and scales with the viewport. */
+  body.focus .hint {
+    margin-top: 6px;
+    font-size: clamp(0.72rem, 1.7vmin, 0.92rem);
+  }
+
+  /* With this padding the stage is 0.96x as tall as it is wide, so dividing
+     the leftover height by that sizes the court to whichever viewport axis
+     runs out first. The 200px reserve covers the state line, dots, step title,
+     controls and the gesture hint. */
+  body.focus .stage {
+    touch-action: none;   /* full screen always fits, so gestures win here */
+    width: min(100vw, calc((100vh - 200px) * 1.04));
+    width: min(100vw, calc((100dvh - 200px) * 1.04));
+    margin: 0;
+    padding: 6% 12% 14%;
+  }
+
+  body.focus .step { margin-top: 0; }
+  body.focus #phase-title { font-size: clamp(1.15rem, 3.4vmin, 1.9rem); }
+  body.focus .controls { width: min(520px, 92vw); margin-top: 8px; }
+
+  body.focus .exit-focus {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: 46px; height: 46px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 50;
+  }
+
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .player, .ball, .btn, .pill, .dot::after { transition: none; }
+  }
+
+  @media (min-width: 600px) {
+    h1 { font-size: 1.65rem; }
+    .pill { font-size: 0.95rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <h1>Where do I go?</h1>
+
+  <!-- Phone only: collapses the picker to one line. Inert on wider screens. -->
+  <button class="summary" id="summary-btn" type="button"
+          aria-expanded="false" aria-controls="picker"><span id="summary-text"></span></button>
+
+  <div class="scrim" id="scrim"></div>
+
+  <div class="picker" id="picker">
+    <p class="pill-label" id="lbl-topic">Show</p>
+    <div class="pills" id="topic-pills" role="group" aria-labelledby="lbl-topic"></div>
+
+    <!-- Two rows share the same slot under Show; only one is ever visible,
+         so both carry the same label. -->
+    <p class="pill-label" id="lbl-play">Situations</p>
+    <div class="pills" id="play-pills" role="group" aria-labelledby="lbl-play"></div>
+
+    <p class="pill-label" id="lbl-defense">Situations</p>
+    <div class="pills" id="defense-pills" role="group" aria-labelledby="lbl-defense"></div>
+
+    <p class="pill-label" id="lbl-rotation">Rotation</p>
+    <div class="pills" id="rotation-pills" role="group" aria-labelledby="lbl-rotation"></div>
+
+    <p class="pill-label" id="lbl-passer">Who drops back to pass</p>
+    <div class="pills" id="passer-pills" role="group" aria-labelledby="lbl-passer"></div>
+
+    <div class="controls controls-secondary">
+      <button id="libero-btn" class="btn btn-libero" type="button" aria-pressed="false">Libero: out</button>
+      <button id="focus-btn" class="btn" type="button" aria-pressed="false">Full screen</button>
+    </div>
+
+    <!-- Phone-only copy of the key; the footer legend is hidden at this size
+         so the layout fits without scrolling. Both are filled by renderLegend. -->
+    <ul class="legend"></ul>
+
+    <button class="picker-done" id="picker-done" type="button">Done</button>
+  </div>
+
+  <p class="focus-title" id="focus-title"></p>
+
+  <div class="stage">
+    <div class="court">
+      <div class="net"></div>
+      <div class="attack-line"></div>
+      <span class="mark mark-net">NET</span>
+      <span class="mark mark-attack">10 ft</span>
+
+      <!-- Labels and the back-row ring are assigned by renderRoster(). -->
+      <div id="S"   class="player s">S</div>
+      <div id="RS"  class="player rs">RS</div>
+      <div id="M1"  class="player m">M</div>
+      <div id="OH1" class="player oh">OH</div>
+      <div id="OH2" class="player oh">OH</div>
+      <div id="M2"  class="player m">M</div>
+
+      <div id="ball" class="ball">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="volleyball"
+             role="img" aria-label="Volleyball"
+             fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round">
+          <circle cx="256" cy="256" r="228"/>
+          <path d="M 379.8,64.7 C 400.6,92.6 421.4,120.6 442.2,148.5"/>
+          <path d="M 132.2,64.7 C 111.4,92.6 90.6,120.6 69.8,148.5"/>
+          <path d="M 483.6,244.5 C 469.8,212.5 456.0,180.5 442.2,148.5"/>
+          <path d="M 359.8,458.8 C 325.2,462.9 290.6,466.9 256.0,471.0"/>
+          <path d="M 442.2,148.5 C 411.1,166.4 380.1,184.3 349.1,202.3 C 318.1,220.2 287.0,238.1 256.0,256.0"/>
+          <path d="M 28.4,244.5 C 42.2,212.5 56.0,180.5 69.8,148.5"/>
+          <path d="M 152.2,458.8 C 186.8,462.9 221.4,466.9 256.0,471.0"/>
+          <path d="M 69.8,148.5 C 100.9,166.4 131.9,184.3 162.9,202.3 C 193.9,220.2 225.0,238.1 256.0,256.0"/>
+          <path d="M 256.0,471.0 C 256.0,435.1 256.0,399.3 256.0,363.5 C 256.0,327.7 256.0,291.8 256.0,256.0"/>
+          <path d="M 43.8,339.1 C 61.7,359.3 75.7,385.0 97.4,399.7 C 119.1,414.4 147.7,422.7 174.2,427.3 C 200.6,431.8 228.7,427.0 256.0,426.8"/>
+          <path d="M 34.1,213.3 C 53.1,234.9 68.3,260.9 91.1,278.2 C 113.9,295.4 143.3,306.2 170.8,316.8 C 198.3,327.3 227.6,333.2 256.0,341.4"/>
+          <path d="M 474.1,190.0 C 475.4,197.8 476.6,205.5 477.9,213.3"/>
+          <path d="M 434.0,398.2 C 442.6,372.6 457.9,347.7 459.8,321.5 C 461.7,295.3 454.5,266.4 445.2,241.2 C 435.9,216.1 417.7,194.1 403.9,170.6"/>
+          <path d="M 330.0,469.5 C 339.2,442.3 354.1,416.1 357.7,387.7 C 361.2,359.4 355.8,328.5 351.2,299.4 C 346.6,270.3 337.1,242.0 330.0,213.3"/>
+          <path d="M 89.8,100.2 C 95.9,95.2 102.0,90.2 108.1,85.2"/>
+          <path d="M 290.1,30.7 C 263.7,36.1 234.4,35.3 210.8,46.8 C 187.2,58.2 165.7,78.9 148.6,99.5 C 131.5,120.1 121.6,146.9 108.1,170.6"/>
+          <path d="M 403.9,85.2 C 375.7,90.8 345.6,91.0 319.3,102.1 C 292.9,113.2 268.8,133.3 246.0,151.8 C 223.1,170.4 203.3,192.8 182.0,213.3"/>
+          <path d="M 204.1,477.9 C 196.8,475.1 189.4,472.3 182.0,469.5"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="dots" id="dots" role="group" aria-label="Steps"></div>
+    <h2 id="phase-title">Starting rotation</h2>
+    <p id="phase-tip"></p>
+  </div>
+
+  <div class="controls">
+    <button id="prev-btn"  class="btn" type="button">Back</button>
+    <button id="play-btn"  class="btn btn-play" type="button" aria-pressed="true">Pause</button>
+    <button id="next-btn"  class="btn" type="button">Next</button>
+  </div>
+  <p class="hint" id="hint"></p>
+
+  <button id="exit-focus" class="exit-focus" type="button" aria-label="Exit full screen">&times;</button>
+
+  <ul class="legend"></ul>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Frames are authored on a 360x360 grid and converted to percentages at
+  // render time, so the court scales to any screen.
+  const GRID = 360;
+
+  const PLAYERS = ["S", "RS", "M1", "OH1", "OH2", "M2"];
+
+  // Two players share each role, so dots show the role only. Which of the
+  // pair is which is conveyed by the back-row ring, not by a 1/2 suffix.
+  const ROLE       = { S: "S", RS: "RS", M1: "M", M2: "M", OH1: "OH", OH2: "OH" };
+  const ROLE_CLASS = { S: "s", RS: "rs", M1: "m", M2: "m", OH1: "oh", OH2: "oh" };
+
+  /* The three states below are only half a lap. After all three, every player
+     has rotated three spots, which lands each on their partner's old role -
+     the two setters have swapped ends. Flipping this pairing on the wrap makes
+     3 & 6 -> 1 & 4 a single clockwise step instead of jumping backwards. */
+  const PARTNER = { S: "RS", RS: "S", M1: "M2", M2: "M1", OH1: "OH2", OH2: "OH1" };
+
+  // Where the set goes. Order matters: pills read left-to-right across the net.
+  const SETS = {
+    outside: { short: "Set outside", target: "outside" },
+    middle:  { short: "Set middle",  target: "middle" },
+    right:   { short: "Set right",   target: "right side" },
+    cross:   { short: "Cross (X)",   target: "right side", attackTitle: "Cross play — cover!" }
+  };
+  const SET_ORDER = ["outside", "middle", "right", "cross"];
+
+  // Which back-court spot takes the serve.
+  const SLOTS = ["left", "middle", "right"];
+  const SLOT_NAME = { left: "Left back", middle: "Middle back", right: "Right back" };
+  /* How that passer steps into the ball from their serve-receive spot. The
+     left/right values reproduce the original hand-drawn frames; the middle
+     step is kept short so it doesn't crowd the outside crossing behind it. */
+  const SLOT_STEP = { left: [42, 0], middle: [0, -14], right: [-40, 0] };
+
+  /* ------------------------------------------------------------------
+     Defense. Base defense is identical in all three rotations - three at
+     the net, two wings on the attack line, one deep middle - so each
+     scenario is defined once by slot and the players are filled in per
+     rotation. The opponent is above the net, so they face us: a set to
+     their left pin attacks our right, and one to their right pin our left.
+
+     The back three play perimeter: deep and wide, middle of the court
+     deliberately left open for the pulled-off blocker to cover.
+     ------------------------------------------------------------------ */
+  const TOPICS = [["rotations", "Rotations"], ["defense", "Defense"]];
+  const MODES  = [["receive", "Serve receive"], ["serve", "Serving"]];
+
+  const DEF_ORDER = ["free", "down", "opp5", "opp2", "oppC"];
+
+  /* Defense is taught by court position, not by rotation - base defense is
+     the same shape in every rotation, so nothing here depends on one. */
+  const DEF_BASE  = { netL: [18, 7], netM: [156, 7], netR: [276, 7],
+                      backL: [60, 96], backR: [252, 96], backM: [156, 264] };
+  const DEF_SLOT  = { OH1: "netL", M1: "netM", RS: "netR",
+                      OH2: "backL", M2: "backM", S: "backR" };
+  const DEF_LIBERO = "M2";   // the dot sitting in middle back
+  const SPOT_NAME  = { netL: "Left front", netM: "Middle front", netR: "Right front",
+                       backL: "Left back", backM: "Middle back", backR: "Right back" };
+
+  const DEFENSE = {
+    free: {
+      short:     "Free ball",
+      readTitle: "Free ball!",
+      readTip:   "No attack coming — call it loud and get off the net.",
+      setTitle:  "Free ball formation",
+      setTip:    "Setter sprints to the net. Hitters pull off to the 10 ft line so they can approach. The outside and middle split the back court in half.",
+      // Front row sit at y=114 so the front of the circle just laps the
+      // 10 ft line (y=120). The two back-court passers take half the width
+      // each: centres on x=90 and x=270, i.e. left edges 66 and 246.
+      spots: { netL: [18, 114], netM: [138, 114], netR: [288, 114],
+               backL: [66, 240], backM: [246, 240], backR: [240, 6] },
+      ball: [[168, -42, 1], [76, 250, 1]],
+      // Everyone but the setter takes a turn passing, one per loop.
+      passers: ["netL", "netM", "netR", "backL", "backM"]
+    },
+    down: {
+      short:     "Down ball",
+      readTitle: "Down ball!",
+      readTip:   "They're hitting, but standing — no jump, so no block. Call it and get off the net.",
+      setTitle:  "Ready to dig",
+      setTip:    "Nobody blocks. All six drop into the court, get low, and play it.",
+      spots: { netL: [24, 126], netM: [150, 120], netR: [282, 126],
+               backL: [36, 246], backM: [156, 288], backR: [270, 246] },
+      ball: [[204, -42, 1], [204, -6, 1]],
+      extra: [
+        { title: "Middle back digs it",
+          tip:   "The ball comes in deep. Middle back steps behind it and digs. The setter releases toward the net.",
+          move:  { M2: [174, 288], S: [240, 150] },
+          ball:  [184, 298, 1] },
+        { title: "Up to the setter",
+          tip:   "The dig goes high to the setter at the net — now you're on offense.",
+          move:  { S: [240, 6] },
+          ball:  [250, 16, 1] }
+      ]
+    },
+    // Named by the opponent's set call: a 5 goes to their left pin, a 2 to
+    // their middle, a C behind the setter to their right pin.
+    opp5: {
+      short:     "Opponent's 5",
+      readTitle: "They set a 5",
+      readTip:   "A high ball out to their outside hitter, so the attack is coming at your right side.",
+      setTitle:  "Block up, dig the perimeter",
+      setTip:    "Right front and middle close the block. Left front pulls off to cover the tip. The back three go deep and wide.",
+      spots: { netR: [276, 0], netM: [228, 0], netL: [36, 114],
+               backR: [288, 216], backM: [180, 288], backL: [24, 240] },
+      ball: [[276, -48, 1], [276, -6, 1]]
+    },
+    opp2: {
+      short:     "Opponent's 2",
+      readTitle: "They set a 2",
+      readTip:   "A ball to their middle, coming straight up the gut.",
+      setTitle:  "Block up, dig the perimeter",
+      setTip:    "The middle blocks it. Both pins pull off to cover tips. The back three stay deep and wide.",
+      spots: { netM: [156, 0], netL: [54, 96], netR: [258, 96],
+               backL: [24, 240], backM: [156, 300], backR: [288, 240] },
+      ball: [[156, -48, 1], [156, -6, 1]]
+    },
+    oppC: {
+      short:     "Opponent's C",
+      readTitle: "They set a C",
+      readTip:   "A back set behind their setter to the right-side hitter, so the attack is coming at your left side.",
+      setTitle:  "Block up, dig the perimeter",
+      setTip:    "Left front and middle close the block. Right front pulls off to cover the tip. The back three go deep and wide.",
+      spots: { netL: [36, 0], netM: [84, 0], netR: [276, 114],
+               backL: [24, 216], backM: [132, 288], backR: [288, 240] },
+      ball: [[36, -48, 1], [36, -6, 1]]
+    }
+  };
+
+  /* ------------------------------------------------------------------
+     Each rotation is defined along its two real axes:
+
+       passing[k]  who drops back to pass -> receive / pass / ready frames
+       sets[k]     where the set goes     -> the attack-and-coverage frame
+
+     A play is one of each. Where both passers leave the front row in the
+     same arrangement (rotation 1 & 4), the set frames live on the rotation
+     and are shared; where the arrangement differs (3 & 6), each passer
+     carries its own.
+     ------------------------------------------------------------------ */
+  const ROTATIONS = {
+    "1,4": {
+      label: "1 & 4",
+      liberoTarget: "M2",
+      start: { RS: [36, 36],  M1: [156, 36], OH1: [276, 36], OH2: [36, 246], M2: [156, 246], S: [276, 246], ball: [180, -30, 0] },
+      base:  { RS: [276, 7],  M1: [156, 7],  OH1: [18, 7],   OH2: [60, 96],  M2: [156, 264], S: [252, 96],  ball: [28, -30, 0] },
+      serving: [
+        { RS: [36, 36],  M1: [156, 36], OH1: [276, 36], OH2: [36, 246], M2: [156, 246], S: [276, 246], ball: [276, 368, 0] },
+        { RS: [104, 7],  M1: [156, 7],  OH1: [208, 7],  OH2: [60, 96],  M2: [156, 264], S: [276, 368], ball: [285, 375, 1] },
+        { RS: [276, 7],  M1: [156, 7],  OH1: [18, 7],   OH2: [60, 96],  M2: [156, 264], S: [252, 96],  ball: [200, -30, 0] }
+      ],
+      // Both passers finish with RS on the left pin, M in the middle,
+      // OH on the right pin - so the attack frames are shared.
+      sets: {
+        outside: { hitter: "RS hits from the left pin.",
+                   frame: { RS: [18, 7],   M1: [78, 18],  OH1: [253, 143], OH2: [18, 68],  M2: [113, 218], S: [138, 48], ball: [28, 15, 1] } },
+        middle:  { hitter: "M hits quick through the middle.",
+                   frame: { RS: [90, 48],  M1: [156, 18], OH1: [222, 48],  OH2: [60, 180], M2: [180, 218], S: [175, 52], ball: [156, 15, 1] } },
+        right:   { hitter: "OH hits from the right pin.",
+                   frame: { RS: [146, 48], M1: [224, 28], OH1: [282, 18],  OH2: [36, 180], M2: [180, 218], S: [320, 65], ball: [282, 15, 1] } }
+      },
+      passing: {
+        RS: {
+          short: "RS",
+          passers: "Right side, outside, and middle pass. OH stays up to hit. The setter runs up to the net.",
+          receive: { RS: [25, 200],  M1: [120, 72],  OH1: [271, 7],   OH2: [148, 235], M2: [260, 200], S: [271, 58], ball: [180, -30, 0] },
+          pass:    { RS: [75, 200],  M1: [120, 96],  OH1: [315, 60],  OH2: [110, 210], M2: [200, 220], S: [240, 25], ball: [85, 210, 1] },
+          ready:   { RS: [-48, 120], M1: [120, 120], OH1: [360, 120], OH2: [68, 183],  M2: [148, 243], S: [216, 7],  ball: [226, 15, 1] }
+        },
+        OH: {
+          short: "OH",
+          passers: "Both outsides and the middle pass. RS stays up to hit. The setter runs up from the back right.",
+          receive: { RS: [72, 50],   M1: [156, 50],  OH1: [260, 200], OH2: [36, 200], M2: [148, 235], S: [276, 245], ball: [180, -30, 0] },
+          pass:    { RS: [15, 85],   M1: [140, 85],  OH1: [220, 200], OH2: [53, 193], M2: [150, 240], S: [245, 125], ball: [230, 210, 1] },
+          ready:   { RS: [-45, 123], M1: [123, 123], OH1: [363, 123], OH2: [71, 186], M2: [151, 246], S: [216, 7],   ball: [226, 15, 1] }
+        }
+      }
+    },
+
+    "2,5": {
+      label: "2 & 5",
+      liberoTarget: "M2",
+      start: { OH2: [36, 36], RS: [156, 36], M1: [276, 36], M2: [36, 246],  S: [156, 246], OH1: [276, 246], ball: [180, -30, 0] },
+      base:  { OH2: [18, 7],  RS: [276, 7],  M1: [156, 7],  M2: [156, 264], S: [252, 96],  OH1: [60, 96],   ball: [28, -30, 0] },
+      serving: [
+        { OH2: [36, 36], RS: [156, 36], M1: [276, 36], M2: [36, 246],  S: [156, 246], OH1: [276, 246], ball: [276, 368, 0] },
+        { OH2: [18, 7],  RS: [130, 7],  M1: [182, 7],  M2: [156, 264], S: [252, 96],  OH1: [276, 368], ball: [285, 375, 1] },
+        { OH2: [18, 7],  RS: [276, 7],  M1: [156, 7],  M2: [156, 264], S: [252, 96],  OH1: [60, 96],   ball: [200, -30, 0] }
+      ],
+      passing: {
+        OH: {
+          short: "OH",
+          passers: "Both outsides and the middle pass. RS stays up to hit. The setter runs up to the net.",
+          receive: { OH2: [36, 200],  RS: [156, 15],  M1: [220, 15],  M2: [148, 235], S: [170, 65], OH1: [260, 200], ball: [180, -30, 0] },
+          pass:    { OH2: [75, 200],  RS: [240, 60],  M1: [188, 60],  M2: [200, 222], S: [193, 35], OH1: [170, 205], ball: [85, 210, 1] },
+          ready:   { OH2: [-48, 120], RS: [330, 110], M1: [156, 110], M2: [252, 210], S: [216, 7],  OH1: [80, 210],  ball: [226, 15, 1] },
+          sets: {
+            outside: { hitter: "OH hits from the left pin.",
+                       frame: { OH2: [18, 7],   RS: [220, 48], M1: [78, 18],  M2: [113, 218], S: [138, 48], OH1: [18, 68],   ball: [28, 15, 1] } },
+            middle:  { hitter: "M hits quick through the middle.",
+                       frame: { OH2: [90, 48],  RS: [222, 48], M1: [156, 18], M2: [180, 218], S: [175, 52], OH1: [60, 180],  ball: [156, 15, 1] } },
+            right:   { hitter: "RS hits from the right pin.",
+                       frame: { OH2: [146, 48], RS: [282, 18], M1: [224, 28], M2: [36, 180],  S: [320, 65], OH1: [180, 218], ball: [282, 15, 1] } },
+            // The cross swaps RS and M through the transition, so it carries
+            // its own pass/ready frames rather than the shared ones.
+            cross:   { hitter: "M hits from the right pin while RS runs the middle as a decoy.",
+                       pass:  { OH2: [75, 200],  RS: [156, 60],  M1: [275, 60],  M2: [114, 222], S: [193, 35], OH1: [256, 205], ball: [85, 210, 1] },
+                       ready: { OH2: [-48, 120], RS: [156, 110], M1: [330, 110], M2: [80, 210],  S: [216, 7],  OH1: [252, 210], ball: [226, 15, 1] },
+                       frame: { OH2: [146, 48],  RS: [224, 28],  M1: [282, 18],  M2: [36, 180],  S: [320, 65], OH1: [180, 218], ball: [282, 15, 1] } }
+          }
+        }
+      }
+    },
+
+    "3,6": {
+      label: "3 & 6",
+      liberoTarget: "M1",
+      start: { M2: [36, 36],  OH2: [156, 36], RS: [276, 36], S: [36, 246], OH1: [156, 246], M1: [276, 246], ball: [180, -30, 0] },
+      base:  { M2: [156, 7],  OH2: [18, 7],   RS: [276, 7],  S: [252, 96], OH1: [60, 96],   M1: [156, 264], ball: [28, -30, 0] },
+      serving: [
+        { M2: [36, 36],  OH2: [156, 36], RS: [276, 36], S: [36, 246],  OH1: [156, 246], M1: [276, 246], ball: [276, 368, 0] },
+        { M2: [130, 7],  OH2: [182, 7],  RS: [276, 7],  S: [110, 120], OH1: [160, 135], M1: [276, 368], ball: [285, 375, 1] },
+        { M2: [156, 7],  OH2: [18, 7],   RS: [276, 7],  S: [252, 96],  OH1: [60, 96],   M1: [156, 264], ball: [200, -30, 0] }
+      ],
+      // The two passers leave the front row arranged differently, so each
+      // carries its own set frames.
+      passing: {
+        OH: {
+          short: "OH",
+          passers: "Both outsides and the middle pass. RS stays up to hit. The setter runs up to the net.",
+          receive: { M2: [15, 15],   OH2: [36, 200],  RS: [276, 15],  S: [15, 65],  OH1: [148, 235], M1: [260, 200], ball: [180, -30, 0] },
+          pass:    { M2: [85, 62],   OH2: [75, 200],  RS: [303, 62],  S: [115, 35], OH1: [114, 222], M1: [256, 205], ball: [85, 210, 1] },
+          ready:   { M2: [156, 110], OH2: [-48, 120], RS: [330, 110], S: [216, 7],  OH1: [80, 210],  M1: [252, 210], ball: [226, 15, 1] },
+          // OH switches out to the left pin, M takes the middle.
+          sets: {
+            outside: { hitter: "OH hits from the left pin.",
+                       frame: { M2: [78, 18],  OH2: [18, 7],   RS: [220, 48], S: [138, 48], OH1: [18, 68],   M1: [113, 218], ball: [28, 15, 1] } },
+            middle:  { hitter: "M hits quick through the middle.",
+                       frame: { M2: [156, 18], OH2: [90, 48],  RS: [222, 48], S: [175, 52], OH1: [60, 180],  M1: [180, 218], ball: [156, 15, 1] } },
+            right:   { hitter: "RS hits from the right pin.",
+                       frame: { M2: [224, 28], OH2: [146, 48], RS: [282, 18], S: [320, 65], OH1: [36, 180],  M1: [180, 218], ball: [282, 15, 1] } }
+          }
+        },
+        RS: {
+          short: "RS",
+          passers: "Right side, outside, and middle pass. OH stays up to hit. The setter runs up to the net.",
+          receive: { M2: [15, 15],   OH2: [120, 15],  RS: [260, 200], S: [15, 65],  OH1: [36, 200], M1: [148, 235], ball: [180, -30, 0] },
+          pass:    { M2: [-15, 68],  OH2: [138, 62],  RS: [220, 200], S: [115, 35], OH1: [58, 205], M1: [200, 222], ball: [230, 210, 1] },
+          ready:   { M2: [-48, 120], OH2: [156, 110], RS: [330, 110], S: [216, 7],  OH1: [80, 210], M1: [252, 210], ball: [226, 15, 1] },
+          // No switch here: M stays on the left pin, OH takes the middle.
+          sets: {
+            outside: { hitter: "M hits from the left pin.",
+                       frame: { M2: [18, 7],   OH2: [78, 18],  RS: [220, 48], S: [138, 48], OH1: [18, 68],  M1: [113, 218], ball: [28, 15, 1] } },
+            middle:  { hitter: "OH hits quick through the middle.",
+                       frame: { M2: [90, 48],  OH2: [156, 18], RS: [222, 48], S: [175, 52], OH1: [60, 180], M1: [180, 218], ball: [156, 15, 1] } },
+            right:   { hitter: "RS hits from the right pin.",
+                       frame: { M2: [146, 48], OH2: [224, 28], RS: [282, 18], S: [320, 65], OH1: [36, 180], M1: [180, 218], ball: [282, 15, 1] } }
+          }
+        }
+      }
+    }
+  };
+
+  // Plain-language wording. Values are a string, or a function of the play.
+  const COPY = {
+    start:   { title: "Starting rotation",
+               tip: "Where everyone lines up before the serve. Stay in order — no overlapping." },
+    receive: { title: "Serve receive",
+               tip: function (v) { return v.passers; } },
+    pass:    { title: "Pass is up",
+               tip: function (v) {
+                 return SLOT_NAME[v.slot] + " passes it to the setter. " +
+                        "The hitters start backing off for their approach.";
+               } },
+    ready:   { title: "Hitters get ready",
+               tip: "Spread out wide — left pin, middle, right pin — so all three are a threat." },
+    attack:  { title: function (v) { return v.attackTitle || ("Set " + v.target + " — cover!"); },
+               tip:   function (v) { return v.hitter + " Everyone else circles under to cover the block."; } },
+    base:    { title: "Base defense",
+               tip: "Back to your defensive spots and get in ready position." },
+    dbase:   { title: "Base defense",
+               tip: "Everyone starts here. Watch their setter and read where the ball is going." },
+    dread:   { title: function (v) { return v.def.readTitle; },
+               tip:   function (v) { return v.def.readTip; } },
+    dset:    { title: function (v) { return v.def.setTitle; },
+               tip:   function (v) { return v.def.setTip; } },
+    serve:   { title: "Serving",
+               tip: "Server steps behind the end line. The other five cover the court." },
+    away:    { title: "Serve is up",
+               tip: "Ball's away. The server steps in across the end line." },
+    over:    { title: "Over the net",
+               tip: "As the ball crosses, all six move to their base defense spots." }
+  };
+
+  function resolve(x, v) { return typeof x === "function" ? x(v) : x; }
+
+  // Expand each rotation's two axes into the plays the UI actually shows.
+  function buildPlays(rot) {
+    const plays = {};
+    Object.keys(rot.passing).forEach(function (pk) {
+      const p = rot.passing[pk];
+      const sets = p.sets || rot.sets;
+      SET_ORDER.forEach(function (sk) {
+        const st = sets[sk];
+        if (!st) { return; }
+        plays[pk + ":" + sk] = {
+          short: SETS[sk].short,
+          target: SETS[sk].target,
+          attackTitle: SETS[sk].attackTitle,
+          hitter: st.hitter,
+          passers: p.passers,
+          phases: [
+            { k: "start",   f: rot.start },
+            { k: "receive", f: p.receive },
+            { k: "pass",    f: st.pass || p.pass },
+            { k: "ready",   f: st.ready || p.ready },
+            { k: "attack",  f: st.frame },
+            { k: "base",    f: rot.base }
+          ]
+        };
+      });
+    });
+    /* Watch the serve travel. The front-row pair trade sides along the net
+       during this, crossing at roughly t=0.15..0.45, so the keyframes stay
+       clear of that band - otherwise a step would rest with two dots on top
+       of each other. */
+    const sv = rot.serving;
+    const server = PLAYERS.filter(function (id) { return sv[1][id][1] > 300; })[0];
+
+    function blend(t, only) {
+      const f = {};
+      PLAYERS.forEach(function (id) {
+        const k = (only && id !== only) ? 0 : t;
+        f[id] = [sv[1][id][0] + (sv[2][id][0] - sv[1][id][0]) * k,
+                 sv[1][id][1] + (sv[2][id][1] - sv[1][id][1]) * k];
+      });
+      return f;
+    }
+
+    const away = blend(0.3, server);   // only the server has moved yet
+    const over = blend(0.8);
+    away.ball = [240, 168, 1];         // mid-court, still climbing
+    over.ball = [200, -30, 1];         // past the net; base fades it in place
+
+    plays.serving = {
+      short: "Serving",
+      phases: [
+        { k: "start", f: sv[0] },
+        { k: "serve", f: sv[1] },
+        { k: "away",  f: away },
+        { k: "over",  f: over },
+        { k: "base",  f: sv[2] }
+      ]
+    };
+    return plays;
+  }
+
+  Object.keys(ROTATIONS).forEach(function (r) {
+    ROTATIONS[r].plays = buildPlays(ROTATIONS[r]);
+  });
+
+  const $ = function (id) { return document.getElementById(id); };
+
+  const els = {};
+  PLAYERS.forEach(function (id) { els[id] = $(id); });
+
+  const ball      = $("ball");
+  const dotsBox   = $("dots");
+  const titleEl   = $("phase-title");
+  const tipEl     = $("phase-tip");
+  const playBtn   = $("play-btn");
+  const prevBtn   = $("prev-btn");
+  const nextBtn   = $("next-btn");
+  const liberoBtn = $("libero-btn");
+  const focusBtn  = $("focus-btn");
+  const exitBtn   = $("exit-focus");
+  const summaryBtn  = $("summary-btn");
+  const summaryText = $("summary-text");
+  const scrim       = $("scrim");
+  const doneBtn     = $("picker-done");
+  const hintEl      = $("hint");
+  const focusTitle  = $("focus-title");
+  const rotBox    = $("rotation-pills");
+  const passBox   = $("passer-pills");
+  const playBox   = $("play-pills");
+  const topicBox  = $("topic-pills");
+  const defBox    = $("defense-pills");
+  const passLabel = $("lbl-passer");
+
+  let rotKey  = "1,4";
+  let passKey = "RS";
+  let topic   = "rotations"; // "rotations" | "defense"
+  let mode    = "receive";   // "receive" | "serve" - only under Rotations
+  let setKey  = "outside";   // which zone gets set   - drawn at random, see drawPlay
+  let slotKey = "left";      // which back-court spot passes - likewise
+  let defKey  = "free";      // which defensive scenario - chosen from the pills
+  let freeKey = "backL";     // which non-setter passes the free ball
+  let swapped = false;       // true on the second lap: partners have traded roles
+  let current = null;        // the play being shown, built by rebuild()
+  let step    = 0;
+  let playing = true;
+  let libero  = false;
+  let timer   = null;
+
+  const pct = function (v) { return (v / GRID * 100) + "%"; };
+
+  // Which role this dot is playing right now. Defense has its own fixed
+  // line-up, so the lap swap doesn't apply there.
+  function roleOf(id) { return (swapped && !defending()) ? PARTNER[id] : id; }
+
+  function rotation() { return ROTATIONS[rotKey]; }
+  function defending() { return topic === "defense"; }
+  function serving()   { return topic === "rotations" && mode === "serve"; }
+  function receiving() { return topic === "rotations" && mode === "receive"; }
+  function play()     { return current; }
+  function phases()   { return current.phases; }
+
+  /* The three back-court passers, keyed by the spot they stand in. The setter
+     is excluded - in a 6-2 they start deep but run to the net, they don't pass. */
+  function passersOf(receive) {
+    const out = {};
+    PLAYERS.forEach(function (id) {
+      if (id === "S" || receive[id][1] <= 150) { return; }
+      const x = receive[id][0];
+      out[x < 120 ? "left" : (x < 240 ? "middle" : "right")] = id;
+    });
+    return out;
+  }
+
+  /* The moment of the pass: whoever is taking it steps into the ball, and
+     everyone else is halfway from serve receive to their attack spots. That
+     50% rule is how the original frames were built, so any passer matches. */
+  function passFrame(receive, ready, who, slot) {
+    const f = {};
+    PLAYERS.forEach(function (id) {
+      if (id === who) {
+        f[id] = [receive[id][0] + SLOT_STEP[slot][0], receive[id][1] + SLOT_STEP[slot][1]];
+      } else {
+        f[id] = [(receive[id][0] + ready[id][0]) / 2, (receive[id][1] + ready[id][1]) / 2];
+      }
+    });
+    f.ball = [f[who][0] + 10, f[who][1] + 10, 1];
+    return f;
+  }
+
+  /* Three beats: hold base, read it, arrive. The middle beat is 42% of the
+     way over, same interpolation the serve-receive frames use. */
+  function defensePlay(key) {
+    const d = DEFENSE[key];
+    const baseF = {}, readF = {}, setF = {};
+    PLAYERS.forEach(function (id) {
+      const s = DEF_SLOT[id], from = DEF_BASE[s], to = d.spots[s];
+      baseF[id] = from;
+      readF[id] = [from[0] + (to[0] - from[0]) * 0.42, from[1] + (to[1] - from[1]) * 0.42];
+      setF[id]  = to;
+    });
+    // Park the ball where it will appear, so it fades in instead of sliding.
+    baseF.ball = [d.ball[0][0], d.ball[0][1], 0];
+    readF.ball = d.ball[0];
+    setF.ball  = d.ball[1];
+    let extra = d.extra || [];
+    if (d.passers) {
+      const spot = freeKey;
+      const at   = [d.spots[spot][0] + 10, d.spots[spot][1] + 10, 1];
+      // Show the ball still in flight, halfway from the net to whoever has it.
+      setF.ball = [(168 + at[0]) / 2, (-6 + at[1]) / 2, 1];
+      extra = [
+        { title: SPOT_NAME[spot] + " passes it",
+          tip:   "Call it early so nobody collides, then pass it to the setter at the net.",
+          ball:  at },
+        { title: "Up to the setter",
+          tip:   "The pass goes high to the setter — now you're on offense.",
+          ball:  [250, 16, 1] }
+      ];
+    }
+
+    const phases = [{ k: "dbase", f: baseF }, { k: "dread", f: readF }, { k: "dset", f: setF }];
+
+    // Optional follow-on beats. Only the players named in `move` shift; the
+    // rest hold whatever they were doing, so each beat stays a small edit.
+    let prev = setF;
+    extra.forEach(function (x) {
+      const f = {};
+      PLAYERS.forEach(function (id) { f[id] = (x.move && x.move[id]) || prev[id]; });
+      f.ball = x.ball;
+      phases.push({ k: "dextra", f: f, copy: { title: x.title, tip: x.tip } });
+      prev = f;
+    });
+    return { def: d, phases: phases };
+  }
+
+  // Swap in a pass frame for the drawn passer; everything else is prebuilt.
+  function rebuild() {
+    if (serving())   { current = rotation().plays.serving; return; }
+    if (defending()) { current = defensePlay(defKey); return; }
+    const base = rotation().plays[passKey + ":" + setKey];
+    const phs = base.phases.slice();
+    const who = passersOf(phs[1].f)[slotKey];
+    phs[2] = { k: "pass", f: passFrame(phs[1].f, phs[3].f, who, slotKey) };
+    current = Object.assign({}, base, { phases: phs, slot: slotKey, passer: who });
+  }
+
+  function setOptions() {
+    const p = rotation().passing[passKey];
+    const sets = p.sets || rotation().sets;
+    return SET_ORDER.filter(function (sk) { return sets[sk]; });
+  }
+
+  /* The set zone and the passer are chosen for the viewer rather than picked.
+     Each draws from a shuffled bag refilled only once empty, so a full pass
+     through a bag covers every option exactly once before anything repeats -
+     random order, guaranteed coverage of all three front-row zones and all
+     three back-court passing spots. The two bags are independent. */
+  const zoneBags = {};
+  const slotBags = {};
+  const freeBag  = {};
+
+  // Cycles all five non-setters before anyone repeats.
+  function drawFreePasser() {
+    freeKey = drawFrom(freeBag, "free", DEFENSE.free.passers, freeKey);
+  }
+
+  function drawFrom(store, key, items, avoid) {
+    let bag = store[key];
+    if (!bag || !bag.length) {
+      bag = items.slice();
+      for (let i = bag.length - 1; i > 0; i--) {          // Fisher-Yates
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+      }
+      // Don't let a refill repeat what we just showed.
+      if (bag.length > 1 && bag[bag.length - 1] === avoid) {
+        const t = bag[bag.length - 1]; bag[bag.length - 1] = bag[0]; bag[0] = t;
+      }
+      store[key] = bag;
+    }
+    return bag.pop();
+  }
+
+  function drawPlay() {
+    if (!defending()) {
+      const key = rotKey + "|" + passKey;
+      setKey  = drawFrom(zoneBags, key, setOptions(), setKey);
+      slotKey = drawFrom(slotBags, key, SLOTS, slotKey);
+    }
+    rebuild();
+    updateSummary();
+  }
+
+  function selectRotation(key) {
+    rotKey = key;
+    if (!rotation().passing[passKey]) { passKey = Object.keys(rotation().passing)[0]; }
+    drawPlay();
+    reset();
+  }
+
+  function cycleRotation(dir) {
+    if (defending()) { return; }   // no rotations to move through in defense
+    const keys = Object.keys(ROTATIONS);
+    const n = keys.length;
+    const i = keys.indexOf(rotKey);
+    const j = ((i + dir) % n + n) % n;
+    // Wrapping past either end completes a lap, so the partners trade roles.
+    if ((dir > 0 && j < i) || (dir < 0 && j > i)) { swapped = !swapped; }
+    selectRotation(keys[j]);
+  }
+
+  // Sideways always steps the Situations row - two options under Rotations,
+  // five under Defense - so the gesture means the same thing in both.
+  function cycleSituation(dir) {
+    if (defending()) {
+      const n = DEF_ORDER.length;
+      const i = DEF_ORDER.indexOf(defKey);
+      defKey = DEF_ORDER[((i + dir) % n + n) % n];
+      if (defKey === "free") { drawFreePasser(); }
+      reset();
+      return;
+    }
+    mode = serving() ? "receive" : "serve";   // only two, so direction is moot
+    if (receiving()) { drawPlay(); }
+    reset();
+  }
+
+  // No-op where the rotation offers no choice, and while serving - the
+  // passer picker is muted then, so a silent change would be misleading.
+  function canSwapPasser() {
+    return receiving() && Object.keys(rotation().passing).length > 1;
+  }
+
+  function cyclePasser() {
+    if (!canSwapPasser()) { return; }
+    const keys = Object.keys(rotation().passing);
+    passKey = keys[(keys.indexOf(passKey) + 1) % keys.length];
+    drawPlay();
+    reset();
+  }
+
+  // Stepping past either end completes a pass, so the next one shows a
+  // different zone. The start frame is shared, so the swap is seamless.
+  function advance(dir) {
+    const next = step + dir;
+    if (next >= phases().length || next < 0) {
+      if (receiving()) {
+        drawPlay();
+      } else if (defending() && defKey === "free") {
+        drawFreePasser();          // next loop, next passer
+        rebuild();
+      }
+    }
+    go(next);
+  }
+
+  /* ---------- Rendering ---------- */
+
+  // Row assignment is fixed for a whole rotation, so it's read off the
+  // starting line-up: anyone in the far half of the court is back row.
+  function renderRoster() {
+    if (defending()) {
+      // Same roles and colours as the rotations; the back-row ring comes from
+      // the defensive slot map so nothing here depends on the rotation.
+      PLAYERS.forEach(function (id) {
+        const isBack = DEF_SLOT[id].indexOf("back") === 0;
+        const isLib  = libero && id === DEF_LIBERO;
+        els[id].className = "player " + (isLib ? "lib" : ROLE_CLASS[id]) +
+                            (isBack ? " back" : "");
+        els[id].textContent = isLib ? "L" : ROLE[id];
+      });
+      liberoBtn.textContent = "Libero: " + (libero ? "in" : "out");
+      liberoBtn.setAttribute("aria-pressed", String(libero));
+      return;
+    }
+    const target = rotation().liberoTarget;
+    const start = rotation().start;
+    PLAYERS.forEach(function (id) {
+      const r      = roleOf(id);
+      const isLib  = libero && r === target;
+      const isBack = start[r][1] > GRID / 2;
+      els[id].className = "player " + (isLib ? "lib" : ROLE_CLASS[r]) + (isBack ? " back" : "");
+      els[id].textContent = isLib ? "L" : ROLE[r];
+    });
+    liberoBtn.textContent = "Libero: " + (libero ? "in" : "out");
+    liberoBtn.setAttribute("aria-pressed", String(libero));
+  }
+
+  function renderDots() {
+    const n = phases().length;
+    dotsBox.textContent = "";
+    for (let i = 0; i < n; i++) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "dot";
+      b.setAttribute("aria-label", "Step " + (i + 1) + " of " + n);
+      b.setAttribute("aria-current", String(i === step));
+      b.addEventListener("click", function () { pause(); go(i); });
+      dotsBox.appendChild(b);
+    }
+  }
+
+  function renderStep() {
+    const v = play();
+    const ph = phases()[step];
+    const f = ph.f;
+
+    PLAYERS.forEach(function (id) {
+      const r = roleOf(id);
+      els[id].style.left = pct(f[r][0]);
+      els[id].style.top  = pct(f[r][1]);
+    });
+
+    ball.style.left    = pct(f.ball[0]);
+    ball.style.top     = pct(f.ball[1]);
+    ball.style.opacity = f.ball[2];
+
+    const copy = ph.copy || COPY[ph.k];
+    titleEl.textContent = resolve(copy.title, v);
+    tipEl.textContent   = resolve(copy.tip, v);
+
+    const dots = dotsBox.children;
+    for (let i = 0; i < dots.length; i++) {
+      dots[i].setAttribute("aria-current", String(i === step));
+    }
+  }
+
+  function go(i) {
+    const n = phases().length;
+    step = ((i % n) + n) % n;
+    renderStep();
+  }
+
+  function reset() {
+    rebuild();
+    step = 0;
+    renderPills();
+    renderLegend();
+    renderDots();
+    renderRoster();
+    renderStep();
+  }
+
+  /* ---------- Playback ---------- */
+
+  function start() {
+    playing = true;
+    clearInterval(timer);
+    timer = setInterval(function () { advance(1); }, 3200);
+    playBtn.textContent = "Pause";
+    playBtn.setAttribute("aria-pressed", "true");
+  }
+
+  function pause() {
+    playing = false;
+    clearInterval(timer);
+    playBtn.textContent = "Play";
+    playBtn.setAttribute("aria-pressed", "false");
+  }
+
+  /* ---------- Selector pills ---------- */
+
+  function pill(text, pressed, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pill";
+    b.textContent = text;
+    b.setAttribute("aria-pressed", String(pressed));
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function renderPills() {
+    topicBox.textContent = "";
+    TOPICS.forEach(function (t) {
+      topicBox.appendChild(pill(t[1], topic === t[0], function () {
+        if (topic === t[0]) { return; }
+        topic = t[0];
+        if (receiving()) { drawPlay(); }
+        reset();
+      }));
+    });
+    document.body.classList.toggle("mode-defense", defending());
+
+    rotBox.textContent = "";
+    Object.keys(ROTATIONS).forEach(function (key) {
+      rotBox.appendChild(pill(ROTATIONS[key].label, key === rotKey, function () {
+        if (key === rotKey) { return; }
+        selectRotation(key);
+      }));
+    });
+
+    // Serving has no serve-receive, so the passer choice doesn't apply.
+    // These are disabled, not just dimmed: pointer-events alone would still
+    // leave them reachable and activatable by keyboard.
+    passBox.textContent = "";
+    Object.keys(rotation().passing).forEach(function (key) {
+      const b = pill(rotation().passing[key].short, key === passKey, function () {
+        if (key === passKey) { return; }
+        passKey = key;
+        drawPlay();
+        reset();
+      });
+      b.disabled = !receiving();
+      passBox.appendChild(b);
+    });
+    passBox.classList.toggle("muted", !receiving());
+    passLabel.classList.toggle("muted", !receiving());
+
+    playBox.textContent = "";
+    defBox.textContent = "";
+    DEF_ORDER.forEach(function (key) {
+      defBox.appendChild(pill(DEFENSE[key].short, key === defKey, function () {
+        if (key === defKey) { return; }
+        defKey = key;
+        if (key === "free") { drawFreePasser(); }
+        reset();
+      }));
+    });
+    MODES.forEach(function (opt) {
+      playBox.appendChild(pill(opt[1], !defending() && mode === opt[0], function () {
+        if (!defending() && mode === opt[0]) { return; }
+        mode = opt[0];
+        if (receiving()) { drawPlay(); }
+        reset();
+      }));
+    });
+
+    updateSummary();
+  }
+
+  // One-line state for the collapsed phone picker. The passer segment is
+  // dropped where the rotation offers no choice, and while serving.
+  function updateSummary() {
+    const bits = [];
+    if (defending()) {
+      bits.push("Defense", DEFENSE[defKey].short);
+    } else {
+      bits.push(rotation().label);
+      if (canSwapPasser()) { bits.push(rotation().passing[passKey].short); }
+      bits.push(serving() ? "Serving" : "Serve receive");
+    }
+    summaryText.textContent = bits.join("  ·  ");
+
+    // Fuller version for full screen, where there's room and no other clue.
+    const full = [];
+    if (defending()) {
+      full.push("Defense", DEFENSE[defKey].short);
+    } else {
+      full.push("Rotation " + rotation().label);
+      if (!serving()) {
+        full.push(rotation().passing[passKey].short + " passes", "Serve receive");
+      } else {
+        full.push("Serving");
+      }
+    }
+    if (libero) { full.push("Libero in"); }
+    focusTitle.textContent = full.join("  ·  ");
+
+    // Don't advertise the tap where this rotation has no passer to swap to.
+    hintEl.textContent = defending()
+      ? "Swipe across to change the situation"
+      : (canSwapPasser() ? "Tap to change who passes  ·  " : "") +
+        "swipe across for serve or serve receive  ·  swipe up or down to change rotation";
+  }
+
+  /* Built rather than static so the footer copy and the phone sheet copy
+     stay in step from one source. */
+  const LEGEND = [
+    ["c-set", "S \u2013 Setter  /  RS \u2013 Right side"],
+    ["c-oh",  "OH \u2013 Outside"],
+    ["c-mid", "M \u2013 Middle"],
+    ["lib",   "L \u2013 Libero"],
+    ["ring",  "Ring \u2013 Back row"]
+  ];
+
+  function renderLegend() {
+    const items = LEGEND;
+    const lists = document.querySelectorAll(".legend");
+    for (let i = 0; i < lists.length; i++) {
+      lists[i].textContent = "";
+      items.forEach(function (it) {
+        const li = document.createElement("li");
+        const sw = document.createElement("span");
+        const named = (it[0] === "lib" || it[0] === "ring");
+        sw.className = "swatch" + (named ? " " + it[0] : "");
+        if (!named) { sw.style.background = "var(--" + it[0] + ")"; }
+        li.appendChild(sw);
+        li.appendChild(document.createTextNode(it[1]));
+        lists[i].appendChild(li);
+      });
+    }
+  }
+
+  function setPicker(open) {
+    document.body.classList.toggle("picker-open", open);
+    summaryBtn.setAttribute("aria-expanded", String(open));
+  }
+  function pickerOpen() { return document.body.classList.contains("picker-open"); }
+
+  /* ---------- Full-screen focus mode ---------- */
+
+  function nativeFS() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  // Both calls are best-effort: a browser that refuses, or lacks the API,
+  // still gets the CSS-driven focus mode.
+  function enterNativeFS() {
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!fn) { return; }
+    try {
+      const r = fn.call(el);
+      if (r && r.catch) { r.catch(function () {}); }
+    } catch (e) { /* ignore */ }
+  }
+
+  function exitNativeFS() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!nativeFS() || !fn) { return; }
+    try {
+      const r = fn.call(document);
+      if (r && r.catch) { r.catch(function () {}); }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Stop an iPad dimming mid-demo. Unsupported browsers just skip it.
+  let wakeLock = null;
+  function keepAwake(on) {
+    if (!navigator.wakeLock) { return; }
+    if (on) {
+      navigator.wakeLock.request("screen").then(
+        function (w) { wakeLock = w; },
+        function () { /* denied - not fatal */ }
+      );
+    } else if (wakeLock) {
+      wakeLock.release().catch(function () {});
+      wakeLock = null;
+    }
+  }
+
+  function inFocus() { return document.body.classList.contains("focus"); }
+
+  function setFocus(on) {
+    document.body.classList.toggle("focus", on);
+    focusBtn.setAttribute("aria-pressed", String(on));
+    if (on) { enterNativeFS(); } else { exitNativeFS(); }
+    keepAwake(on);
+    (on ? exitBtn : focusBtn).focus();
+  }
+
+  /* ---------- Events ---------- */
+
+  focusBtn.addEventListener("click", function () { setPicker(false); setFocus(true); });
+  exitBtn.addEventListener("click", function () { setFocus(false); });
+
+  summaryBtn.addEventListener("click", function () { setPicker(!pickerOpen()); });
+  doneBtn.addEventListener("click", function () { setPicker(false); summaryBtn.focus(); });
+  scrim.addEventListener("click", function () { setPicker(false); });
+
+  // Leaving native fullscreen by any other route (Esc, a system gesture)
+  // should drop the CSS mode too, or the page would look stuck.
+  ["fullscreenchange", "webkitfullscreenchange"].forEach(function (ev) {
+    document.addEventListener(ev, function () {
+      if (!nativeFS() && inFocus()) { setFocus(false); }
+    });
+  });
+
+  playBtn.addEventListener("click", function () {
+    if (playing) { pause(); } else { start(); }
+  });
+
+  prevBtn.addEventListener("click", function () { pause(); advance(-1); });
+  nextBtn.addEventListener("click", function () { pause(); advance(1); });
+
+  liberoBtn.addEventListener("click", function () {
+    libero = !libero;
+    renderRoster();
+    updateSummary();   // the full-screen state line names the libero
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft")  { pause(); advance(-1); }
+    if (e.key === "ArrowRight") { pause(); advance(1); }
+    if (e.key === "Escape") {
+      if (pickerOpen()) { setPicker(false); summaryBtn.focus(); }
+      else if (inFocus()) { setFocus(false); }
+    }
+    if (e.key === " " && e.target === document.body) {
+      e.preventDefault();
+      if (playing) { pause(); } else { start(); }
+    }
+  });
+
+  /* Court gestures: swipe across = step the Situations row, swipe up/down =
+     change rotation, tap = swap who drops back to pass. Stepping and
+     pause/resume stay on the buttons and the progress dots. */
+  (function () {
+    const stage = document.querySelector(".stage");
+    const SWIPE = 40;   // px before a drag counts as a swipe
+    const TAP   = 12;   // px of slop still counted as a tap
+    const TAP_MS = 400;
+    let t0 = null;
+
+    stage.addEventListener("touchstart", function (e) {
+      // Ignore pinches and any drag that starts while the sheet is up.
+      if (e.touches.length !== 1 || pickerOpen()) { t0 = null; return; }
+      t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp };
+    }, { passive: true });
+
+    stage.addEventListener("touchend", function (e) {
+      if (!t0) { return; }
+      const dx = e.changedTouches[0].clientX - t0.x;
+      const dy = e.changedTouches[0].clientY - t0.y;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const quick = (e.timeStamp - t0.t) < TAP_MS;
+      t0 = null;
+
+      if (adx < TAP && ady < TAP && quick) {
+        cyclePasser();
+      } else if (adx > SWIPE && adx > ady * 1.4) {
+        cycleSituation(dx < 0 ? 1 : -1);
+      } else if (ady > SWIPE && ady > adx * 1.4) {
+        cycleRotation(dy < 0 ? 1 : -1);
+      }
+    }, { passive: true });
+
+    /* touch-action already tells the browser to keep out, but full screen is
+       where a stray downward drag costs the most - so while a drag is being
+       tracked there, claim it outright. Non-passive so preventDefault works. */
+    stage.addEventListener("touchmove", function (e) {
+      if (t0 && inFocus() && e.cancelable) { e.preventDefault(); }
+    }, { passive: false });
+
+    stage.addEventListener("touchcancel", function () { t0 = null; }, { passive: true });
+  })();
+
+  // Don't keep animating in a background tab.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      clearInterval(timer);
+    } else {
+      if (playing) { start(); }
+      // A wake lock is dropped automatically when the page is hidden.
+      if (inFocus()) { keepAwake(true); }
+    }
+  });
+
+  drawPlay();
+  reset();
+  start();
+})();
+</script>
+</body>
+</html>
   }
 
   .wrap { max-width: 560px; margin: 0 auto; }
