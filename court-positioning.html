@@ -1727,7 +1727,7 @@
     const keys = Object.keys(rotation().passing);
     passKey = keys[(keys.indexOf(passKey) + 1) % keys.length];
     drawPlay();
-    reset();
+    reset(true);
   }
 
   // Stepping past either end completes a pass, so the next one shows a
@@ -1824,9 +1824,12 @@
     renderStep();
   }
 
-  function reset() {
+  /* keepStep holds your place in the sequence - used when swapping the passer,
+     where the point is to compare the same moment two ways. Clamped, since
+     other plays can be shorter. */
+  function reset(keepStep) {
     rebuild();
-    step = 0;
+    step = keepStep ? Math.min(step, phases().length - 1) : 0;
     renderPills();
     renderLegend();
     renderDots();
@@ -1892,7 +1895,7 @@
         if (key === passKey) { return; }
         passKey = key;
         drawPlay();
-        reset();
+        reset(true);
       });
       b.disabled = !receiving();
       passBox.appendChild(b);
