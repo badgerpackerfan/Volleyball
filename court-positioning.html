@@ -22,6 +22,7 @@
     --court:   #3d6a7a;
     --court-2: #34606f;
     --chalk:   #ffffff;
+    --mark:    rgba(255, 255, 255, .34);   /* court watermark - raise/lower to taste */
 
     /* Role colors - all >= 4.5:1 against white text */
     --c-set:  #b3251f;
@@ -161,6 +162,36 @@
   }
   .mark-net    { bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 2%; }
   .mark-attack { top: 33.333%; right: 100%; margin-right: 2%; transform: translateY(-50%); white-space: nowrap; }
+
+  /* Big tonal watermark naming what you're looking at. Sits above the court
+     surface but below the players, and pulses so it stays noticeable. */
+  .court-mark {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    z-index: 1;
+    font-size: 44cqw;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--mark);
+    opacity: 0;
+    pointer-events: none;
+    user-select: none;
+  }
+  .court-mark.word { font-size: 15cqw; letter-spacing: .02em; }
+  .court-mark.show { animation: mark-pulse 4s ease-in-out infinite; }
+
+  /* Opacity only - a repeating scale would read as noise. One cycle per 4s
+     is far below any flash-rate threshold. */
+  @keyframes mark-pulse {
+    0%   { opacity: 0; }
+    12%  { opacity: 1; }
+    48%  { opacity: 1; }
+    72%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
 
   /* ---------- Players ---------- */
 
@@ -574,6 +605,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .player, .ball, .btn, .pill, .dot::after { transition: none; }
+    /* Hold it steady rather than pulsing; the label still reads. */
+    .court-mark.show { animation: none; opacity: .8; }
   }
 
   @media (min-width: 600px) {
@@ -1031,6 +1064,7 @@
     <div class="court">
       <div class="net"></div>
       <div class="attack-line"></div>
+      <div class="court-mark" id="court-mark" aria-hidden="true"></div>
       <span class="mark mark-net">NET</span>
       <span class="mark mark-attack">10 ft</span>
 
@@ -1154,6 +1188,7 @@
 
   const DEFENSE = {
     free: {
+      mark:      "FREE",
       short:     "Free ball",
       readTitle: "Free ball!",
       readTip:   "No attack coming — call it loud and get off the net.",
@@ -1169,6 +1204,7 @@
       passers: ["netL", "netM", "netR", "backL", "backM"]
     },
     down: {
+      mark:      "DOWN",
       short:     "Down ball",
       readTitle: "Down ball!",
       readTip:   "They're hitting, but standing — no jump, so no block. Call it and get off the net.",
@@ -1191,6 +1227,7 @@
     // Named by the opponent's set call: a 5 goes to their left pin, a 2 to
     // their middle, a C behind the setter to their right pin.
     opp5: {
+      mark:      "5",
       short:     "Opponent's 5",
       readTitle: "They set a 5",
       readTip:   "A high ball out to their outside hitter, so the attack is coming at your right side.",
@@ -1201,6 +1238,7 @@
       ball: [[276, -48, 1], [276, -6, 1]]
     },
     opp2: {
+      mark:      "2",
       short:     "Opponent's 2",
       readTitle: "They set a 2",
       readTip:   "A ball to their middle, coming straight up the gut.",
@@ -1211,6 +1249,7 @@
       ball: [[156, -48, 1], [156, -6, 1]]
     },
     oppC: {
+      mark:      "C",
       short:     "Opponent's C",
       readTitle: "They set a C",
       readTip:   "A back set behind their setter to the right-side hitter, so the attack is coming at your left side.",
@@ -1475,6 +1514,7 @@
   const doneBtn     = $("picker-done");
   const hintEl      = $("hint");
   const focusTitle  = $("focus-title");
+  const markEl      = $("court-mark");
   const rotBox    = $("rotation-pills");
   const passBox   = $("passer-pills");
   const playBox   = $("play-pills");
@@ -1774,6 +1814,8 @@
     for (let i = 0; i < dots.length; i++) {
       dots[i].setAttribute("aria-current", String(i === step));
     }
+
+    updateMark();
   }
 
   function go(i) {
@@ -1941,6 +1983,43 @@
         lists[i].appendChild(li);
       });
     }
+  }
+
+  /* "1 & 4" is rotation 1 on the first lap and rotation 4 on the second, so
+     the number here walks 1..6 as you swipe - which is also the only visible
+     sign that the setters have swapped. */
+  let lastMark = null;
+  let markOn = false;
+
+  function markText() {
+    return defending() ? DEFENSE[defKey].mark
+                       : rotKey.split(",")[swapped ? 1 : 0];
+  }
+
+  /* Rotations label the opening frames only, so the number is gone for the
+     rest of the play. Defense holds it the whole time - those sequences are
+     short and the call is the point. */
+  function markWanted() {
+    return defending() || step <= 1;
+  }
+
+  function updateMark() {
+    const txt = markText();
+    const changed = txt !== lastMark;
+    if (changed) {
+      lastMark = txt;
+      markEl.textContent = txt;
+      markEl.classList.toggle("word", txt.length > 2);
+    }
+    const want = markWanted();
+    if (want && (!markOn || changed)) {
+      markEl.classList.remove("show");
+      void markEl.offsetWidth;        // reflow, so the pulse replays from 0
+      markEl.classList.add("show");
+    } else if (!want && markOn) {
+      markEl.classList.remove("show");
+    }
+    markOn = want;
   }
 
   function setPicker(open) {
