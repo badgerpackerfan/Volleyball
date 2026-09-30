@@ -1,0 +1,154 @@
+/* Mobile-first: iPad and phone are the primary targets; every action is a button-sized touch target. */
+:root{font:16px/1.45 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#273842;background:#eef2f4;color-scheme:light;-webkit-text-size-adjust:100%;--accent:#286747;--court:#447454;--court-2:#356448;--c-set:#a82e29;--c-oh:#254fa7;--c-mid:#17613b}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;-webkit-tap-highlight-color:transparent}
+h1,h2,h3,p{margin:0 0 12px}h2{font-size:22px}
+button,input,select,summary{font:inherit;touch-action:manipulation}
+.eyebrow{text-transform:uppercase;letter-spacing:.12em;color:var(--accent);font-size:12px;font-weight:700;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* App bar with Back and Live set buttons */
+.appbar{position:sticky;top:0;z-index:20;background:#eef2f4eb;-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid #d6dfe4;padding-top:env(safe-area-inset-top)}
+.appbar-inner{max-width:1000px;margin:auto;display:flex;align-items:center;gap:12px;min-height:68px;padding:8px max(16px,env(safe-area-inset-right)) 8px max(16px,env(safe-area-inset-left))}
+.appbar-title{flex:1;min-width:0}
+.appbar h1{font-size:26px;line-height:1.15;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button.back,button.live{border-radius:999px;min-height:44px;padding:8px 16px;flex-shrink:0}
+button.back{display:flex;align-items:center;gap:6px;max-width:38vw;padding-left:12px;color:var(--accent);font-weight:650}
+button.back>span:first-child{font-size:28px;line-height:.7;margin-top:-3px}
+#backLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.live{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:650}
+.appbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+button.theme{min-height:44px;padding:8px 14px;color:var(--accent);font-weight:650}
+
+main{max-width:1000px;margin:auto;padding:20px max(16px,env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+#notice:empty{display:none}#notice{background:#e2edf0;padding:12px 16px;border-radius:12px;margin-bottom:16px}#notice.error{background:#f8e1e1;color:#852d35}
+
+/* Buttons */
+button{min-height:48px;border:1px solid #cbd6dd;border-radius:12px;background:#fff;color:#263e48;padding:11px 18px;cursor:pointer;font-weight:600;transition:transform .08s,filter .08s}
+button:active:not(:disabled){transform:scale(.97);filter:brightness(.94)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.danger{color:#9b2c35;border-color:#e2bcc0;background:#fff}
+button:disabled{opacity:.45;cursor:default}
+@media(hover:hover){button:hover:not(:disabled){filter:brightness(.97)}button.danger:hover{background:#fbeff0}}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+
+/* Page toolbars and lists */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 20px}
+.toolbar .danger{margin-left:auto}
+.list{display:grid;gap:12px}
+.list-title{font-size:14px;text-transform:uppercase;letter-spacing:.1em;color:#5b707b;margin:28px 0 10px}
+.card,form{background:#fff;border:1px solid #d9e1e6;border-radius:16px;padding:20px;margin:0 0 16px}
+.card{border-left:6px solid var(--team-color,#4b7d85)}
+.list .card{margin:0}
+.card p,.help{color:#60727e}
+.muted{color:#60727e;font-size:14px}
+.item{display:flex;align-items:center;gap:16px}
+.item-main{flex:1;min-width:0}
+.item-main h3{font-size:19px;margin:0 0 4px;overflow-wrap:anywhere}
+.item-main p{margin:0 0 2px}
+.team-card-heading{display:flex;align-items:center;gap:14px;min-width:0}
+.team-logo{width:62px;height:62px;flex:none;object-fit:contain;border-radius:12px;background:#f2f5f6;padding:4px}
+.team-brand{display:flex;align-items:center;gap:14px;margin:0 0 18px;padding:12px 16px;border-left:6px solid var(--team-color);border-radius:12px;background:#fff}
+.team-brand .team-logo{width:54px;height:54px}
+.team-brand>div{display:grid;gap:2px}.team-brand strong{font-size:17px}.team-brand span{font-size:13px;color:#60727e}
+.item-actions{display:flex;gap:10px;flex-shrink:0}
+.item-actions button{min-width:112px}
+.set-score{font-size:28px;font-weight:750;color:#273842!important;font-variant-numeric:tabular-nums;margin:0}
+.match-summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 18px}
+.match-summary p{margin:0}
+.match-result{color:#273842}
+.lineup-warning{color:#923d48!important}
+
+/* Forms */
+label{display:block;font-size:14px;font-weight:650}
+input,select{display:block;width:100%;min-height:48px;margin-top:6px;border:1px solid #bbc9d2;border-radius:10px;padding:10px 12px;background:#fff;color:#273842;font-size:16px}
+input[readonly]{background:#f1f5f6;color:#546a75}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.team-theme-field{min-width:0}
+.team-theme-preview{display:flex;align-items:center;gap:12px;margin-top:10px;padding:10px;border:1px solid #d9e1e6;border-radius:12px;background:#f8fafb}
+.team-theme-preview .theme-preview{width:100px;height:58px;flex:none}
+.team-theme-preview .theme-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.team-theme-preview .theme-copy strong{font-size:14px}
+.team-theme-preview .theme-copy small{color:#60727e;font-size:12px;line-height:1.3}
+.team-logo-field{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:14px;margin-top:22px;padding:16px;border:1px solid #d9e1e6;border-radius:14px;background:#f8fafb}
+.team-logo-field h2{font-size:18px;margin:0 0 4px}.team-logo-field p{margin:0}
+.team-logo-preview{display:grid;place-items:center;width:92px;height:76px;border:1px dashed #b8c7d0;border-radius:12px;background:#fff;color:#71838d;font-size:12px;text-align:center}
+.team-logo-large{width:84px;height:68px;object-fit:contain;padding:4px}
+.upload-label{display:grid;gap:4px;min-width:145px}
+.upload-label input[type=file]{min-height:44px;padding:8px;font-size:13px}
+.team-logo-field>button{min-width:90px}
+fieldset{border:0;padding:0;margin:0;min-width:0}
+legend{font-size:20px;font-weight:650;margin:24px 0 12px;padding:0}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px}
+.section-head h2{margin:0}
+.roster-row{display:grid;grid-template-columns:minmax(130px,2fr) 100px minmax(120px,1fr) auto;gap:12px;align-items:end;padding:14px 0;border-bottom:1px solid #e1e7eb}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.form-actions{position:sticky;bottom:0;z-index:10;margin:24px -20px -20px;padding:12px 20px calc(12px + env(safe-area-inset-bottom));background:#fffffff5;border-top:1px solid #d9e1e6;border-radius:0 0 16px 16px}
+.form-actions button{flex:1 1 0}
+#lineupFields>label{margin-top:20px;max-width:360px}
+.save-lineup{margin:20px 0;padding:4px 16px;background:#f2f6f7;border-radius:12px}
+.save-lineup summary{cursor:pointer;font-weight:650;min-height:48px;display:flex;align-items:center}
+.save-lineup label{margin:12px 0}
+body.busy{cursor:progress}
+
+/* Volleyball court lineup editor and starting-court preview */
+.lineup-court{position:relative;aspect-ratio:1;max-width:600px;margin:20px auto 0;background:linear-gradient(var(--court),var(--court-2));border:3px solid white;border-radius:3px;box-shadow:0 8px 24px #0003;container-type:inline-size}
+.lineup-net{position:absolute;inset:0 0 auto;height:1.7%;background:white;color:white;text-align:center;font-size:11px;letter-spacing:.18em;padding-top:10px}
+.lineup-attack-line{position:absolute;top:33.333%;width:100%;border-top:2px dashed #ffffffbf;pointer-events:none}
+.lineup-player{position:absolute;left:calc((var(--column) + .5)*100%/3);top:calc(10% + var(--row)*49%);width:30%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;color:white;text-align:center;cursor:pointer}
+.lineup-position{font-size:clamp(11px,2.6cqw,15px);font-weight:700;margin-bottom:4px;color:#e0ebee}
+.lineup-disc{position:relative;display:grid;place-items:center;width:clamp(46px,19cqw,114px);aspect-ratio:1;border-radius:50%;background:var(--player-color);box-shadow:0 2px 7px #0006;transition:background-color .2s,transform .2s}
+.lineup-player.back .lineup-disc{box-shadow:0 2px 7px #0006,inset 0 0 0 4px #fffffff0}
+.lineup-player.empty .lineup-disc{background:var(--court-2)}
+.lineup-disc:focus-within{outline:3px solid white;outline-offset:4px;transform:scale(1.04)}
+.lineup-number{font-size:clamp(24px,8cqw,48px);line-height:1;font-weight:800;font-variant-numeric:tabular-nums}
+.lineup-chevron{position:absolute;bottom:5%;right:21%;font-size:clamp(12px,3cqw,18px);line-height:1}
+.lineup-disc select{position:absolute;inset:0;width:100%;height:100%;min-height:0;margin:0;padding:0;opacity:0;border-radius:50%;cursor:pointer}
+.lineup-name{max-width:100%;font-size:clamp(11px,2.8cqw,16px);line-height:1.2;margin-top:8px;overflow-wrap:anywhere;text-shadow:0 1px 2px #0006;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media(prefers-reduced-motion:reduce){.lineup-disc{transition:none}}
+.lineup-preview .lineup-player{cursor:default}
+
+/* Shared color-theme chooser, also used in Live set settings. */
+.theme-dialog{width:min(560px,calc(100vw - 28px));max-width:none;padding:20px;border:0;border-radius:18px;background:#fff;color:#273842;box-shadow:0 20px 60px #0006}
+.theme-dialog::backdrop{background:#0a0e12a6}
+.theme-dialog h2{margin:0 0 4px}
+.theme-help{margin:0 0 14px;color:#60727e}
+.theme-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.theme-option{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:10px;min-width:0;min-height:70px;padding:8px;border:1px solid #cbd6dd;border-radius:12px;background:#fff;text-align:left}
+.theme-option[aria-pressed="true"]{border:2px solid var(--accent);padding:7px;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 15%,transparent)}
+.theme-preview{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:88px;height:48px;overflow:hidden;border:2px solid #fff;border-radius:7px;background:linear-gradient(var(--preview-court),var(--preview-court-2));box-shadow:0 1px 3px #0003}
+.theme-preview::after{content:'';position:absolute;top:33%;left:0;right:0;border-top:1px dashed #ffffffa6}
+.theme-preview-roles{z-index:1;display:flex;gap:5px}
+.theme-preview-roles i{width:12px;height:12px;border:1px solid #ffffffe6;border-radius:50%;box-shadow:0 1px 2px #0005}
+.theme-preview-roles i.set{background:var(--preview-set)}.theme-preview-roles i.oh{background:var(--preview-oh)}.theme-preview-roles i.mid{background:var(--preview-mid)}
+.theme-preview-results{z-index:1;display:flex;align-items:center;gap:3px;width:100%;padding:0 6px}
+.theme-preview-results i{width:13px;height:5px;border-radius:4px}
+.theme-preview-results .win{background:var(--preview-win)}.theme-preview-results .lose{background:var(--preview-lose)}
+.theme-preview-results b{width:16px;height:5px;margin-left:auto;border-radius:4px;background:var(--preview-accent)}
+.theme-copy{display:flex;flex-direction:column;gap:2px;min-width:0}.theme-copy strong{font-size:14px}.theme-copy small{color:#60727e;font-size:10px;line-height:1.2}
+.theme-dialog-actions{display:flex;justify-content:flex-end;margin-top:16px}
+
+/* Phones */
+@media(max-width:700px){
+ .appbar-inner{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"back . actions" "title title title";row-gap:8px;padding-top:10px;padding-bottom:12px}
+ #backButton{grid-area:back;max-width:62vw}.appbar-actions{grid-area:actions}.appbar-title{grid-area:title}
+ .appbar h1{font-size:24px}
+ .toolbar{display:grid;grid-template-columns:1fr 1fr}
+ .toolbar .primary,.toolbar .danger{grid-column:1/-1;margin:0}
+ .item{flex-direction:column;align-items:stretch;gap:14px}
+ .item-actions{display:grid;grid-template-columns:1fr 1fr}
+ .item.three .item-actions{grid-template-columns:repeat(3,1fr)}
+ .item-actions button{min-width:0;padding:11px 8px;white-space:nowrap}
+ .grid{grid-template-columns:1fr}
+ .team-theme-field .theme-picker{grid-template-columns:1fr}
+ .team-logo-field{grid-template-columns:1fr auto}
+ .team-logo-field>div:first-child{grid-column:1/-1}
+ .team-logo-preview{grid-row:2;grid-column:2}
+ .upload-label{grid-column:1;grid-row:2}
+ .team-logo-field>button{grid-column:1/-1}
+ .roster-row{grid-template-columns:88px 1fr auto}
+ .roster-row>label:first-child{grid-column:1/-1}
+ .card,form{padding:16px}
+ .form-actions{margin:24px -16px -16px;padding-left:16px;padding-right:16px}
+ #lineupFields>label{max-width:none}
+}
