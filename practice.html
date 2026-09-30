@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="VB Tracker"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef2f4"><title>Practice · Volleyball</title>
+<link rel="stylesheet" href="./src/teams/teams.css"><link rel="stylesheet" href="./src/practice/practice.css">
+</head><body>
+<header class="appbar"><div class="appbar-inner">
+  <button id="backButton" class="back" type="button"><span aria-hidden="true">‹</span> <span id="backLabel">Team</span></button>
+  <div class="appbar-title"><p id="pageContext" class="eyebrow">Practice</p><h1 id="pageTitle">Practice</h1></div>
+  <button id="teamsLink" class="live" type="button">Teams</button>
+</div></header>
+<main class="practice-main"><p id="notice" role="status" aria-live="polite">Loading practice…</p><button id="reloadPractice" type="button" hidden>Reload saved practice</button><section id="content"></section></main>
+<script type="module" src="./src/practice/practice.mjs"></script>
+</body></html>
