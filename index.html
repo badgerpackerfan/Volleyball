@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#eef1f4">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-title" content="VB Tracker"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Live set · Volleyball</title>
+<style>
+  /* Palette, type and dark mode taken from volleyball-rotations.html ("Where do I go?")
+     so the two apps read as one family. */
+  :root {
+    --bg:      #eef1f4;
+    --card:    #ffffff;
+    --ink:     #131a21;
+    --ink-dim: #5a6771;
+    --line:    #d5dce2;
+    --accent:  #286747;
+    --court:   #447454;
+    --court-2: #356448;
+    --chalk:   #ffffff;
+
+    /* Role colors - all >= 4.5:1 against white text. With a 5-1 the
+       opposite pairs share a role, so these double as the sheet's pair colors. */
+    --c-set:  #a82e29;
+    --c-oh:   #254fa7;
+    --c-mid:  #17613b;
+
+    /* Who gets the point: green = us, red = them.
+       Solid = earned (Ace/Kill/Block), tinted = error. */
+    --win:       #16713c;
+    --win-tint:  color-mix(in srgb, var(--win) 10%, #ffffff);
+    --win-ink:   color-mix(in srgb, var(--win) 70%, #000000);
+    --lose:      #b3251f;
+    --lose-tint: color-mix(in srgb, var(--lose) 10%, #ffffff);
+    --lose-ink:  color-mix(in srgb, var(--lose) 70%, #000000);
+
+    --page:   #d9dfe4;   /* around the iPad frame only */
+    --frame:  var(--bg);
+    --radius: 14px;
+
+    --font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+            "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto,
+            "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
+      --line: #2a343d; --accent: #35a3b3; --page: #05080a;
+      --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
+      --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
+    }
+  }
+  :root.dark {
+    --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
+    --line: #2a343d; --accent: #35a3b3; --page: #05080a;
+    --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
+    --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink); font-family: var(--font);
+    font-optical-sizing: auto; letter-spacing: -0.006em;
+    -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+
+  /* ---------- Page chrome around the iPad frame (not part of the app) ---------- */
+  .toolbar {
+    display: flex; gap: 14px; align-items: center; padding: 10px 18px; flex-wrap: wrap;
+    font-size: 13px; color: var(--ink-dim);
+  }
+  .toolbar b { color: var(--ink); }
+  .toolbar label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .stage { padding: 0 18px 18px; }
+  .scaler { transform-origin: top left; }
+
+  /* ---------- The iPad Pro 12.9" landscape canvas: 1366 x 1024 pt ---------- */
+  .ipad {
+    position: relative; width: 1366px; height: 1024px; overflow: hidden;
+    background: var(--frame); border-radius: 22px;
+    box-shadow: 0 0 0 10px #1c2329, 0 20px 50px rgba(0,0,0,.35);
+    display: grid;
+    grid-template-rows: 60px minmax(0, 1fr) 104px;
+  }
+
+  /* ① Header */
+  /* Same three columns as the body, so each team's info sits above its own pad. */
+  .hdr {
+    display: grid; grid-template-columns: 1fr; padding: 0 16px;
+    align-items: center; border-bottom: 1px solid var(--line); background: var(--card);
+  }
+  .hdr-us, .hdr-them { display: flex; align-items: center; gap: 18px; }
+  .hdr-them { justify-content: flex-end; }
+  .hdr-mid { display: flex; align-items: center; justify-content: center; gap: 14px; position: relative; }
+  .team-chip {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px;
+    border-radius: 12px; background: var(--accent); color: #fff; font-weight: 800; font-size: 18px;
+    white-space: nowrap;
+  }
+  .team-chip .badge {
+    width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.2);
+    display: grid; place-items: center; font-size: 15px;
+  }
+  .team-chip .team-logo-mini { width: 36px; height: 36px; flex: none; object-fit: contain; border-radius: 8px; background: #fff; padding: 2px; }
+  .team-chip > span:not(.caret) { overflow: hidden; text-overflow: ellipsis; }
+  .team-chip.opp { background: var(--frame); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; }
+  .team-chip.opp small { font-weight: 700; color: var(--ink-dim); font-size: 14px; }
+  .match-info { text-align: center; line-height: 1.25; }
+  .match-info .set { font-weight: 800; font-size: 19px; }
+  .match-info .set small { font-weight: 700; color: var(--ink-dim); font-size: 15px; }
+  .match-info .sub { color: var(--ink-dim); font-size: 13px; }
+  .past-sets { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
+  .hdr-mid .menu-btn { position: absolute; right: 0; width: 46px; height: 44px; }
+  .meter { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .hdr-them .meter { align-items: flex-end; }
+  .meter .lbl { font-size: 13px; color: var(--ink-dim); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .meter .val { font-size: 18px; font-weight: 800; }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .bar.warn i { background: #d97706; }
+  .dots { display: flex; gap: 5px; align-items: center; font-size: 14px; font-weight: 700; }
+  /* Remaining timeout = dark dot; used = light gray. */
+  .dots span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); border: 2px solid var(--line); }
+  .dots span.on { background: var(--ink); border-color: var(--ink); }
+  .menu-btn { width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--line); font-size: 24px; font-weight: 800; }
+
+  /* Body grid: Us pad | center | Them pad */
+  .body {
+    display: grid; grid-template-columns: 330px minmax(0, 1fr) 330px; grid-template-rows: minmax(0, 1fr); gap: 16px; padding: 16px;
+    min-height: 0;
+  }
+
+  /* ②/⑥ Code pads */
+  .pad {
+    background: var(--card); border-radius: var(--radius); border: 1px solid var(--line);
+    padding: 14px; display: flex; flex-direction: column; gap: 8px; position: relative; min-height: 0; overflow: hidden;
+  }
+  .pad h2 {
+    margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: center;
+  }
+  #padThem h2 { justify-content: flex-end; }
+  .pad h2 .team-chip { padding: 7px 14px; }
+  .pad h2 .team-chip .badge { width: 30px; height: 30px; }
+  .pad h2 .team-chip.opp { padding: 7px 14px; gap: 8px; }
+  .pad h2 small { font-size: 13px; font-weight: 700; color: var(--ink-dim); letter-spacing: .04em; }
+  .pad h3 {
+    margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .code {
+    height: 80px; border-radius: 14px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px; position: relative;
+    transition: transform .06s, box-shadow .15s, opacity .15s;
+  }
+  .code:active { transform: scale(.97); }
+  .code.solid { box-shadow: 0 2px 7px rgba(0,0,0,.18); }
+  .code b { font-size: 30px; font-weight: 800; letter-spacing: .01em; }
+  .code span { font-size: 12px; font-weight: 700; opacity: .85; }
+  .code.earned { height: 80px; }
+  .code.earned b { font-size: 34px; }
+  .code.small { height: 64px; }
+  .code.small b { font-size: 20px; }
+  .code.small span { font-size: 10px; }
+  /* Words mode: full words instead of codes (toolbar switch). */
+  .code .word { display: none; font-size: 18px; font-weight: 800; line-height: 1.1; text-align: center; }
+  .code.earned .word { font-size: 28px; }
+  .code.small .word { font-size: 18px; }
+  body.words .code .word { display: block; }
+  body.words .code .abbr, body.words .code .cap { display: none; }
+  .code.win.solid  { background: var(--win);  color: #fff; }
+  .code.lose.solid { background: var(--lose); color: #fff; }
+  .code.win.tint   { background: var(--win-tint);  color: var(--win-ink);  border: 1px solid color-mix(in srgb, var(--win) 35%, transparent); }
+  .code.lose.tint  { background: var(--lose-tint); color: var(--lose-ink); border: 1px solid color-mix(in srgb, var(--lose) 35%, transparent); }
+  .code.tint .word, .code.tint .abbr, .code.tint .cap { font-weight: 600; }
+  .code:disabled { opacity: .22; pointer-events: none; }
+  .code.pending { box-shadow: 0 0 0 5px var(--ink); }
+  .code .auto {
+    position: absolute; top: 6px; right: 8px; font-size: 10px; font-weight: 800;
+    padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.18); letter-spacing: .04em;
+  }
+  .team-btn {
+    height: 64px; border-radius: 14px; border: 2px dashed var(--ink-dim); font-weight: 800; font-size: 18px;
+    color: var(--ink-dim);
+  }
+  .grid3 .team-btn { height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 20px; }
+  .team-btn small { font-size: 12px; font-weight: 700; }
+  .team-btn.ready { border-style: solid; border-color: var(--accent); color: #fff; background: var(--accent); }
+  .team-btn:disabled { opacity: .3; }
+  .pad-hint {
+    margin-top: auto; font-size: 12px; color: var(--ink-dim); line-height: 1.3;
+    border-top: 1px solid var(--line); padding-top: 8px;
+  }
+  .pad-hint b { color: var(--ink); }
+
+  /* Coach's corner: the top three suggestions under the court. */
+  .corner {
+    position: relative; flex: none; height: 166px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 8px 10px 10px; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto minmax(0, 1fr);
+    gap: 6px 10px; align-items: center;
+  }
+  .corner h3 { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); }
+  .corner-mode:empty { visibility: hidden; }
+  .corner-mode { justify-self: start; font-size: 12px; font-weight: 800; color: #b45309; background: #fdf1e3; border: 1px solid #f3c58a; border-radius: 8px; padding: 2px 8px; }
+  .corner #corner { grid-column: 1 / -1; align-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; overflow: hidden; }
+  .corner #corner .more-tips { position: absolute; top: 5px; right: 10px; min-height: 26px; padding: 2px 8px; }
+  .corner #corner .quiet { grid-column: 1 / -1; align-self: center; }
+  .corner .tip { display: flex; flex-direction: column; gap: 2px; position: relative; padding: 6px 30px 6px 11px; overflow: hidden; }
+  .corner .tip .x { position: absolute; top: 4px; right: 2px; }
+  .corner .tip { cursor: pointer; }
+  .corner .tip b { font-size: 14px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .corner .tip.has-acts span { -webkit-line-clamp: 1; }
+  .corner .tip span { line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .corner .tip .acts { margin-top: auto; flex-wrap: nowrap; min-width: 0; }
+  .corner .tip .acts .pill { min-height: 30px; min-width: 0; font-size: 12px; padding: 2px 6px; white-space: normal; line-height: 1.15; }
+  .tip {
+    display: grid; grid-template-columns: 1fr 32px; gap: 2px 8px; align-items: start;
+    padding: 9px 6px 9px 12px; border-radius: 11px; background: var(--bg); border-left: 5px solid var(--accent);
+  }
+  .tip[data-category="timeout"] { --tip-color: #c43d50; --tip-label: "Timeout / reset"; }
+  .tip[data-category="passing"] { --tip-color: #397bd1; --tip-label: "Passing / defense"; }
+  .tip[data-category="attacking"] { --tip-color: #9254c8; --tip-label: "Attacking"; }
+  .tip[data-category="serving"] { --tip-color: #208c87; --tip-label: "Serving"; }
+  .tip[data-category="rotation"] { --tip-color: #a6535b; --tip-label: "Rotation / lineup"; }
+  .tip[data-category="management"] { --tip-color: #788599; --tip-label: "Game management"; }
+  .tip[data-category] {
+    border-left-color: var(--tip-color);
+    background: color-mix(in srgb, var(--tip-color) 9%, var(--card));
+  }
+  .tip[data-category]::before {
+    content: var(--tip-label); grid-column: 1; font-size: 10px; line-height: 1.2;
+    font-weight: 800; color: var(--ink); letter-spacing: .04em;
+  }
+  .tip.urgent::before { content: var(--tip-label) " · Urgent"; }
+  .tip[data-category].urgent {
+    background: color-mix(in srgb, var(--tip-color) 65%, #111827);
+    color: #fff;
+    border-left: 0;
+  }
+  .tip[data-category].urgent::before,
+  .tip[data-category].urgent span,
+  .tip[data-category].urgent .x { color: #fff; }
+  .tip[data-category].urgent .acts .pill {
+    background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.55);
+  }
+  .tip[data-category] > b { grid-column: 1; }
+  .tip[data-category] .x { grid-row: 1 / span 3; }
+  .tip-preview { margin-bottom: 28px; }
+  .tip-preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .tip-preview-grid .tip { grid-template-columns: 1fr; padding: 14px; gap: 7px; }
+  .tip-preview-grid .tip span { font-size: 14px; }
+
+  .tip b { font-size: 15px; line-height: 1.25; }
+  .tip span { grid-column: 1; font-size: 12px; color: var(--ink-dim); line-height: 1.3; }
+  .tip .x { grid-row: 1 / span 2; grid-column: 2; width: 32px; height: 32px; border-radius: 9px; color: var(--ink-dim); font-size: 20px; }
+  .tip .acts { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tip .acts .pill { min-height: 36px; font-size: 13px; padding: 2px 10px; }
+  .chip.crunch { color: #b45309; border-color: #d97706; }
+  .score.crunch { border-color: #d97706; box-shadow: inset 0 0 0 2px #d97706; }
+  .corner .quiet { font-size: 13px; color: var(--ink-dim); }
+  .act.suggest { box-shadow: 0 0 0 3px #d97706; }
+
+  /* Rare codes live behind More. */
+  .pad-hint:empty { display: none; }
+  .pad-actions { margin-top: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .pad-actions .act { height: 72px; }
+  .act-sub .bar { width: 70%; margin-top: 5px; }
+  .act-to .dots { margin-top: 6px; }
+  .act-to:disabled { opacity: .45; }
+  .act.suggest { border-color: #d97706; box-shadow: 0 0 0 3px #d97706; }
+  /* Court view tools sit in the space beside the (square) court. */
+  .court-wrap { position: relative; }
+  .court-tools { flex: none; display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .court-tools .view-pills { display: flex; gap: 8px; }
+  .court-tools .pill { min-height: 36px; font-size: 13px; padding: 2px 12px; }
+  /* Court view buttons sit inside the court; the state label stays on its surface. */
+  .end-zone { display: flex; align-items: center; width: var(--cw, 100%); }
+  #receiveStatus { font-size: 12px; line-height: 1.2; color: var(--ink); max-width: 80%; }
+  .court-tools [hidden] { display: none !important; }
+  .court.editing #rcvPassers, .court.editing #rcvToggle { display: none; }
+  .court .court-tools { max-width: 96%; flex-wrap: wrap; justify-content: center; position: absolute; left: 50%; transform: translateX(-50%); bottom: 2.5%; z-index: 6; margin: 0; white-space: nowrap; }
+  .court .court-tools .tools-lbl { display: none; }
+  .court .court-tools .pill {
+    min-height: 34px; background: rgba(8, 18, 24, .45); color: #fff; border-color: rgba(255, 255, 255, .45);
+    backdrop-filter: blur(2px);
+  }
+  .court .court-tools .pill[aria-pressed="true"] { background: #fff; color: var(--accent); border-color: #fff; }
+  .tools-lbl { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); text-align: center; }
+  .corner .more-tips { display: grid; place-items: center; font-size: 14px; font-weight: 800; color: var(--accent); border: 1px dashed var(--line); border-radius: 11px; }
+
+  /* Variation: no header. The team chip opens the menu. */
+  body.no-header .hdr { display: none; }
+  body.no-header .ipad { grid-template-rows: minmax(0, 1fr) 104px; }
+  body.no-header .callout:not(#callout1) { transform: translateY(-60px); }
+  body.no-header #callout1 { left: 400px !important; top: 60px !important; }
+  button.team-chip { cursor: pointer; }
+  .team-chip .caret { font-size: 13px; opacity: .8; margin-left: 2px; }
+
+  /* Center column */
+  .center { display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .center-main { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; min-width: 0; }
+
+  /* ③ Scoreboard */
+  .score {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 8px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr); align-items: center; column-gap: 12px;
+  }
+  .score .side { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .score #sideUs { justify-self: end; } .score #sideThem { justify-self: start; }
+  .score .who { font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.015em; color: var(--ink); display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .score .num { font-size: 84px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+  .score .colon { font-size: 64px; font-weight: 800; color: var(--ink-dim); padding: 0 6px; }
+  .set-history {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  }
+  #pastSetsThem { align-items: flex-end; }
+  .set-result {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
+    font-size: 13px; color: var(--ink-dim);
+  }
+  .set-result .set-label { font-size: 11px; font-weight: 700; }
+  .set-result.won .set-label { color: var(--win-ink); }
+  .set-result.lost .set-label { color: var(--lose-ink); }
+  .set-result strong { font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .set-result.won { background: var(--win-tint); border-color: color-mix(in srgb, var(--win) 35%, transparent); }
+  .set-result.lost { background: var(--lose-tint); border-color: color-mix(in srgb, var(--lose) 35%, transparent); }
+  .set-result.won strong { color: var(--win-ink); }
+  .set-result.lost strong { color: var(--lose-ink); }
+  .serve-ball { width: 24px; height: 24px; color: var(--ink); visibility: hidden; }
+  .serve-ball svg { width: 100%; height: 100%; display: block; }
+  .serving .serve-ball { visibility: visible; }
+  .serving .who { color: var(--ink); }
+  .score .meta {
+    grid-column: 4; grid-row: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  }
+  .chip {
+    font-size: 15px; font-weight: 700; padding: 7px 14px; border-radius: 11px;
+    background: var(--card); border: 1px solid var(--line);
+  }
+  .chip.rot { background: var(--accent); color: #fff; border-color: var(--accent); font-size: 17px; }
+  .chip.pos { color: var(--win); }
+  .chip.neg { color: var(--lose); }
+
+  /* ④ Court — same surface, chalk and player discs as "Where do I go?" */
+  .court-wrap {
+    padding: 0; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0;
+    container-type: size;
+    --court-reserve: 44px;
+  }
+  .court-wrap:has(> .court-tools) { --court-reserve: 84px; }
+  .mark-net { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--ink-dim); text-align: center; margin-bottom: 4px; }
+  /* Half court to scale: 9 m x 9 m (square), attack line 3 m (10 ft) from the net = 1/3 of the depth. */
+  .court {
+    flex: none; width: min(100cqw, calc(100cqh - var(--court-reserve))); aspect-ratio: 1 / 1; max-width: 100%; position: relative;
+    --cw: 440px;   /* court width, kept current by ResizeObserver */
+    background: linear-gradient(var(--court), var(--court-2));
+    border: 3px solid var(--chalk); border-radius: 3px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+  .court .net { position: absolute; inset: 0 0 auto 0; height: 1.7%; background: var(--chalk); z-index: 2; }
+  .court .attack-line { position: absolute; top: 33.333%; left: 0; width: 100%; border-top: 2px dashed rgba(255,255,255,.75); pointer-events: none; }
+  /* Tap areas are bigger than the drawn zones: the split sits between the two
+     rows of players (42%), not on the attack line, so front-row targets stay large. */
+  .zone {
+    position: absolute; width: 33.333%; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; color: #fff;
+  }
+  /* Zones are placed inline (left/top/width/height) so they can glide between
+     rotation spots and serve-receive spots, like the players in "Where do I go?". */
+  .zone { transition: left .9s ease-in-out, top .9s ease-in-out, width .9s ease-in-out, height .9s ease-in-out, padding .9s ease-in-out; }
+  .zone.front { justify-content: flex-start; padding-top: 5.5%; }
+  .zone.backrow { justify-content: center; padding-bottom: 4%; }
+  .zone.rcv { justify-content: center; padding: 0; }
+  .zone.rcv .pos, .zone.rcv .name { display: none; }
+  .zone.rcv .disc { width: calc(var(--cw) * 0.13333); height: calc(var(--cw) * 0.13333); font-size: calc(var(--cw) * 0.062); }
+  .zone .pos { position: absolute; left: 10px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); }
+  .zone.front .pos { top: 12px; }
+  .zone.backrow .pos { top: 10px; }
+  .dwrap { position: relative; }
+  .disc {
+    width: calc(var(--cw) * 0.19); height: calc(var(--cw) * 0.19); border-radius: 50%; display: grid; place-items: center;
+    font-size: calc(var(--cw) * 0.084); font-weight: 800; color: #fff; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 7px rgba(0,0,0,.4); transition: box-shadow .15s, transform .08s, width .9s ease-in-out, height .9s ease-in-out, font-size .9s ease-in-out;
+  }
+  .court.editing .zone { touch-action: none; cursor: grab; transition: none; }
+  .court.editing .zone:active { cursor: grabbing; }
+  .court.editing .disc { transition: none; }
+  .zone:active .disc { transform: scale(.97); }
+  .disc.set { background: var(--c-set); }
+  .disc.oh  { background: var(--c-oh); }
+  .disc.mid { background: var(--c-mid); }
+  /* Ring = back-row player; libero = white disc, black ring (as in the other app). */
+  .disc.back { box-shadow: 0 2px 7px rgba(0,0,0,.4), inset 0 0 0 6px rgba(255,255,255,.92); }
+  .disc.lib  { background: #fff; color: #111; box-shadow: 0 2px 7px rgba(0,0,0,.4), inset 0 0 0 6px #111; }
+  .zone .name { font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4); white-space: nowrap; }
+  .zone .name small { font-weight: 600; opacity: .8; margin-left: 4px; }
+  .dwrap .ball {
+    position: absolute; width: calc(var(--cw) * 0.075); height: calc(var(--cw) * 0.075); border-radius: 50%; background: #fff; color: #1a1a1a;
+    box-shadow: 0 3px 9px rgba(0,0,0,.45); right: calc(var(--cw) * -0.025); top: calc(var(--cw) * -0.015);
+  }
+  .dwrap .ball svg { width: 100%; height: 100%; display: block; }
+  .dwrap .form {
+    position: absolute; left: -4px; top: -4px; width: 24px; height: 24px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 12px; color: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.35);
+  }
+  .dwrap .form.hot { background: var(--win); }
+  .dwrap .form.cold { background: #d97706; }
+  .dwrap .swap-tag {
+    position: absolute; left: calc(100% + 6px); bottom: 0; font-size: 12px; font-weight: 700; white-space: nowrap;
+    padding: 3px 7px; border-radius: 8px; background: rgba(255,255,255,.92); color: #131a21;
+  }
+  .zone.pick .disc { animation: pulse 1s infinite alternate; }
+  .zone.selected .disc { outline: 5px solid #fff; outline-offset: 4px; }
+  .zone.nopick { opacity: .35; }
+  @keyframes pulse { from { outline: 3px solid #fff; outline-offset: 3px; } to { outline: 6px solid #fff; outline-offset: 6px; } }
+  /* Formation bar under the court. Fixed height so the court is the same size
+     whether we serve or receive; when we serve, the top of it is the space
+     behind the end line where the server stands. */
+  /* Room behind the end line for our server; the same height whether we serve
+     or receive, so the court never changes size. */
+  .end-zone { height: 44px; flex: none; }
+  /* Court view controls live in the Us pad. */
+  .view-row { display: flex; align-items: center; gap: 8px; }
+  .view-pills { display: flex; gap: 8px; }
+  .view-row .pill { flex: none; padding: 4px 10px; font-size: 13px; }
+  .view-row #rcvToggle { margin-left: auto; }
+  .pill {
+    min-height: 40px; padding: 4px 14px; border: 1px solid var(--line); border-radius: 11px;
+    background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; white-space: nowrap;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .pill[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .court .court-mark {
+    position: absolute; top: 37%; left: 50%; transform: translateX(-50%);
+    font-size: 12px; font-weight: 800; letter-spacing: .08em; white-space: nowrap;
+    color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); pointer-events: none;
+  }
+  .court .court-mark { display: block; }
+  @media (prefers-reduced-motion: reduce) { .zone, .disc { transition: none; } }
+  .legend {
+    display: flex; justify-content: flex-start; gap: 4px 10px; margin: 0; padding: 0; flex-wrap: nowrap; white-space: nowrap;
+    font-size: 12px; color: var(--ink-dim); font-weight: 600;
+  }
+  .legend li { display: flex; align-items: center; gap: 6px; list-style: none; }
+  .swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .swatch.lib  { border: 3px solid #111; background: #fff; }
+  .swatch.ring { background: var(--ink-dim); box-shadow: inset 0 0 0 3px #fff; }
+
+  /* ⑤ Action row */
+  .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .act {
+    height: 80px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line);
+    font-size: 20px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: background .15s, transform .08s;
+  }
+  .act:active { transform: scale(.97); }
+  .act small { font-size: 13px; color: var(--ink-dim); font-weight: 600; }
+  .act.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .act.on small { color: var(--bg); opacity: .8; }
+
+  /* ⑦ Bottom bar: rally log + undo */
+  .foot {
+    display: grid; grid-template-columns: 1fr 210px; gap: 16px; padding: 0 16px 16px; align-items: stretch;
+  }
+  .log {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; overflow: hidden; justify-content: flex-end;
+  }
+  .log .lbl { font-size: 12px; font-weight: 800; letter-spacing: .1em; color: var(--ink-dim); white-space: nowrap; }
+  .log-head { flex: none; margin-right: auto; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .log-meta { display: flex; gap: 6px; }
+  .log-meta .chip { font-size: 14px; padding: 4px 10px; white-space: nowrap; }
+  .run-track { display: flex; flex: 1; gap: 8px; min-width: 0; overflow: hidden; padding: 3px; }
+  .run-track > [hidden] { display: none; }
+  .sideout-divider {
+    flex: 0 0 2px; align-self: stretch; margin: 4px 2px;
+    background: var(--ink-dim); border-radius: 1px;
+  }
+  .rchip {
+    flex: 0 0 auto; display: grid; grid-template-columns: 1fr; gap: 4px; align-items: center; text-align: center;
+    padding: 8px 12px; border-radius: 11px; background: var(--win-tint); color: var(--win-ink); font-size: 13px; white-space: nowrap;
+  }
+  .rchip.lost { background: var(--lose-tint); color: var(--lose-ink); }
+  .rchip .c { font-weight: 800; font-size: 16px; }
+  .rchip .s { font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
+  .rchip.latest { box-shadow: 0 0 0 2px var(--ink); }
+  .undo {
+    border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 24px; font-weight: 800;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  }
+  .undo small { font-size: 13px; font-weight: 700; opacity: .75; }
+  .undo:disabled { opacity: .3; }
+
+  /* ⑧ Banners (non-blocking prompts) */
+  .banners {
+    position: absolute; left: 16px; right: 242px; bottom: 16px;
+    display: flex; flex-direction: column-reverse; gap: 8px; z-index: 20; pointer-events: none;
+  }
+  .banner {
+    min-height: 88px; pointer-events: auto; background: var(--ink); color: var(--card); border-radius: 14px;
+    padding: 12px 12px 12px 18px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.3); font-size: 17px; font-weight: 700;
+  }
+  .banner .t { flex: 1; }
+  .banner .t small { display: block; font-size: 13px; opacity: .7; font-weight: 600; }
+  .banner button { height: 48px; padding: 0 18px; border-radius: 10px; font-weight: 800; font-size: 16px; }
+  .banner .yes { background: var(--card); color: var(--ink); }
+  .banner .no { border: 2px solid rgba(255,255,255,.4); color: var(--card); }
+  .banner.info { background: var(--accent); }
+
+  /* Sheets (sub / libero / timeout pickers) — centered over the court */
+  .sheet {
+    position: absolute; inset: 0; background: rgba(10,14,18,.35); display: none;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .sheet.open { display: flex; }
+  .sheet .card {
+    width: 560px; background: var(--card); border-radius: 18px; padding: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  }
+  .sheet h4 { margin: 0 0 4px; font-size: 22px; }
+  .sheet p { margin: 0 0 14px; color: var(--ink-dim); font-size: 15px; }
+  .bench { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .bench button {
+    height: 96px; border-radius: 14px; border: 1px solid var(--line); background: var(--card);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .bench b { font-size: 34px; font-weight: 800; }
+  .bench span { font-size: 12px; color: var(--ink-dim); font-weight: 700; }
+  .bench em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--lose); text-align: center; line-height: 1.2; padding: 0 4px; }
+  .bench em.ok { color: var(--accent); }
+  .bench .partner { border: 2px solid var(--accent); }
+  .bench button:disabled { opacity: .45; cursor: not-allowed; }
+  .bench button:disabled b { color: var(--ink-dim); }
+  .bench button.blocked:not(:disabled) { border: 2px dashed #d97706; }
+  .pass-rating-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .pass-rating-grid button { min-height: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 5px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); }
+  .pass-rating-grid button b { font-size: 32px; line-height: 1; }
+  .pass-rating-grid button span { display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.2; }
+  .pass-rating-grid button strong { font-size: 12px; }
+  .pass-rating-grid button small { margin-top: 2px; color: var(--ink-dim); font-size: 10px; font-weight: 600; }
+  .sheet-row { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
+  .sheet-row .cancel { margin-top: 0; flex: 1; }
+  .ovr { font-size: 14px; font-weight: 700; color: var(--ink-dim); text-decoration: underline; padding: 0 6px; }
+  .ovr.on { text-decoration: none; color: #b45309; }
+  .sheet .cancel { margin-top: 14px; width: 100%; height: 56px; border-radius: var(--radius); border: 1px solid var(--line); font-weight: 800; font-size: 17px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .two button { height: 110px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 22px; font-weight: 800; }
+  .two button small { display: block; font-size: 14px; color: var(--ink-dim); font-weight: 700; }
+  .two button:disabled { opacity: .3; }
+
+  .lib-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 10px; }
+  .lib-table th { text-align: right; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); padding: 2px 6px; }
+  .lib-table td { padding: 4px 6px; border-top: 1px solid var(--line); }
+  .lib-table td + td { text-align: right; font-variant-numeric: tabular-nums; }
+  .lib-table tr.b td { font-weight: 800; }
+  .lib-table tr.grp td { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); padding-top: 10px; border-top: 0; }
+  .lib-rec { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-left: 5px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.4; margin-bottom: 10px; }
+  .lib-plan { display: flex; gap: 8px; margin-bottom: 12px; }
+  .sheet .card { max-height: 960px; overflow-y: auto; }
+
+  .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .menu-list button { text-align: left; padding: 12px 14px; min-height: 68px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 2px; }
+  .menu-list button:disabled { opacity: .6; cursor: default; }
+  .menu-list .menu-status { font-weight: 600; }
+  .menu-list b { font-size: 16px; }
+  .menu-list span { font-size: 12px; color: var(--ink-dim); }
+
+  /* Team-menu screens: rotation report, lineup, edit rallies, fixes, match summary, settings */
+  .sheet .card.wide { width: 1300px; }
+  .sheet h5 { margin: 14px 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+  .sheet button:disabled { opacity: .35; cursor: default; }
+  .sheet .sheet-row .cancel { margin-top: 0; }
+  .rr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  .rr-col { border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--card); min-width: 0; }
+  .rr-col.now { box-shadow: inset 0 0 0 2px var(--accent); }
+  .rr-col.best { background: color-mix(in srgb, var(--win) 9%, var(--card)); }
+  .rr-col.worst { background: color-mix(in srgb, var(--lose) 9%, var(--card)); }
+  .rr-col header { display: flex; justify-content: space-between; align-items: baseline; font-size: 20px; margin-bottom: 6px; }
+  .rr-col header span { font-size: 15px; color: var(--ink-dim); font-weight: 800; }
+  .mini-court { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--court); border: 2px solid var(--chalk); border-top-width: 5px; border-radius: 4px; }
+  .mini-court div { color: #fff; text-align: center; padding: 4px 2px; min-width: 0; display: flex; flex-direction: column; }
+  .mini-court div:nth-child(n+4) { border-top: 1px dashed rgba(255,255,255,.6); }
+  .mini-court .srv { background: rgba(255,255,255,.24); }
+  .mini-court small { font-size: 10px; opacity: .8; font-weight: 700; }
+  .mini-court b { font-size: 20px; line-height: 1.15; }
+  .mini-court span { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rr .mini-court span { display: none; }
+  .rr-log { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; margin: 6px 0; font-variant-numeric: tabular-nums; }
+  .rr-log th { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--ink-dim); padding: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rr-log td { text-align: center; padding: 3px 1px; border-top: 1px solid var(--line); }
+  .rr-log tr.won td:nth-child(3) { color: var(--win); font-weight: 800; }
+  .rr-log tr.lost td:nth-child(4) { color: var(--lose); font-weight: 800; }
+  .rr-log tr.edited td:nth-child(2)::after { content: '*'; color: var(--accent); }
+  .rr-log .empty { color: var(--ink-dim); font-size: 12px; }
+  .rr-tot { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; margin: 0; font-size: 13px; }
+  .rr-tot dt { color: var(--ink-dim); } .rr-tot dd { margin: 0; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+  .fix-list { margin: 0 0 8px; padding-left: 20px; font-size: 15px; line-height: 1.5; }
+  .two-courts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .two-courts .mini-court b { font-size: 26px; }
+  .lineup-facts ul { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.5; }
+  .lineup-facts p { margin: 0 0 6px; }
+  .rally-list { display: grid; gap: 6px; max-height: 660px; overflow-y: auto; }
+  .rally-row { display: grid; grid-template-columns: 36px 78px 1fr auto; align-items: center; gap: 8px; min-height: 54px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: left; font-size: 16px; }
+  .rally-row.won { border-left: 6px solid var(--win); } .rally-row.lost { border-left: 6px solid var(--lose); }
+  .rally-row .n, .rally-row small { color: var(--ink-dim); font-weight: 700; }
+  .rally-row b { font-size: 19px; font-variant-numeric: tabular-nums; }
+  .rally-row em { font-style: normal; font-size: 12px; color: var(--accent); font-weight: 800; }
+  .seg { display: flex; gap: 8px; }
+  .seg button, .code-grid button, .player-grid button, .toggle-grid button, .sheet .pill { min-height: 52px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-weight: 800; font-size: 15px; flex: 1; padding: 6px 10px; }
+  .seg button.on, .player-grid button.on, .toggle-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .theme-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .theme-option { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 10px; min-width: 0; min-height: 70px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: left; }
+  .theme-option[aria-pressed="true"] { border: 2px solid var(--accent); padding: 7px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .theme-preview { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 88px; height: 48px; overflow: hidden; border: 2px solid #fff; border-radius: 7px; background: linear-gradient(var(--preview-court), var(--preview-court-2)); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .theme-preview::after { content: ''; position: absolute; top: 33%; left: 0; right: 0; border-top: 1px dashed rgba(255,255,255,.65); }
+  .theme-preview-roles { z-index: 1; display: flex; gap: 5px; }
+  .theme-preview-roles i { width: 12px; height: 12px; border: 1px solid rgba(255,255,255,.9); border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .theme-preview-roles i.set { background: var(--preview-set); }
+  .theme-preview-roles i.oh { background: var(--preview-oh); }
+  .theme-preview-roles i.mid { background: var(--preview-mid); }
+  .theme-preview-results { z-index: 1; display: flex; align-items: center; gap: 3px; width: 100%; padding: 0 6px; }
+  .theme-preview-results i { width: 13px; height: 5px; border-radius: 4px; }
+  .theme-preview-results .win { background: var(--preview-win); }
+  .theme-preview-results .lose { background: var(--preview-lose); }
+  .theme-preview-results b { width: 16px; height: 5px; margin-left: auto; border-radius: 4px; background: var(--preview-accent); }
+  .theme-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .theme-copy strong { font-size: 14px; }
+  .theme-copy small { color: var(--ink-dim); font-size: 10px; line-height: 1.2; }
+  .code-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .code-grid button.win { color: var(--win-ink); } .code-grid button.lose { color: var(--lose-ink); }
+  .code-grid button.on.win { background: var(--win); border-color: var(--win); color: #fff; }
+  .code-grid button.on.lose { background: var(--lose); border-color: var(--lose); color: #fff; }
+  .player-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .player-grid button { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .player-grid b { font-size: 22px; } .player-grid span { font-size: 11px; font-weight: 700; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .toggle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .sheet p.edit-error { color: var(--lose); font-weight: 700; min-height: 20px; margin: 10px 0 0; }
+  .save-btn, .danger-btn { height: 56px; border-radius: var(--radius); font-weight: 800; font-size: 17px; flex: 1; }
+  .save-btn { background: var(--accent); color: #fff; }
+  .danger-btn { border: 1px solid var(--lose); color: var(--lose); background: var(--card); }
+  .fix-scores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button { width: 64px; height: 64px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 30px; font-weight: 800; }
+  .stepper b { font-size: 44px; min-width: 70px; text-align: center; font-variant-numeric: tabular-nums; }
+  .fix-reason { width: 100%; height: 52px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; font: inherit; font-size: 16px; background: var(--card); color: var(--ink); }
+  .set-chips { display: flex; gap: 8px; margin-bottom: 8px; }
+  .set-chips div { border-radius: 12px; padding: 8px 14px; display: flex; flex-direction: column; background: var(--bg); }
+  .set-chips .won { background: var(--win-tint); color: var(--win-ink); } .set-chips .lost { background: var(--lose-tint); color: var(--lose-ink); }
+  .set-chips b { font-size: 24px; font-variant-numeric: tabular-nums; }
+  .summary-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; }
+  .stat-table td:first-child { text-align: left; }
+  .stat-table td.pos { color: var(--win); font-weight: 800; } .stat-table td.neg { color: var(--lose); font-weight: 800; }
+
+  /* Numbered callouts for design review */
+  .callout {
+    position: absolute; z-index: 40; width: 34px; height: 34px; border-radius: 50%;
+    background: #f59e0b; color: #111; font-weight: 800; font-size: 18px; display: grid; place-items: center;
+    box-shadow: 0 0 0 3px #fff, 0 4px 10px rgba(0,0,0,.3); pointer-events: none;
+  }
+  body.no-callouts .callout { display: none; }
+
+  /* Design notes below the canvas */
+  .notes { max-width: 1366px; margin: 28px 0 60px; color: var(--ink); font-size: 16px; line-height: 1.5; }
+  .notes h2 { font-size: 22px; margin: 0 0 6px; }
+  .notes > p { color: var(--ink-dim); margin: 0 0 16px; }
+  .notes .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .note { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+  .note h3 { margin: 0 0 6px; font-size: 17px; display: flex; gap: 10px; align-items: center; }
+  .note h3 .n { width: 28px; height: 28px; border-radius: 50%; background: #f59e0b; color: #111; display: grid; place-items: center; font-size: 15px; flex: none; }
+  .note ul { margin: 4px 0 0; padding-left: 20px; }
+  .note li { margin: 2px 0; }
+  .note .q { color: var(--accent); font-weight: 700; }
+</style>
+
+<style>
+  /* Plus Jakarta Sans - latin subset, variable weight 500-800 - embedded as
+     base64 so the page keeps its typeface with no network at all.
+     (c) Tokotype, SIL Open Font License 1.1 - https://openfontlicense.org
+
+     The payload is split with CSS escaped newlines (backslash + newline,
+     which the parser removes) and lives in its own style element. Safari
+     was cutting the stylesheet short on the original 36k-character line,
+     which dropped every rule after it. Isolated here, a repeat would cost
+     the typeface and nothing else. */
+  @font-face {
+    font-family: "Plus Jakarta Sans";
+    font-style: normal;
+    font-weight: 500 800;
+    font-display: swap;
+    src: url("data:font/woff2;base64,d09GMgABAAAAAGrUABQAAAAA7vwAAGpeAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGoMxG8gwHIgyP0hWQVKHLz9NVkFSRgZg\
+      P1NUQVSBHACFNC9cEQgKgYxI7lYLhDwAMIHLEAE2AiQDiHQEIAWGXAeKIQwHG3PcNaoT5UJ2rjvBFbXb1zrCyICwcZDhsTEZ\
+      ibBTnFVS2f//PUGNMeRZOxBMy80nwssIL4KRVlVWPVvuKhLWyDHqzqzt9i3jsf0imSFDA83Xui3bPfnMmSlI4ra1RWYWA5CO\
+      0JIgbL6GrFlWgrQtAUMewx/GbmdZhDMtwyvcUyGwCAQQBKSCx4kzvZdsNH8uuPVF/bVT/8p1W/EwLmL+iGO3nSXL8vN9/SLA\
+      nR4iZT19eH5uf+59sbegxpijxghhKDmhB44xYcCGtHzFJtsojI+R/T8/GptfhdWI1T8wcj/V1K8HVdwsthXizzMZpuviafZG\
+      cATqkjRAl9MScGYHKf+HHDu2HFvUrW6ef35/z/+Yaz/p3AewuskfqmxyBON3cqISmN//iWrGhgoOc3b37r5gqgaoCoRDtduD\
+      BDVK4YD/8Lhp/yo+0YoBwSyBBNGEEIHgFSi0VGxtVyo6a2d+upOebrf9fzsT7bY737w98Yn/qLP3JccpMczt1mXosHVY4u8P\
+      21ygD5gjDtoxyTKILFuG0MHRO62+JNuSLYKW2CLbMnHASS572WyWmKN1Dr8e/ALgFzDMbS5LmQxkMhBA/zFn9r8dD+hF5WAJ\
+      OJkCC6bRIHQZfE2uRYQlOi54woaQKA8fOpfJE88eZEyfdrmqtO/PnICFP6WHUjUdr5U7XrByOPwth2VmNY96LPVYa2Y1Q3nZ\
+      TrCYVVpn26YAT3wB/OlHv85f4mnk6ByUIr3cLDTLZH7SWV+vypLs9nQP9vASHxGFEGW/7F5IossuiDlc5gayJVsWFbHFdC5X\
+      gnzg4lLRYbOpKNk0PvDVWAi0AQEUBEL//bKf3TPNr7dDfpBdyHIKYVJ2eCTCTvph9rI8QlqWnJcQko5GoVEpKAqLopAep1GW\
+      /99Ue9t3MaA0pHZ9COGHkZyGa/Ps08b5uSUFip/O/ClUTrmceQMQEwghidohQH2B4IYBFDwAqV2Q0t9FWhmCuPupsEly4IaU\
+      H0jJZ0RtAPm1x9SP+g4x6GetUyq3qB1S9Vs3nUuXLuoQe7e9XZTuavtf06YPWEXt4zHuJKUJd8Ym7+3OUnpT4FCX+ZkspRTp\
+      kAZvgsQhJEiJ+ab7NKMU6AZtMH+d5tgib4/tWPzfsCxPe1xCShjS2SDhY/+6YiUVcVLn6HVuJrvD2FR7r3BlgoKgsIEBRkFG\
+      uJXJ0iIW/orqH2Otmtzn+zzPM0NCxJEQASlZj4+BYJQD5OpLv2aPk0LbSvUnKGKSaQCCxSQaPMrrGgAlx2Nqd0+KtECOfEsm\
+      8/G5VIbQIgbojxFBUhBmBYhCxYhSyejLVW6vNtHneBqQVucI7b/gTCTEGQwCeIwBXAP8BVAYBqAA8tb6p/Pu0qkvv/i9wpq7\
+      dsOWqZlWf/Ysb+w/fjY+e9/on3pbv7D121t/yaoXf237h1VXLRen2x/b/q2dj+wme7r3au9n9n6/WLybF9Vx/ah+XD+rP1Z/\
+      YuvjYnu8fbZ9fzNrTlrUVu2T9v14itaoOVHFEJbwRCBSYkcURE009KUJVTHvwzD2HMO/mPdDeEb8bL1nfWF9Y/1o/XytkOik\
+      L/e0Cj2kAIJ8+f98rVCpA7Q6PXgAgQtfPnoeCQj6Gl0AwMAABCDhz4DuubDkwf781+Za2GMBsK0IQNDzPhtrociDKOx7cQIN\
+      Riew4BGFC8j43un6EB/Xh0zDuF2zAdMtmLapn9IpGEvl1vO6V+/Dq461wL3vJ32rL/WJ7upvq8w9vabbeyo2r+6izmljx+C1\
+      03LqmIKT4Jizr+uf6q0T1VXf1p7ahIMtqlnVWOVVWJmVyEZUX11+rBsrYV5PmwfpzYl05fPsqdRlac9tacXvx9IUxBJjdIwP\
+      wMxjBPq+SrjPD8ocvRSdhf7hLn/rlcVrt8eb3CvSpc7yn7zR5R7lzKJ4ukQaQf2oG5VQkB/VWw0/oV9gXF4ZNCynKRUky9uA\
+      ilg1jTsUT+sSA94mM2lMFLJZnxV9SkFjS8liWUBBuDgGRnIMkpeeIvYSH9Uqepb9x2DzEdniZT1R6Hp/6OqOEurJ3E1iNEfh\
+      zGY26yNMNa+xaF22wf3CL2p/nD4MAjqaekmO5XSlgnlZURgfEONlRt3RBFiVH/npddEP3pg+q0fiMwl3nZwJZI0bk36Jn7kZ\
+      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\
+      cPlvVGoxXywXT7Zfbf+pekP7u8pYk8x7dz+y+7fmTnto0RqvT/d+3225J/tv9v/Onz5ZbGOstm+O3n980lL0qPYUvYh/p/6o\
+      foxrvMWKDHnK8B5+HX8BfxX+Jvzt7J35RfFCZpe4s7i3tJzXc6W9rY/rYxUfPvK3ItHZQJv2fwMLABhg7bI7nAQMADAA4tXA\
+      OtwtrbRnyEWuc56fKe8cBrhTJovqts1KPIaHuFhuKkjT+8kyYAHwj9M0AK5v7xj7ILTYO1Ary4Cn+54DfLfdcTMXBF1gv6im\
+      k/YDZhhwM0jxEcgdAKDz6H0ADQa56+wHFJwe8EOv+i5vJgzw7QRRIl3TTu9BK4ZJliLlYlOQMfgNOtdYEgQMT9EsO4O+RK8d\
+      T/rwwgm0sHKiOT6J0dgicnZkAPpAHeoKmrQutrb95DUx4LDshIo1XQdbYRJOcv2LL/lKCMMyYsZXQzVijVSj0Lhp1Bofjb9m\
+      kCZOY+J3+D7ey/2VgdzHxbYC2NEIE2ebTx005JwIpjHCZzhrVBqPV6/TxA77bUCW+gNkK7YVeH9yM/t94nsOAN792Kv1Pt77\
+      WO+LAND7YO/dvc8PT3aum+T8cK3GqbZ7ey6DvK4RH+WO97CG3IM4kdytdXyxyK1axc+uLx1xxc8eeeeaq/7yt5/864DfdPrF\
+      QYe88Mxzx/QgJKTsOFBwodSPB09qXjR8DHi8Ixh2/IMV54RfnfTGn1EiXjKTFGZWmYbKMswHhhuhyCilylWoVK3mcVVoPvBE\
+      3e457pWvHPXAExpP3ccv+7jghukueO1m3HHbS5/7Iv3wVq/v44HPzHDRR/b7WBcexRJwRMRknDlyIudOxZUbe978+fKj1d//\
+      AkQIpzNIrIGqDKaXIEkiA6MhLI/gxAvkPM5mpBoJ+ZEctbiHPrsGterUa1VmgkAla+R3mYCMcM55p5xx1mkE4IgiFESEcRTB\
+      b+laCphlS0gjLOmrYw02wTi4FcbDr2iCPL57J46hPjLJbjhB+ipV6mK6QHcITwDOhwDc7shmrgb0VOo3ZdEeRgyS1ici8LCE\
+      7mX5CZ1tdGo3Dsr2otDba2a0lzYFYZXrk2HvUWnldxhgeJWEG6DNO5LpVxB//q6g9nKDNEa+I691eZcM9S0L/XmHspAlDUMZ\
+      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") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+                   U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+                   U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+</style>
+<style>
+.toolbar,.notes { display:none !important; }
+.save-bar { display:flex; gap:16px; align-items:center; padding:10px 18px; font:14px system-ui; }
+.save-bar button { padding:8px 12px; }
+.save-bar a { display:inline-flex; align-items:center; min-height:44px; padding:0 16px; border:1px solid #c5d0d8; border-radius:999px; background:#fff; color:#0f6e7d; font-weight:650; text-decoration:none; }
+#saveStatus { flex:1; } #saveStatus.error { color:#b52f40; font-weight:600; }
+body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="vb" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round">
+<circle cx="256" cy="256" r="228"/>
+<path d="M 379.8,64.7 C 400.6,92.6 421.4,120.6 442.2,148.5"/>
+<path d="M 132.2,64.7 C 111.4,92.6 90.6,120.6 69.8,148.5"/>
+<path d="M 483.6,244.5 C 469.8,212.5 456.0,180.5 442.2,148.5"/>
+<path d="M 359.8,458.8 C 325.2,462.9 290.6,466.9 256.0,471.0"/>
+<path d="M 442.2,148.5 C 411.1,166.4 380.1,184.3 349.1,202.3 C 318.1,220.2 287.0,238.1 256.0,256.0"/>
+<path d="M 28.4,244.5 C 42.2,212.5 56.0,180.5 69.8,148.5"/>
+<path d="M 152.2,458.8 C 186.8,462.9 221.4,466.9 256.0,471.0"/>
+<path d="M 69.8,148.5 C 100.9,166.4 131.9,184.3 162.9,202.3 C 193.9,220.2 225.0,238.1 256.0,256.0"/>
+<path d="M 256.0,471.0 C 256.0,435.1 256.0,399.3 256.0,363.5 C 256.0,327.7 256.0,291.8 256.0,256.0"/>
+<path d="M 43.8,339.1 C 61.7,359.3 75.7,385.0 97.4,399.7 C 119.1,414.4 147.7,422.7 174.2,427.3 C 200.6,431.8 228.7,427.0 256.0,426.8"/>
+<path d="M 34.1,213.3 C 53.1,234.9 68.3,260.9 91.1,278.2 C 113.9,295.4 143.3,306.2 170.8,316.8 C 198.3,327.3 227.6,333.2 256.0,341.4"/>
+<path d="M 474.1,190.0 C 475.4,197.8 476.6,205.5 477.9,213.3"/>
+<path d="M 434.0,398.2 C 442.6,372.6 457.9,347.7 459.8,321.5 C 461.7,295.3 454.5,266.4 445.2,241.2 C 435.9,216.1 417.7,194.1 403.9,170.6"/>
+<path d="M 330.0,469.5 C 339.2,442.3 354.1,416.1 357.7,387.7 C 361.2,359.4 355.8,328.5 351.2,299.4 C 346.6,270.3 337.1,242.0 330.0,213.3"/>
+<path d="M 89.8,100.2 C 95.9,95.2 102.0,90.2 108.1,85.2"/>
+<path d="M 290.1,30.7 C 263.7,36.1 234.4,35.3 210.8,46.8 C 187.2,58.2 165.7,78.9 148.6,99.5 C 131.5,120.1 121.6,146.9 108.1,170.6"/>
+<path d="M 403.9,85.2 C 375.7,90.8 345.6,91.0 319.3,102.1 C 292.9,113.2 268.8,133.3 246.0,151.8 C 223.1,170.4 203.3,192.8 182.0,213.3"/>
+<path d="M 204.1,477.9 C 196.8,475.1 189.4,472.3 182.0,469.5"/>
+  </symbol>
+</svg>
+
+<div class="save-bar"><b id="liveTitle">Live set</b><a id="teamsLink" href="./teams.html">Teams</a><a id="matchLink" href="./teams.html">Match</a><span id="saveStatus" role="status">Opening saved set…</span><button id="retrySave" hidden>Retry action</button><button id="reloadSaved" hidden>Reload saved set</button><button id="exportSet">Export set</button></div><div class="toolbar" hidden>
+  <b>Live Set — mockup v2</b>
+  <label><input type="checkbox" id="optCallouts" checked> Callouts</label>
+  <label><input type="checkbox" id="optDark"> Dark</label>
+  <span>Buttons:</span>
+  <label><input type="radio" name="labels" id="optWords" checked> Words</label>
+  <label><input type="radio" name="labels" id="optCodes"> Codes</label>
+  <span>Court buttons:</span>
+  <label><input type="radio" name="tools" value="below"> Below</label>
+  <label><input type="radio" name="tools" value="in" checked> In court</label>
+  <span>Header:</span>
+  <label><input type="radio" name="hdr" value="show"> Show</label>
+  <label><input type="radio" name="hdr" value="none" checked> None</label>
+  <span>System:</span>
+  <label><input type="radio" name="sys" value="5-1"> 5-1</label>
+  <label><input type="radio" name="sys" value="6-2" checked> 6-2</label>
+  <label><input type="radio" name="sys" value="4-2"> 4-2</label>
+  <button id="btnReset" style="text-decoration:underline">Reset demo</button>
+  <button id="btnPreviewTips" style="text-decoration:underline">Preview 5 tips</button>
+</div>
+
+<div class="stage">
+<div class="scaler" id="scaler">
+<div class="ipad" id="ipad">
+
+  <!-- ① Header -->
+  <header class="hdr">
+    <div class="hdr-mid">
+      <div class="match-info">
+        <div class="set">Set 1 <small>of 3 · Sets <span id="setsRec">1–0</span> · to 25</small></div>
+        <div class="past-sets" id="pastSets"></div>
+        <div class="sub">Saved practice set</div>
+      </div>
+      <button class="menu-btn" id="menuBtn" title="Menu">⋯</button>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <!-- ② Us pad -->
+    <section class="pad" id="padUs">
+      <h2><button class="team-chip" id="teamMenu" title="Menu">8th Grade<span class="caret">▾</span></button></h2>
+      <h3>Our point</h3>
+      <div class="grid3" id="usEarned"></div>
+      <h3>Our error — their point</h3>
+      <div class="grid3" id="usErr"></div>
+      <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
+      <div class="pad-hint" id="hintUs"></div>
+      <!-- ⑤ Sub & Libero -->
+      <div class="pad-actions">
+        <button class="act act-sub" id="actSub">Sub<small id="subsVal">0 / 18</small><span class="bar" id="subsBar"><i style="width:0"></i></span></button>
+        <button class="act" id="actLib">Libero<small id="actLibSm">#22 · #3</small></button>
+        <button class="act act-to" id="toUsBtn">Timeout<span class="dots"><span id="toU1"></span><span id="toU2"></span></span></button>
+      </div>
+    </section>
+
+    <div class="center">
+     <div class="center-main">
+      <!-- ③ Scoreboard -->
+      <section class="score" id="scoreBox">
+        <div class="set-history" id="pastSetsUs" role="list" aria-label="Sets we won, scores in 8th Grade–West Fargo order"></div>
+        <div class="side" id="sideUs"><div class="who"><span class="serve-ball"><svg><use href="#vb"/></svg></span><span id="scoreTeamUs">8th Grade</span></div><div class="num" id="scUs">0</div></div>
+        <div class="colon">:</div>
+        <div class="side" id="sideThem"><div class="who"><span id="scoreTeamThem">West Fargo</span><span class="serve-ball"><svg><use href="#vb"/></svg></span></div><div class="num" id="scThem">0</div></div>
+        <div class="set-history" id="pastSetsThem" role="list" aria-label="Sets they won, scores in 8th Grade–West Fargo order"></div>
+      </section>
+
+      <!-- ④ Court -->
+      <section class="court-wrap" id="courtWrap">
+        <div class="court" id="court"></div>
+        <div class="end-zone"><span id="receiveStatus" role="status" aria-live="polite"></span></div>
+        <div class="court-tools">
+          <span class="tools-lbl">Court view</span>
+          <span id="rcvPassers" class="view-pills"></span>
+          <button class="pill" id="rcvToggle" aria-pressed="false">Rotation spots</button>
+          <button id="editReceive" class="pill" aria-pressed="false">Adjust receive</button>
+          <button id="resetReceive" class="pill" hidden>Reset</button>
+        </div>
+      </section>
+
+      <!-- ⑩ Coach's corner -->
+      <aside class="corner">
+        <h3>Coach's corner</h3>
+        <div class="corner-mode" id="cornerMode"></div>
+        <div id="corner"></div>
+      </aside>
+
+     </div>
+    </div>
+
+    <!-- ⑥ Them pad -->
+    <section class="pad" id="padThem">
+      <h2><span class="team-chip opp">West Fargo</span></h2>
+      <h3>Their point</h3>
+      <div class="grid3" id="thEarned"></div>
+      <h3>Their error — our point</h3>
+      <div class="grid3" id="thErr"></div>
+      <div class="pad-actions them">
+        <button class="act act-to" id="toThemBtn">Timeout<span class="dots"><span id="toT1"></span><span id="toT2"></span></span></button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ⑦ Footer -->
+  <footer class="foot">
+    <div class="log" id="log"><div class="log-head"><span class="lbl">RECENT RALLIES</span><span class="log-meta" id="logMeta"></span></div></div>
+    <button class="undo" id="undoBtn">Undo<small id="undoSm"></small></button>
+  </footer>
+
+  <!-- ⑧ Banners -->
+  <div class="banners" id="banners"></div>
+
+  <!-- Sheets -->
+  <div class="sheet" id="sheet"><div class="card" id="sheetCard"></div></div>
+
+  <!-- Callouts -->
+  <div class="callout" id="callout1" style="left:540px; top:21px">1</div>
+  <div class="callout" style="left:0px; top:62px">2</div>
+  <div class="callout" style="left:340px; top:62px">3</div>
+  <div class="callout" style="left:340px; top:404px">4</div>
+  <div class="callout" style="left:110px; top:860px">5</div>
+  <div class="callout" style="left:1006px; top:62px">6</div>
+  <div class="callout" style="left:0px; top:888px">7</div>
+  <div class="callout" style="left:1136px; top:888px">8</div>
+  <div class="callout" style="left:0px; top:844px" id="calloutBanner">9</div>
+  <div class="callout" id="callout10" style="left:340px; top:830px">10</div>
+</div>
+</div>
+
+<div class="notes">
+  <section class="tip-preview" id="tip-colors">
+    <h2>Coaching tip colors</h2>
+    <p>12 sample tips for comparing categories. These examples do not reflect the live set. Urgent tips use a dark category-colored background and light text, without an accent border.</p>
+    <div class="tip-preview-grid" id="tipPreview"></div>
+  </section>
+  <h2>Confirmed live-screen baseline</h2>
+  <p>This mockup's default layout is the development baseline. The controls above the canvas let us review alternatives; they are not part of the production app.</p>
+  <div class="grid">
+    <div class="note"><h3>Scoring and match context</h3><ul>
+      <li>Our scoring pad is on the left, theirs on the right. Full words are the default; paper codes remain an option.</li>
+      <li>The live score and completed-set scores sit above the court, without a title or match-context line. There is no separate header by default. Our team name opens the menu.</li>
+      <li>Our contacts take two taps, code-first or player-first; our ace and serve error use the known server in one tap. Their contacts take one tap. Team finishes an unattributed error.</li>
+    </ul></div>
+    <div class="note"><h3>Court and match actions</h3><ul>
+      <li>Jersey numbers show serving or receive formations from Where do I go? Court-view controls sit inside the court.</li>
+      <li>Our Sub, Libero, and Timeout controls sit below our pad; their Timeout sits below theirs.</li>
+      <li>Recent rallies and Undo stay at the bottom. Coach's corner shows up to three suggestions under the court, with additional suggestions one level deeper.</li>
+      <li>Planned swaps require confirmation. Production actions must all use the same eligibility checks and record explicit overrides.</li>
+    </ul></div>
+    <div class="note"><h3>Production recovery policy</h3><ul>
+      <li>Save each completed match action immediately and restore the match after reopening. Incomplete entries are not rallies.</li>
+      <li>Undo covers all match actions. Historical edits recalculate later state and flag conflicting substitutions or libero changes for review.</li>
+      <li>Manual corrections preserve the original record. This demo still keeps its state only in memory.</li>
+    </ul></div>
+    <div class="note"><h3>Coaching evidence and device checks</h3><ul>
+      <li>Production suggestions must distinguish terminal attacks from all swings, and back-row receiving rallies from actual passes.</li>
+      <li>Libero comparisons show observed rates and sample sizes, with cautious recommendations rather than precise errors-saved predictions. The demo's existing suggestion logic has not yet been updated to these decisions.</li>
+      <li>Test touch targets, reopening, offline tracking, wake lock, Google sign-in, and a sample Drive backup on the coach's iPad after the first persistent live-set build.</li>
+      <li>Review shortcuts: #pending, #base, #sub, #swap, #run, #crunch, #form, #libero, and #menu.</li>
+    </ul></div>
+  </div>
+</div>
+</div>
+
+<script type="module" src="./src/app/live-set.mjs"></script>
+</body>
+</html>
