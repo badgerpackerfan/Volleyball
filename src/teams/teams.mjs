@@ -7,6 +7,7 @@ import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme, loadSettings, saveSettings, applyColorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
+import { buildTeamStats } from './stats-model.mjs';
 registerApp();
 const $=id=>document.getElementById(id);
 applyColorTheme(loadSettings().theme);
@@ -143,11 +144,42 @@ const leave=()=>!dirty||confirm('Discard your unsaved changes?');
 $('backButton').onclick=()=>{if(!leave())return;dirty=false;notice();backAction?.();};
 $('liveLink').onclick=()=>{if(!leave())return;dirty=false;location.href='./index.html';};
 const item=(color,main,actions,extra='')=>`<article class="card item ${extra}" style="--team-color:${color}"><div class="item-main">${main}</div><div class="item-actions">${actions}</div></article>`;
+function statTable(rows){
+ if(!rows.length)return '<div class="stats-empty">No serving or passing results recorded.</div>';
+ return `<div class="stats-table-scroll"><table class="stats-table"><thead><tr><th>Player</th><th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
+  const passes=stats.passing.count?`${(stats.passing.sum/stats.passing.count).toFixed(2)} <small>n=${stats.passing.count}</small>`:'—';
+  const attempts=stats.serving.attempts, aceIn=stats.serving.aces;
+  const serves=`${attempts?`${Math.round(stats.serving.in*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
+  const acePercent=`${attempts?`${Math.round(aceIn*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
+ }).join('')}</tbody></table></div>`;
+}
+function teamStatsPage(team){
+ const stats=buildTeamStats(team,practices);
+ const totalRows=stats.players.map(row=>({player:row.player,stats:row.total}));
+ $('content').innerHTML=`<section class="season-stats-summary card" style="--team-color:${team.color}">
+   <div><h2>${esc(team.name)} · ${esc(team.season||'Season stats')}</h2><p>${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.matches,'match')} · ${plural(stats.counts.sets,'set')} · ${plural(stats.counts.practiceResults,'practice result')}</p></div>
+   <p class="muted">Totals combine all saved practices and match sets linked to this team. Practice results are tapped individually; match serve attempts come from completed rallies. Serve In % includes aces; Ace % shows aces as a share of attempts.</p>
+  </section>
+  <h2 class="list-title">Season totals · all saved results</h2>
+  ${statTable(totalRows)}
+  <h2 class="list-title">Matches and sets</h2>
+  <div class="stats-breakdowns">${stats.matches.length?stats.matches.map(match=>{
+   const result=match.winner?(match.winner==='us'?'Won':'Lost'):match.inProgress?'In progress':match.sets.length?'Complete':'Not started';
+   return `<details class="stats-group"><summary><strong>vs ${esc(match.opponent||'Opponent')}</strong><span>${esc(match.date||'Date not recorded')} · ${esc(result)}${match.sets.length?` · Sets ${match.wins.us}–${match.wins.them}`:''}</span></summary>
+    ${match.sets.length?`<section class="stats-match-total"><h3>Match totals</h3>${statTable(match.rows)}</section>
+     <div class="stats-set-list">${match.sets.map(set=>`<details class="stats-set"><summary>Set ${set.number} · ${set.score.us}–${set.score.them} · ${set.status==='ended'?'Finished':'In progress'}</summary>${statTable(set.rows)}</details>`).join('')}</div>`:'<p class="stats-empty">No set results recorded yet.</p>'}
+   </details>`;
+  }).join(''):'<div class="stats-empty">No matches recorded for this team.</div>'}</div>
+  <h2 class="list-title">Practices</h2>
+  <div class="stats-breakdowns">${stats.practices.length?stats.practices.map(practice=>`<details class="stats-group stats-practice"><summary><strong>Practice · ${esc(practice.date)}</strong><span>${plural(practice.resultCount,'result')} · ${new Date(practice.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</span></summary>${statTable(practice.rows)}</details>`).join(''):'<div class="stats-empty">No practices recorded for this team.</div>'}</div>`;
+}
 function home(){
  dirty=false;
  const hierarchy=teamHierarchy(teams,sets),params=new URLSearchParams(location.hash.slice(1));
  const team=hierarchy.find(t=>t.id===params.get('team'));
  const match=team?.matches.find(m=>m.id===params.get('match'));
+ if(team&&!match&&params.get('view')==='stats'){bar('Season stats',team.name,{label:team.name,action:()=>go(team.id)});teamStatsPage(team);return;}
  if(team?.editable&&params.get('view')==='lineups'){bar('Lineups',team.name,{label:team.name,action:()=>go(team.id)});lineupLibrary(teams.find(t=>t.id===team.id));return;}
  if(!team){
   bar('Teams');
@@ -161,7 +193,7 @@ function home(){
  if(!match){
   bar(team.name,team.editable?`${team.level} · ${team.season}`:'Saved team',{label:'Teams',action:()=>go()});
   const teamPractices=practices.filter(p=>p.teamId===team.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  $('content').innerHTML=`${team.logo?`<div class="team-brand" style="--team-color:${team.color}">${logoMarkup(team.logo,team.name)}<div><strong>${esc(team.name)}</strong><span>${esc(colorTheme(team.teamTheme).name)} theme</span></div></div>`:''}<div class="toolbar">${team.editable?`<button data-start="${esc(team.id)}" class="primary" ${team.players.length<6?'disabled':''}>New match</button><button id="startPractice" class="primary" ${team.players.length?'':'disabled'}>New practice</button><button id="teamLineups">Lineups</button><button data-edit="${esc(team.id)}">Edit roster</button>`:''}<button id="deleteTeam" class="danger">Delete team</button></div>
+  $('content').innerHTML=`${team.logo?`<div class="team-brand" style="--team-color:${team.color}">${logoMarkup(team.logo,team.name)}<div><strong>${esc(team.name)}</strong><span>${esc(colorTheme(team.teamTheme).name)} theme</span></div></div>`:''}<div class="toolbar">${team.editable?`<button data-start="${esc(team.id)}" class="primary" ${team.players.length<6?'disabled':''}>New match</button><button id="startPractice" class="primary" ${team.players.length?'':'disabled'}>New practice</button><button id="teamLineups">Lineups</button><button data-edit="${esc(team.id)}">Edit roster</button>`:''}<button id="teamStats">View stats</button><button id="deleteTeam" class="danger">Delete team</button></div>
    ${team.editable&&team.players.length<6?'<p class="muted">Add at least six players to start a match.</p>':''}
    <h2 class="list-title">Matches</h2>
    <div class="list">${team.matches.length?team.matches.map(m=>item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}`:'Not started'}</p><p class="muted">${!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost'):m.inProgress?'Set in progress':'All recorded sets finished'}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
@@ -170,6 +202,7 @@ function home(){
    <div class="list">${teamPractices.length?teamPractices.map(p=>item(team.color,`<h3>Practice · ${esc(p.date)}</h3><p>${plural(p.events.length,'recorded result')} · ${new Date(p.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</p>`,
     `<button data-practice="${esc(p.id)}" class="primary">Open practice</button><button data-delete-practice="${esc(p.id)}" class="danger">Delete practice</button>`,'practice-card')).join(''):'<div class="card"><p>No practices recorded yet. Start a practice to track serves and serve receive for this roster.</p></div>'}</div>`;
   $('teamLineups')?.addEventListener('click',()=>go(team.id,null,'lineups'));
+  $('teamStats').onclick=()=>go(team.id,null,'stats');
   document.querySelector('[data-start]')?.addEventListener('click',()=>matchSetup(team));
   $('startPractice')?.addEventListener('click',()=>save(async()=>{
    const practice=createPractice(teams.find(t=>t.id===team.id),identity());
