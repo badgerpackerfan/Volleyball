@@ -64,7 +64,8 @@ export function validateSetAddition(record, existing) {
   if(c.bestOf){
     if(siblings.some(r=>r.config.bestOf&&r.config.bestOf!==c.bestOf))throw new Error('A new set must keep the match format.');
     const wins={us:0,them:0};for(const r of siblings)wins[replaySet(r).winner]++;
-    if(matchWinner(wins,c.bestOf))throw new Error('This match is already decided.');
+    const optionalThirdSet=c.bestOf===3&&(c.setNumber??1)===3&&siblings.length===2;
+    if(matchWinner(wins,c.bestOf)&&!optionalThirdSet)throw new Error('This match is already decided.');
     const plan=setPlan({bestOf:c.bestOf,setNumber:c.setNumber??1,previousSet:siblings.at(-1)});
     if(c.rules.target!==plan.target||(plan.firstServe&&c.firstServe!==plan.firstServe))
       throw new Error('The set target or first serve does not follow the match format.');
