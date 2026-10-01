@@ -1,4 +1,4 @@
-import { orderMatchSets } from '../teams/match-model.mjs';
+import { matchWinner, orderMatchSets } from '../teams/match-model.mjs';
 import { FORMATIONS } from './formations.mjs';
 import { checkCommand, replaySet } from '../engine/set-engine.mjs';
 import { receiveLayoutError } from '../engine/receive-layout.mjs';
@@ -251,12 +251,30 @@ function actionLabel(a) {
 function status(message, error=false) {
   $('saveStatus').textContent=message; $('saveStatus').classList.toggle('error',error);
 }
+function nextSetSetupHref(record) {
+  const c=record.config,bestOf=c.bestOf;
+  if(!bestOf)return null;
+  const siblings=MATCH_RECORDS.map(r=>r.config.id===c.id?record:r);
+  const nextSet=(c.setNumber??siblings.length)+1;
+  if(nextSet>bestOf)return null;
+  const wins={us:0,them:0};
+  for(const sibling of siblings){
+    const state=replaySet(sibling);
+    if(state.status==='ended')wins[state.winner]++;
+  }
+  const decided=Boolean(matchWinner(wins,bestOf));
+  const optionalThird=bestOf===3&&nextSet===3&&siblings.length===2&&decided;
+  if(decided&&!optionalThird)return null;
+  const route=new URLSearchParams({team:c.teamId,match:c.matchId,view:'setup'});
+  return `./teams.html#${route}`;
+}
 async function perform(cmd, clear=true) {
   if(saving || failedCommand) return false;
   if(ui.timeoutMode) { status('Choose Done with timeout before recording another action.',true); return false; }
   if(editingReceive && !cmd.type.startsWith('receive.')) {status('Tap Done before recording another action.',true);return false;}
   saving=true; document.body.classList.add('saving'); status('Saving…');
-  const pending = {...ui};
+  const pending = {...ui},wasEnded=session.state.status==='ended';
+  let nextSetup=null;
   try {
     await session.run(cmd);
     if (cmd.type === 'timeout') {
@@ -268,6 +286,7 @@ async function perform(cmd, clear=true) {
       tacticalDrag = null;
     }
     syncState();
+    if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
     if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null}; $('sheet').classList.remove('open'); }
     status(session.state.status==='ended' ? 'Set ended · saved on this device' : 'Saved on this device');
     return true;
@@ -282,6 +301,7 @@ async function perform(cmd, clear=true) {
     return false;
   } finally {
     saving=false; document.body.classList.remove('saving'); render();
+    if(nextSetup)location.href=nextSetup;
   }
 }
 
@@ -397,7 +417,7 @@ function render() {
     const swapTag = plan && !isLib && !rcv ? `<span class="swap-tag">⇄ #${S.onCourt[slot] === plan.back ? plan.front : plan.back}</span>` : '';
     const serving = !timeoutMode && pos === 1 && S.serving === 'us';
     z.innerHTML = `<span class="pos">P${pos}</span>
-      <span class="dwrap"><span class="${disc}">${p}</span>${formMark(p)}${serving ? '<span class="ball"><svg viewBox="0 0 512 512"><use href="#vb"/></svg></span>' : ''}${swapTag}</span>
+      <span class="dwrap"><span class="${disc}">${p}</span>${formMark(p,pos)}${serving ? '<span class="ball"><svg viewBox="0 0 512 512"><use href="#vb"/></svg></span>' : ''}${swapTag}</span>
       <span class="name">${info.n}<small>${info.r}</small></span>`;
   });
 
@@ -459,11 +479,20 @@ function render() {
 
   // Log
   const log = $('log');
-  log.querySelector('.run-track')?.remove();
+  const previousTrack=log.querySelector('.run-track');
+  const previousCount=Number(previousTrack?.dataset.rallyCount??0);
+  const previousScroll=previousTrack?.scrollLeft??0;
+  const wasNearEnd=previousTrack
+    ? previousTrack.scrollWidth-previousTrack.clientWidth-previousTrack.scrollLeft<=48
+    : true;
+  previousTrack?.remove();
   const track = document.createElement('div');
   track.className = 'run-track';
-  track.setAttribute('aria-label', 'Recent rallies, oldest to newest');
+  track.tabIndex=0;
+  track.setAttribute('role','region');
+  track.setAttribute('aria-label', 'Recent rallies, oldest to newest. Scroll horizontally to review the entire set.');
   const last = S.rallies;
+  track.dataset.rallyCount=String(last.length);
   last.forEach((r, i) => {
     const c = document.createElement('div');
     c.className = `rchip${r.winner === 'them' ? ' lost' : ''}${i === last.length - 1 ? ' latest' : ''}`;
@@ -482,7 +511,8 @@ function render() {
     }
   });
   log.appendChild(track);
-  fitRecentRallies();
+  if(!previousTrack||(last.length>previousCount&&wasNearEnd))track.scrollLeft=track.scrollWidth;
+  else track.scrollLeft=Math.min(previousScroll,Math.max(0,track.scrollWidth-track.clientWidth));
 
   renderCorner();
 
@@ -565,6 +595,53 @@ function frontOutlook(pos) {
   return { front: false, until: { 1: 3, 6: 2, 5: 1 }[pos] };
 }
 
+// Every on-court form marker has a matching Coach's Corner note. Build the
+// marker and note from the same filtered state so a hidden note never leaves
+// an unexplained symbol on the player.
+function playerFormTip(p,pos,F=formOf(p)) {
+  if(!SETTINGS.corner||session.state.status==='ended')return null;
+  const available=category=>SETTINGS.categories[category]!==false;
+  const cold=[];
+  if(F.coldHit&&available('attacking')) {
+    const errors=F.last3.filter(x=>x.r.code==='HE').length;
+    cold.push({id:`hit-${errors}`,category:'attacking',label:'hitting',
+      note:`${errors} errors in her last ${F.last3.length} attacks. Ask for shots or tips, or set elsewhere briefly.`});
+  }
+  if(F.weakPass&&available('passing')) {
+    const errors=F.lastRc.filter(r=>r.team==='us'&&r.code==='SrE'&&r.player===p).length;
+    cold.push({id:`pass-${errors}`,category:'passing',label:'serve receive',
+      note:`${errors} errors in her last ${F.lastRc.length} receiving rallies. Adjust her position or coverage.`});
+  }
+  if(F.coldServe&&available('serving')) {
+    const misses=F.lastSv.filter(r=>r.team==='us'&&r.code==='SE').length;
+    cold.push({id:`serve-${misses}`,category:'serving',label:'serving',
+      note:`${misses} misses in her last ${F.lastSv.length} serves. Ask for a safe serve to a comfortable target.`});
+  }
+  if(cold.length) {
+    return {key:`form-${p}-cold-${cold.map(x=>x.id).join('-')}`,state:'cold',formFlag:true,
+      category:cold[0].category,pri:0.5,urgent:crunch()&&cold.some(x=>x.category!=='attacking'),
+      title:`#${p} could use support · ${cold.map(x=>x.label).join(' / ')}`,
+      why:cold.map(x=>x.note).join(' ')};
+  }
+  const hot=[];
+  if(F.hotHit&&available('attacking')) {
+    const o=frontOutlook(pos),kills=F.lastSw.filter(x=>x.r.code==='K').length;
+    const advice=o.front?(o.more===0?'Front row this rotation only — set her now.':`Front row for ${o.more} more rotation${o.more===1?'':'s'}.`)
+      :`She's front again after ${o.until} side-out${o.until===1?'':'s'}.`;
+    hot.push({id:`hit-${kills}`,category:'attacking',label:'attacking',
+      note:`${kills} kills in her last ${F.lastSw.length} attacks. ${advice}`});
+  }
+  if(F.hotServe&&S.serving==='us'&&pos===1&&available('serving')) {
+    const serves=F.serves.slice(-FORM.aceWindow),aces=serves.filter(r=>r.team==='us'&&r.code==='SA').length;
+    hot.push({id:`serve-${aces}`,category:'serving',label:'serving',
+      note:`${aces} aces in her last ${serves.length} serves. Keep her serving aggressively.`});
+  }
+  if(!hot.length)return null;
+  return {key:`form-${p}-hot-${hot.map(x=>x.id).join('-')}`,state:'hot',formFlag:true,
+    category:hot[0].category,pri:0.5,title:`#${p} is hot · ${hot.map(x=>x.label).join(' / ')}`,
+    why:hot.map(x=>x.note).join(' ')};
+}
+
 /* ---------------- Coach's corner: rule-based suggestions ----------------
    Every rule uses only what the app records (terminal contacts, rotations,
    serve, subs, timeouts), explains its evidence, and never acts on its own.
@@ -632,38 +709,10 @@ function suggestions() {
   }
   // Form: who's on court now, and what they're doing lately.
   const onCourt = [4, 3, 2, 5, 6, 1].map(pos => ({ pos, p: S.onCourt[slotAt(pos)] })).filter(x => ROSTER[x.p]);
-  const lt = crunch();
-  const f = formation();
   for (const { pos, p } of onCourt) {
     const F = formOf(p);
-    // Ride the hot hand.
-    if (F.hotHit && ROSTER[p].r !== 'L') {
-      const o = frontOutlook(pos);
-      out.push({ key: `hot-${p}-${F.kills}`, pri: lt ? 2.5 : 4.5,
-        title: o.front ? `Ride #${p}: ${F.lastSw.filter(x => x.r.code === 'K').length} kills in her last ${F.lastSw.length} terminal attacks` : `#${p} is hot but in the back row`,
-        why: `Last terminal attacks: ${recent(F.lastSw, 'K')}. ` + (o.front
-          ? (o.more === 0 ? 'Front row this rotation only — set her now.' : `Front row for ${o.more} more rotation${o.more === 1 ? '' : 's'}.`)
-          : `She's front again after ${o.until} side-out${o.until === 1 ? '' : 's'}.`) });
-    }
-    // Help the weak link: hitting.
-    if (F.coldHit)
-      out.push({ key: `coldhit-${p}-${F.errs}`, pri: lt ? 3 : 5.5, title: `#${p}: ${F.last3.filter(x => x.r.code === 'HE').length} hitting errors in her last ${F.last3.length} terminal attacks`,
-        why: `Last terminal attacks: ${recent(F.last3, 'K')}. Shots and tips, or set elsewhere for a few.` });
-    if (F.weakPass && !LIBEROS.includes(p) && S.serving==='them') {
-      const n=F.lastRc.filter(r=>r.code==='SrE' && r.player===p).length;
-      out.push({key:`weakpass-${p}-${n}`,pri:lt?2:4,urgent:lt,title:`Review #${p}'s receive position`,
-        why:`${n} receive errors in her last ${F.lastRc.length} back-row receiving rallies. Consider adjusting coverage.`});
-    }
-    // Serving: hot server serving now; cold server serving now or next.
-    const servingNow = S.serving === 'us' && pos === 1;
-    const servesNext = S.serving === 'them' && pos === 2;   // she rotates to P1 on our side-out
-    if (F.hotServe && servingNow)
-      out.push({ key: `hotsrv-${p}-${F.serves.length}`, pri: 7, title: `#${p} is serving well: stay aggressive`,
-        why: `Last serves: ${F.lastSv.map(r => r.team === 'us' && r.code === 'SA' ? 'ace' : r.team === 'us' && r.code === 'SE' ? 'miss' : 'in').join(', ')}.` });
-    if (F.coldServe && (servingNow || servesNext))
-      out.push({ key: `coldsrv-${p}-${F.serves.length}`, pri: lt ? 1.8 : 3.8, urgent: lt,
-        title: servesNext ? `Heads-up: #${p} serves next` : `#${p} is serving: ${F.lastSv.filter(r => r.code === 'SE').length} misses in her last ${F.lastSv.length}`,
-        why: `Last serves: ${F.lastSv.map(r => r.team === 'us' && r.code === 'SA' ? 'ace' : r.team === 'us' && r.code === 'SE' ? 'miss' : 'in').join(', ')}. Remind her: serve it in play.` });
+    const formTip=playerFormTip(p,pos,F);
+    if(formTip)out.push(formTip);
   }
   // Missed serves.
   const se = byUs('SE');
@@ -682,10 +731,11 @@ function suggestions() {
     out.push({ key: `subs-${S.subs}`, pri: 9, urgent: true, title: `${SUB_LIMIT - S.subs} subs left`,
       why: 'Planned swaps still count; save one for an injury.' });
 
-  return out.filter(t => !dismissed.has(t.key) && SETTINGS.categories[tipCategory(t)] !== false).sort((a, b) => a.pri - b.pri);
+  return out.filter(t => !dismissed.has(t.key) && (t.formFlag || SETTINGS.categories[tipCategory(t)] !== false)).sort((a, b) => a.pri - b.pri);
 }
 
 function tipCategory(t) {
+  if(t.category)return t.category;
   const prefix = t.key.split('-')[0];
   if (['run', 'errs'].includes(prefix)) return 'timeout';
   if (['lib', 'libplan', 'weakpass'].includes(prefix)) return 'passing';
@@ -699,7 +749,7 @@ function renderCorner() {
   const all = session.state.status === 'ended' || !SETTINGS.corner ? [] : suggestions(), tips = all.slice(0, 3), extra = all.length - tips.length;
   $('cornerMode').textContent = crunch() ? 'Crunch time' : '';
   $('corner').innerHTML = tips.length
-    ? tips.map((t, i) => `<div class="tip${t.urgent ? ' urgent' : ''}${(t.acts || []).length ? ' has-acts' : ''}" data-category="${tipCategory(t)}" data-i="${i}"><b>${t.title}</b><button class="x" data-k="${t.key}" aria-label="Dismiss">×</button><span>${t.why}</span>${
+    ? tips.map((t, i) => `<div class="tip${t.formFlag ? ' form-flag' : ''}${t.urgent ? ' urgent' : ''}${(t.acts || []).length ? ' has-acts' : ''}" data-category="${tipCategory(t)}" data-i="${i}"><b>${t.title}</b><button class="x" data-k="${t.key}" aria-label="Dismiss">×</button><span>${t.why}</span>${
         (t.acts || []).length ? `<div class="acts">${t.acts.map((a, j) => `<button class="pill" data-t="${i}" data-a="${j}">${a.label}</button>`).join('')}</div>` : ''}</div>`).join('')
     : `<div class="quiet">${session.state.status === 'ended' ? `Set complete · ${S.us}–${S.them}` : SETTINGS.corner ? 'Nothing to flag right now.' : 'Coach’s corner is off. Turn it on in Settings.'}</div>`;
   $('corner').classList.toggle('has-more', extra > 0);
@@ -709,10 +759,10 @@ function renderCorner() {
     const rest = all.slice(tips.length);
     $('moreTips').onclick = () => {
       openSheet(`<h4>More suggestions</h4>
-        ${rest.map((t, i) => `<div class="tip${t.urgent ? ' urgent' : ''}" data-category="${tipCategory(t)}" style="margin-bottom:8px"><b>${t.title}</b><button class="x" data-rk="${t.key}" aria-label="Dismiss">×</button><span style="grid-column:1/-1">${t.why}</span>${
+        ${rest.map((t, i) => `<div class="tip${t.formFlag ? ' form-flag' : ''}${t.urgent ? ' urgent' : ''}" data-category="${tipCategory(t)}" style="margin-bottom:8px"><b>${t.title}</b><button class="x" data-rk="${t.key}" aria-label="Dismiss">×</button><span style="grid-column:1/-1">${t.why}</span>${
           (t.acts || []).length ? `<div class="acts" style="grid-column:1/-1">${t.acts.map((a, j) => `<button class="pill" data-ri="${i}" data-ra="${j}">${a.label}</button>`).join('')}</div>` : ''}</div>`).join('')}
         <button class="cancel" id="shCancel">Close</button>`);
-      $('sheetCard').querySelectorAll('[data-rk]').forEach(b => b.onclick = () => { dismissed.add(b.dataset.rk); closeSheet(); });
+      $('sheetCard').querySelectorAll('[data-rk]').forEach(b => b.onclick = () => { dismissed.add(b.dataset.rk); closeSheet(); render(); });
       $('sheetCard').querySelectorAll('[data-ra]').forEach(b => b.onclick = () => { closeSheet(); rest[b.dataset.ri].acts[b.dataset.ra].fn(); });
     };
   }
@@ -722,43 +772,23 @@ function renderCorner() {
   // Tap a suggestion to read it in full.
   $('corner').querySelectorAll('.tip').forEach(el => el.onclick = () => {
     const t = tips[el.dataset.i];
-    openSheet(`<div class="tip${t.urgent ? ' urgent' : ''}" data-category="${tipCategory(t)}"><b>${t.title}</b><span>${t.why}</span></div>
+    openSheet(`<div class="tip${t.formFlag ? ' form-flag' : ''}${t.urgent ? ' urgent' : ''}" data-category="${tipCategory(t)}"><b>${t.title}</b><span>${t.why}</span></div>
       ${(t.acts || []).length ? `<div class="lib-plan">${t.acts.map((a, j) => `<button class="pill" data-a="${j}">${a.label}</button>`).join('')}</div>` : ''}
       <div class="sheet-row"><button class="cancel" id="shCancel">Close</button><button class="ovr" id="shDismiss">Dismiss</button></div>`);
     $('sheetCard').querySelectorAll('[data-a]').forEach(b => b.onclick = () => { closeSheet(); t.acts[b.dataset.a].fn(); });
-    $('shDismiss').onclick = () => { dismissed.add(t.key); closeSheet(); };
+    $('shDismiss').onclick = () => { dismissed.add(t.key); closeSheet(); render(); };
   });
   $('toUsBtn').classList.toggle('suggest', all.some(t => t.to) && S.toUs > 0);
 }
 
-// ▲ hot (hitting or serving), ▼ weak link (hitting, serving or passing).
-function formMark(p) {
+// ▲ hot hand, ▼ player support note. The matching note is available in
+// Coach's Corner; the mark has no hover-only message.
+function formMark(p,pos) {
   if (!ROSTER[p]) return '';
-  const F = formOf(p);
-  if (F.coldHit || F.coldServe || F.weakPass) return '<span class="form cold" title="Struggling lately">▼</span>';
-  const servingNow = S.serving === 'us' && server() === p;
-  const hotServing = F.hotServe && servingNow;
-  if (F.hotHit || hotServing) {
-    const title = F.hotHit && hotServing ? 'Attacking and serving well lately'
-      : F.hotHit ? 'Attacking well lately' : 'Serving well lately';
-    return `<span class="form hot" title="${title}" aria-label="${title}">▲</span>`;
-  }
-  return '';
-}
-
-// Keep the newest contiguous history that fits, with dividers only between visible rallies.
-// Reconsider all entries when the available width or font metrics change.
-function fitRecentRallies() {
-  const track = $('log').querySelector('.run-track');
-  if (!track) return;
-  const nodes = [...track.children];
-  nodes.forEach(n => { n.hidden = false; });
-  let first = 0;
-  while (track.scrollWidth > track.clientWidth && first < nodes.length) {
-    nodes[first++].hidden = true;
-    while (first < nodes.length && nodes[first].classList.contains('sideout-divider'))
-      nodes[first++].hidden = true;
-  }
+  const tip=playerFormTip(p,pos);
+  if(!tip||dismissed.has(tip.key))return '';
+  const symbol=tip.state==='hot'?'▲':'▼';
+  return `<span class="form ${tip.state}" role="img" aria-label="${esc(tip.title)}">${symbol}</span>`;
 }
 
 function canPick(pos, slot) {
@@ -1078,8 +1108,6 @@ function fit() {
   document.querySelector('.notes').style.maxWidth = (1366 * k) + 'px';
 }
 window.addEventListener('resize', fit);
-new ResizeObserver(fitRecentRallies).observe($('log'));
-document.fonts.ready.then(fitRecentRallies);
 // Player dots scale with the court.
 new ResizeObserver(([e]) => { $('court').style.setProperty('--cw', e.contentRect.width + 'px'); $('courtWrap').style.setProperty('--cw', e.contentRect.width + 'px'); }).observe($('court'));
 
