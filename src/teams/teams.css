@@ -157,6 +157,12 @@ body.busy{cursor:progress}
 .season-stats-summary{display:grid;gap:8px;margin-bottom:20px}
 .season-stats-summary h2{font-size:20px;margin:0 0 4px}
 .season-stats-summary p{margin:0}
+.lineup-suggestion{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 18px}
+.lineup-suggestion>div{min-width:0}
+.lineup-suggestion h3{font-size:18px;margin:0 0 5px}
+.lineup-suggestion p{margin:0 0 4px}
+.lineup-suggestion p:last-child{margin-bottom:0}
+.lineup-suggestion button{flex:none}
 .stats-table-scroll{max-width:100%;overflow-x:auto;border:1px solid #d9e1e6;border-radius:12px;background:#fff}
 .stats-table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
 .stats-table th,.stats-table td{padding:10px 12px;border-bottom:1px solid #e1e7eb;text-align:left;white-space:nowrap}
@@ -177,10 +183,34 @@ body.busy{cursor:progress}
 .stats-set{background:#f8fafb}
 .stats-set>summary{min-height:46px;font-size:14px}
 .stats-empty{padding:14px 16px;border:1px solid #d9e1e6;border-radius:12px;background:#fff;color:#60727e}
+.lineup-analysis-group>summary{align-items:flex-start}
+.lineup-analysis-group>summary>strong{flex:none}
+.lineup-analysis-group>summary>span{max-width:75%;line-height:1.35}
+.lineup-analysis-body{display:grid;gap:12px;padding:0 12px 12px}
+.lineup-analysis-body>p{margin:0}
+.analysis-rotation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.analysis-rotation{min-width:0;padding:12px;border:1px solid #d9e1e6;border-left:4px solid #aebbc2;border-radius:12px;background:#fff}
+.analysis-rotation.positive{border-left-color:var(--win,#16713c)}
+.analysis-rotation.negative{border-left-color:var(--lose,#b3251f)}
+.analysis-rotation h4{display:flex;align-items:baseline;justify-content:space-between;gap:5px;margin:0;font-size:17px}
+.analysis-rotation h4 span{font-size:13px;font-variant-numeric:tabular-nums}
+.analysis-volume{margin:0 0 8px;color:#60727e;font-size:12px}
+.analysis-rotation dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 8px;margin:0;font-size:12px}
+.analysis-rotation dt{color:#60727e}.analysis-rotation dd{margin:0;text-align:right;font-weight:650;font-variant-numeric:tabular-nums}
+.analysis-rotation dd small{display:block;color:#60727e;font-size:10px;font-weight:450}
+.analysis-rotation dd.analysis-distribution{grid-column:1/-1;text-align:left;font-size:11px;font-weight:500;overflow-wrap:anywhere}
+.analysis-players{padding:0 10px 10px}
+.analysis-players>summary{min-height:44px;font-size:14px}
+.lineup-player-table{min-width:760px}
 @media(max-width:700px){
  .season-stats-summary{padding:15px}
+ .lineup-suggestion{align-items:stretch;flex-direction:column}
+ .lineup-suggestion button{width:100%}
  .stats-group>summary{align-items:flex-start;flex-direction:column;gap:2px}
  .stats-group>summary>span{margin:0;text-align:left}
  .stats-group>summary::after{position:absolute;right:30px}
  .stats-group>summary{position:relative;padding-right:46px}
+ .lineup-analysis-group>summary>span{max-width:100%;text-align:left}
+ .analysis-rotation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .analysis-rotation{padding:9px}
 }
