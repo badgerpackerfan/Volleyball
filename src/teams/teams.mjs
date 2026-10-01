@@ -7,7 +7,7 @@ import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme, loadSettings, saveSettings, applyColorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
-import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats } from './stats-model.mjs';
+import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats, matchSetLineups } from './stats-model.mjs';
 import { matchSummary, rotationReport } from '../app/team-menu.mjs';
 registerApp();
 const $=id=>document.getElementById(id);
@@ -169,24 +169,27 @@ function exportMatch(team,match){
  setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Match export downloaded.');
 }
 function showRotationReportPicker(team,match){
- const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1}));
+ const lineups=matchSetLineups(match.sets);
+ const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1,lineup:lineups[index]}));
  openReport(`<h4>Rotation Report · ${esc(team.name)} vs ${esc(match.opponent||'Opponent')}</h4>
   <p>Choose a set to view its rotation by rotation rally record.</p>
-  <div class="report-set-picker">${sets.map(({record,state,number})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
+  <div class="report-set-picker">${sets.map(({record,state,number,lineup})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number} · ${esc(lineup.name)}${lineup.inheritedFromSet?` (continued from Set ${lineup.inheritedFromSet})`:''}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
   <button class="cancel" id="shCancel" type="button">Close</button>`);
  reportBody.querySelectorAll('[data-report-set]').forEach(button=>button.onclick=()=>{
   const record=match.sets.find(set=>set.config.id===button.dataset.reportSet);
   if(record)rotationReport(matchReportContext(team,match,record));
  });
 }
-function statTable(rows){
- if(!rows.length)return '<div class="stats-empty">No serving or passing results recorded.</div>';
- return `<div class="stats-table-scroll"><table class="stats-table"><thead><tr><th>Player</th><th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
+function statTable(rows,matchStats=false){
+ if(!rows.length)return `<div class="stats-empty">No ${matchStats?'player match':'serving or passing'} results recorded.</div>`;
+ return `<div class="stats-table-scroll"><table class="stats-table${matchStats?' match-stats':''}"><thead><tr><th>Player</th>${matchStats?'<th>Kills</th><th>Hitting errors</th><th>+/-</th>':''}<th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
   const passes=stats.passing.count?`${(stats.passing.sum/stats.passing.count).toFixed(2)} <small>n=${stats.passing.count}</small>`:'—';
   const attempts=stats.serving.attempts, aceIn=stats.serving.aces;
   const serves=`${attempts?`${Math.round(stats.serving.in*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
   const acePercent=`${attempts?`${Math.round(aceIn*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
-  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
+  const attacking=stats.attacking;
+  const plusMinus=attacking.plusMinus;
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th>${matchStats?`<td>${attacking.kills}</td><td>${attacking.hittingErrors}</td><td class="${plusMinus>0?'pos':plusMinus<0?'neg':''}">${plusMinus>0?`+${plusMinus}`:plusMinus}</td>`:''}<td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
 const analysisPercent=(part,total)=>total?`${Math.round(part*100/total)}%`:'—';
@@ -240,26 +243,42 @@ function lineupSuggestionMarkup(suggestion,teamColor,savedLineupCount){
 function teamStatsPage(team){
  const stats=buildTeamStats(team,practices);
  const lineupAnalysis=buildLineupAnalysis(team);
- const totalRows=stats.players.map(row=>({player:row.player,stats:row.total}));
+ const seasonRows=source=>stats.players.map(row=>({player:row.player,stats:row[source]}))
+  .filter(row=>row.stats.passing.count||row.stats.serving.attempts||(source==='matches'
+   &&row.stats.attacking.actions));
+ const seasonSourceText=source=>source==='matches'
+  ?`Match stats · ${plural(stats.counts.sets,'set')} recorded`
+  :`Practice stats · ${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.practiceResults,'result')}`;
  $('content').innerHTML=`<section class="season-stats-summary card" style="--team-color:${team.color}">
    <div><h2>${esc(team.name)} · ${esc(team.season||'Season stats')}</h2><p>${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.matches,'match')} · ${plural(stats.counts.sets,'set')} · ${plural(stats.counts.practiceResults,'practice result')}</p></div>
-   <p class="muted">Totals combine all saved practices and match sets linked to this team. Practice results are tapped individually; match serve attempts come from completed rallies. Serve In % includes aces; Ace % shows aces as a share of attempts.</p>
+   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Serve In % includes aces; Ace % shows aces as a share of attempts. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
   </section>
   <h2 class="list-title">Lineup and rotation analysis</h2>
   <p class="help">Rally outcomes are grouped by the lineup used in each set and the rotation at the start of each rally. Pass-to-side-out rates include scores linked to a recorded rally.</p>
   ${lineupAnalysisMarkup(lineupAnalysis)}
-  <h2 class="list-title">Season totals · all saved results</h2>
-  ${statTable(totalRows)}
+  <section class="season-totals">
+   <div class="season-totals-heading"><div><h2 class="list-title">Season totals</h2><p id="seasonTotalsContext" class="muted">${seasonSourceText('matches')}</p></div>
+    <div class="season-source-toggle" role="group" aria-label="Season totals source"><button type="button" data-season-source="matches" aria-pressed="true">Matches</button><button type="button" data-season-source="practice" aria-pressed="false">Practices</button></div>
+   </div>
+   <div id="seasonTotalsTable">${statTable(seasonRows('matches'),true)}</div>
+  </section>
   <h2 class="list-title">Matches and sets</h2>
   <div class="stats-breakdowns">${stats.matches.length?stats.matches.map(match=>{
    const result=match.winner?(match.winner==='us'?'Won':'Lost'):match.inProgress?'In progress':match.sets.length?'Complete':'Not started';
    return `<details class="stats-group"><summary><strong>vs ${esc(match.opponent||'Opponent')}</strong><span>${esc(match.date||'Date not recorded')} · ${esc(result)}${match.sets.length?` · Sets ${match.wins.us}–${match.wins.them}`:''}</span></summary>
-    ${match.sets.length?`<section class="stats-match-total"><h3>Match totals</h3>${statTable(match.rows)}</section>
-     <div class="stats-set-list">${match.sets.map(set=>`<details class="stats-set"><summary>Set ${set.number} · ${set.score.us}–${set.score.them} · ${set.status==='ended'?'Finished':'In progress'}</summary>${statTable(set.rows)}</details>`).join('')}</div>`:'<p class="stats-empty">No set results recorded yet.</p>'}
+    ${match.sets.length?`<section class="stats-match-total"><h3>Match totals</h3>${statTable(match.rows,true)}</section>
+     <div class="stats-set-list">${match.sets.map(set=>`<details class="stats-set"><summary>Set ${set.number} · ${set.score.us}–${set.score.them} · ${set.status==='ended'?'Finished':'In progress'}</summary><p class="stats-set-lineup"><strong>Lineup:</strong> ${esc(set.lineupName)}${set.lineupInheritedFromSet?` · continued from Set ${set.lineupInheritedFromSet}`:''}</p>${statTable(set.rows,true)}</details>`).join('')}</div>`:'<p class="stats-empty">No set results recorded yet.</p>'}
    </details>`;
   }).join(''):'<div class="stats-empty">No matches recorded for this team.</div>'}</div>
   <h2 class="list-title">Practices</h2>
   <div class="stats-breakdowns">${stats.practices.length?stats.practices.map(practice=>`<details class="stats-group stats-practice"><summary><strong>Practice · ${esc(practice.date)}</strong><span>${plural(practice.resultCount,'result')} · ${new Date(practice.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</span></summary>${statTable(practice.rows)}</details>`).join(''):'<div class="stats-empty">No practices recorded for this team.</div>'}</div>`;
+ const sourceButtons=[...$('content').querySelectorAll('[data-season-source]')];
+ sourceButtons.forEach(button=>button.onclick=()=>{
+  const source=button.dataset.seasonSource;
+  sourceButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+  $('seasonTotalsContext').textContent=seasonSourceText(source);
+  $('seasonTotalsTable').innerHTML=statTable(seasonRows(source),source==='matches');
+ });
 }
 function home(){
  dirty=false;
