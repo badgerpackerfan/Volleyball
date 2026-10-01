@@ -2,7 +2,8 @@ import { getSetStats, replaySet } from '../engine/set-engine.mjs';
 import { practiceStats } from '../practice/practice-model.mjs';
 import { lineupConfig } from './lineup-model.mjs';
 
-const zero = () => ({ passing: { count: 0, sum: 0 }, serving: { attempts: 0, in: 0, aces: 0, errors: 0 } });
+const zero = () => ({ passing: { count: 0, sum: 0 }, serving: { attempts: 0, in: 0, aces: 0, errors: 0 },
+  attacking: { kills: 0, hittingErrors: 0, plusMinus: 0, actions: 0 } });
 function add(target, source) {
   target.passing.count += source.passing.count;
   target.passing.sum += source.passing.sum;
@@ -10,6 +11,10 @@ function add(target, source) {
   target.serving.in += source.serving.in;
   target.serving.aces += source.serving.aces;
   target.serving.errors += source.serving.errors;
+  target.attacking.kills += source.attacking.kills;
+  target.attacking.hittingErrors += source.attacking.hittingErrors;
+  target.attacking.plusMinus += source.attacking.plusMinus;
+  target.attacking.actions += source.attacking.actions;
 }
 function profile(player) {
   return { id: player.id, name: player.name || '', jersey: String(player.jersey ?? '?') };
@@ -20,6 +25,7 @@ function fromPractice(row) {
     passing: { count: passes.total, sum: passes.sum },
     serving: { attempts: serves.ace + serves.in + serves.error, in: serves.ace + serves.in,
       aces: serves.ace, errors: serves.error },
+    attacking: { kills: 0, hittingErrors: 0, plusMinus: 0, actions: 0 },
   };
 }
 function rowsForPractice(practice) {
@@ -34,8 +40,11 @@ function rowsForSet(record) {
       passing: { count: row.passing?.count ?? 0, sum: row.passing?.sum ?? 0 },
       serving: { attempts: row.serving?.attempts ?? 0, in: row.serving?.in ?? 0,
         aces: row.serving?.aces ?? 0, errors: row.serving?.errors ?? 0 },
+      attacking: { kills: row.codes?.K ?? 0, hittingErrors: row.codes?.HE ?? 0, plusMinus: row.net ?? 0,
+        actions: Object.values(row.codes ?? {}).reduce((sum, count) => sum + count, 0) },
     },
-  })).filter(row => row.stats.passing.count || row.stats.serving.attempts);
+  })).filter(row => row.stats.passing.count || row.stats.serving.attempts
+    || row.stats.attacking.actions);
 }
 function ordered(rows) {
   return [...rows].sort((a, b) => Number(a.player.jersey) - Number(b.player.jersey)
@@ -82,7 +91,8 @@ export function buildTeamStats(team, allPractices) {
 
   let setCount = 0;
   const matches = team.matches.map(match => {
-    const sets = match.sets.map(record => {
+    const lineups = matchSetLineups(match.sets);
+    const sets = match.sets.map((record, index) => {
       setCount++;
       const state = replaySet(record), rows = rowsForSet(record);
       for (const row of rows) {
@@ -93,6 +103,7 @@ export function buildTeamStats(team, allPractices) {
       return {
         id: record.config.id, number: record.config.setNumber ?? 1,
         score: state.score, status: state.status, target: record.config.rules.target,
+        lineupName: lineups[index].name, lineupInheritedFromSet: lineups[index].inheritedFromSet,
         rows,
       };
     });
@@ -161,12 +172,38 @@ function passesByRally(record, state) {
   return linked;
 }
 
-function lineupDescription(record) {
-  const c = record.config, slots = new Map(c.slots.map(slot => [slot.id, slot]));
+function lineupSignature(c) {
+  const slots = new Map(c.slots.map(slot => [slot.id, slot]));
   const starters = (c.order ?? c.slots.map(slot => slot.id)).map(id => slots.get(id)?.playerId ?? null);
   const plans = c.slots.filter(slot => slot.plan).map(slot => [slot.id, slot.plan.frontPlayerId, slot.plan.backPlayerId]);
-  const signature = JSON.stringify({ system: c.system, starters, setters: c.setters, liberos: c.liberos, plans });
-  const templateId = c.lineupTemplate?.id ?? 'custom';
+  return JSON.stringify({ system: c.system, starters, setters: c.setters, liberos: c.liberos, plans });
+}
+
+/** Reuse a prior saved lineup's identity only when the full R1 configuration is unchanged. */
+export function matchSetLineups(records) {
+  let previousSignature = null, previousTemplate = null, previousSourceSet = null;
+  return records.map((record, index) => {
+    const c = record.config, signature = lineupSignature(c);
+    let template = c.lineupTemplate ?? null, inheritedFromSet = null;
+    if (!template && previousTemplate && signature === previousSignature) {
+      template = previousTemplate;
+      inheritedFromSet = previousSourceSet;
+    }
+    const setNumber = c.setNumber ?? index + 1;
+    const result = { template, inheritedFromSet, name: template?.name || 'Custom lineup' };
+    previousSignature = signature;
+    previousTemplate = template;
+    previousSourceSet = template ? (inheritedFromSet ?? setNumber) : null;
+    return result;
+  });
+}
+
+function lineupDescription(record, template = record.config.lineupTemplate) {
+  const c = record.config;
+  const slots = new Map(c.slots.map(slot => [slot.id, slot]));
+  const starters = (c.order ?? c.slots.map(slot => slot.id)).map(id => slots.get(id)?.playerId ?? null);
+  const signature = lineupSignature(c);
+  const templateId = template?.id ?? 'custom';
   const players = new Map(c.players.map(player => [player.id, profile(player)]));
   const starterLabel = starters.map(id => {
     const player = players.get(id);
@@ -180,7 +217,7 @@ function lineupDescription(record) {
   return {
     key: JSON.stringify([templateId, signature]),
     id: templateId,
-    name: c.lineupTemplate?.name || 'Custom lineup',
+    name: template?.name || 'Custom lineup',
     system: c.system,
     starterLabel,
     setterLabel,
@@ -189,10 +226,8 @@ function lineupDescription(record) {
 }
 
 export function savedLineupAnalysisKey(team, lineup) {
-  const c = lineupConfig(team, lineup), starters = c.slots.map(slot => slot.playerId);
-  const plans = c.slots.filter(slot => slot.plan).map(slot => [slot.id, slot.plan.frontPlayerId, slot.plan.backPlayerId]);
-  const signature = JSON.stringify({ system: c.system, starters, setters: c.setters, liberos: c.liberos, plans });
-  return JSON.stringify([lineup.id, signature]);
+  const c = lineupConfig(team, lineup);
+  return JSON.stringify([lineup.id, lineupSignature(c)]);
 }
 
 function makeLineupAnalysis(info) {
@@ -224,8 +259,10 @@ function orderedAnalysisPlayers(players) {
 /** Aggregate match outcomes by the exact saved lineup and rotation used. */
 export function buildLineupAnalysis(team) {
   const groups = new Map();
-  for (const match of team.matches ?? []) for (const record of match.sets ?? []) {
-    const state = replaySet(record), info = lineupDescription(record);
+  for (const match of team.matches ?? []) {
+    const records = match.sets ?? [], lineups = matchSetLineups(records);
+    for (const [index, record] of records.entries()) {
+    const state = replaySet(record), info = lineupDescription(record, lineups[index].template);
     let lineup = groups.get(info.key);
     if (!lineup) { lineup = makeLineupAnalysis(info); groups.set(info.key, lineup); }
     lineup.matches.add(match.id);
@@ -290,6 +327,7 @@ export function buildLineupAnalysis(team) {
           rotation.completed.wonReceiving += rally.winner === 'us' ? 1 : 0;
         }
       }
+    }
     }
   }
   return [...groups.values()].map(lineup => ({
