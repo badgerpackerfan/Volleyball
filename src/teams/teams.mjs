@@ -158,6 +158,16 @@ function matchReportContext(team,match,record){
 function showMatchSummary(team,match){
  const record=match.sets.at(-1);if(record)matchSummary(matchReportContext(team,match,record));
 }
+function exportMatch(team,match){
+ const payload={schemaVersion:1,kind:'volleyball-match-export',exportedAt:new Date().toISOString(),
+  match:{id:match.id,teamId:team.id,teamName:team.name,opponent:match.opponent,date:match.date,bestOf:match.bestOf,
+   setsWon:{us:match.wins.us,them:match.wins.them},winner:match.winner},sets:match.sets};
+ const clean=value=>String(value??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'');
+ const stem=[team.name,'vs',match.opponent,match.date].map(clean).filter(Boolean).join('-')||'volleyball-match';
+ const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+ const link=document.createElement('a');link.href=url;link.download=`${stem}.json`;link.hidden=true;document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Match export downloaded.');
+}
 function showRotationReportPicker(team,match){
  const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1}));
  openReport(`<h4>Rotation Report · ${esc(team.name)} vs ${esc(match.opponent||'Opponent')}</h4>
@@ -284,8 +294,9 @@ function home(){
    <h2 class="list-title">Matches</h2>
    <div class="list">${team.matches.length?team.matches.map(m=>{
     const reportsAvailable=Boolean(m.winner&&m.sets.length);
+    const exportAvailable=Boolean(reportsAvailable&&!m.inProgress);
     return item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}`:'Not started'}</p><p class="muted">${!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost'):m.inProgress?'Set in progress':'All recorded sets finished'}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
-     `<button data-match="${esc(m.id)}" class="primary">Open match</button>${reportsAvailable?`<button data-match-summary="${esc(m.id)}">Match Summary</button><button data-rotation-report="${esc(m.id)}">Rotation Report</button>`:''}<button data-delete-match="${esc(m.id)}" class="danger">Delete match</button>`,'match-card');
+     `<button data-match="${esc(m.id)}" class="primary">Open match</button>${reportsAvailable?`<button data-match-summary="${esc(m.id)}">Match Summary</button><button data-rotation-report="${esc(m.id)}">Rotation Report</button>`:''}${exportAvailable?`<button data-export-match="${esc(m.id)}">Export Match</button>`:''}<button data-delete-match="${esc(m.id)}" class="danger">Delete match</button>`,'match-card');
    }).join(''):'<div class="card"><p>No matches yet. Choose New match to set up the opponent and first set.</p></div>'}</div>
    <h2 class="list-title">Practices</h2>
    <div class="list">${teamPractices.length?teamPractices.map(p=>item(team.color,`<h3>Practice · ${esc(p.date)}</h3><p>${plural(p.events.length,'recorded result')} · ${new Date(p.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</p>`,
@@ -303,6 +314,7 @@ function home(){
   document.querySelectorAll('[data-match]').forEach(b=>b.onclick=()=>go(team.id,b.dataset.match));
   document.querySelectorAll('[data-match-summary]').forEach(b=>b.onclick=()=>showMatchSummary(team,team.matches.find(m=>m.id===b.dataset.matchSummary)));
   document.querySelectorAll('[data-rotation-report]').forEach(b=>b.onclick=()=>showRotationReportPicker(team,team.matches.find(m=>m.id===b.dataset.rotationReport)));
+  document.querySelectorAll('[data-export-match]').forEach(b=>b.onclick=()=>exportMatch(team,team.matches.find(m=>m.id===b.dataset.exportMatch)));
   $('deleteTeam').onclick=()=>deleteTeam(team);
   document.querySelectorAll('[data-delete-match]').forEach(b=>b.onclick=()=>deleteMatch(team,team.matches.find(m=>m.id===b.dataset.deleteMatch)));
   document.querySelectorAll('[data-practice]').forEach(b=>b.onclick=()=>{location.href=`./practice.html?id=${encodeURIComponent(b.dataset.practice)}`;});
