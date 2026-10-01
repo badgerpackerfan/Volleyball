@@ -93,6 +93,8 @@ const LABEL = {
    which role stands in which rotational position, so we can map each role to
    the player actually standing there. */
 const RECEIVE_KEY = { 1: '1,4', 6: '2,5', 5: '3,6' };   // back-row setter position -> pair
+// Court-positioning pairs each rotation with the one opposite it after a lap.
+const ROTATION_KEY = { 1: '1,4', 4: '1,4', 2: '2,5', 5: '2,5', 3: '3,6', 6: '3,6' };
 const PASS_LABEL = { OH: 'OH passes', RS: 'RS passes' };
 const PASS_RATINGS = [[3,'Perfect','All attack options'],[2,'Playable','Some attack options'],
   [1,'High ball','Limited attack'],[0,'No play','Ace or no playable pass']];
@@ -104,46 +106,76 @@ function gridPos(x, y) {
   return y < 120 ? [4, 3, 2][col] : [5, 6, 1][col];
 }
 
+function mappedSpots(rot, frame) {
+  const spots = {};
+  for (const id in frame) {
+    const [sx, sy] = rot.start[id], [x, y0] = frame[id];
+    const y = Math.min(y0, 336); // the serving spot sits just behind the end line
+    spots[slotAt(gridPos(sx, sy))] = { left: (x + 24) / 360 * 100, top: (y + 24) / 360 * 100 };
+  }
+  return spots;
+}
+
+function baseDefenseLayout() {
+  const activeSetterPos=setterPos();
+  const backRowSetterPos=activeSetterPos && isFront(activeSetterPos)
+    ? (activeSetterPos + 2) % 6 + 1 : activeSetterPos;
+  const key = RECEIVE_KEY[backRowSetterPos] || ROTATION_KEY[rotNum()];
+  const rot = FORMATIONS[key];
+  return rot?.base ? { key, spots: mappedSpots(rot, rot.base) } : null;
+}
+
 // The formation for the current moment: serve receive when they serve, the
 // serving spots when we serve. slot -> { left, top } (% of the court, center
 // of the dot). The formation is looked up even when the coach has flipped to
 // rotation spots, so the bar can still offer the passer choice.
-function formation() {
-  // Those frames have the setter releasing from the back row, so they fit a 6-2
-  // and the three 5-1 rotations where the setter is back. Front-row setting
-  // (4-2, or a 5-1 setter in 4/3/2) has no formation yet: show rotation spots.
-  const key = RECEIVE_KEY[setterPos()];
-  if (!key) return { none: true };
+function formation(forceReceive = false) {
+  // Live receive spots are defined for back-row setters. In timeout planning,
+  // forceReceive can use the matching opposite-rotation diagram as well.
+  const base = baseDefenseLayout();
+  const key = RECEIVE_KEY[setterPos()] || (forceReceive ? base?.key : null);
+  if (!key) return { none: true, base };
   const rot = FORMATIONS[key];
-  const receiving = S.serving === 'them';
+  const receiving = forceReceive || S.serving === 'them';
   let frame, tip, options = [], passer = null;
   if (receiving) {
     options = Object.keys(rot.passing);
-    passer = options.includes(ui.passer) ? ui.passer : (options.includes('OH') ? 'OH' : options[0]);
+    const selectedPasser = forceReceive && ui.timeoutMode ? ui.timeoutPasser : ui.passer;
+    passer = options.includes(selectedPasser) ? selectedPasser : (options.includes('OH') ? 'OH' : options[0]);
     frame = rot.passing[passer].receive;
     tip = rot.passing[passer].passers;
   } else {
     frame = rot.serve;
     tip = SERVE_TIP;
   }
-  const spots = {};
-  for (const id in frame) {
-    const [sx, sy] = rot.start[id];
-    const [x, y0] = frame[id];
-    const y = Math.min(y0, 336);   // server just behind the end line (keeps the court large)
-    spots[slotAt(gridPos(sx, sy))] = { left: (x + 24) / 360 * 100, top: (y + 24) / 360 * 100 };
-  }
+  const spots = mappedSpots(rot, frame);
   const editKey = `${SYSTEM}:${rotNum()}:${setterPos()}:${passer}`;
   if (receiving && receiveEdits[editKey]) {
     for (let pos = 1; pos <= 6; pos++) spots[slotAt(pos)] = { ...receiveEdits[editKey][pos] };
   }
-  return { receiving, options, passer, tip, spots, editKey };
+  return { receiving, options, passer, tip, spots, editKey, base };
+}
+
+function timeoutSpots(form, view = ui.timeoutView) {
+  const defaults = view === 'defense' ? form.base?.spots : form.spots;
+  return defaults ? { ...defaults, ...(ui.timeoutPositions?.[view] || {}) } : null;
+}
+
+// Timeout receive layouts are keyed by lineup slot for drawing, while the
+// receive legality rules are expressed in current court positions (P1–P6).
+function timeoutReceiveLayout(spots) {
+  return Object.fromEntries([1, 2, 3, 4, 5, 6].map(pos => [pos, { ...spots[slotAt(pos)] }]));
+}
+function timeoutReceiveError(spots, slot, target) {
+  const layout = timeoutReceiveLayout(spots);
+  layout[posOf(Number(slot))] = target;
+  return receiveLayoutError(layout);
 }
 
 /* ---------------- State ---------------- */
 let S, history, ui;
 let receiveEdits = {};
-let editingReceive = false, receiveDrag = null;
+let editingReceive = false, receiveDrag = null, tacticalDrag = null;
 async function saveReceiveEdits() {
   const key = formation().editKey;
   return perform({ type: 'receive.edit', payload: { key, positions: receiveEdits[key] || null } }, false);
@@ -221,11 +253,20 @@ function status(message, error=false) {
 }
 async function perform(cmd, clear=true) {
   if(saving || failedCommand) return false;
+  if(ui.timeoutMode) { status('Choose Done with timeout before recording another action.',true); return false; }
   if(editingReceive && !cmd.type.startsWith('receive.')) {status('Tap Done before recording another action.',true);return false;}
   saving=true; document.body.classList.add('saving'); status('Saving…');
   const pending = {...ui};
   try {
     await session.run(cmd);
+    if (cmd.type === 'timeout') {
+      ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, showBase: false,
+        timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
+        timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} } };
+    } else if (cmd.type === 'rally' || cmd.type === 'correction') {
+      ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null, showBase: false };
+      tacticalDrag = null;
+    }
     syncState();
     if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null}; $('sheet').classList.remove('open'); }
     status(session.state.status==='ended' ? 'Set ended · saved on this device' : 'Saved on this device');
@@ -318,28 +359,34 @@ function render() {
     }
     court.dataset.built = '1';
   }
-  const form = formation();
+  const timeoutMode = Boolean(ui.timeoutMode), timeoutView = ui.timeoutView || (S.serving === 'them' ? 'receive' : 'defense');
+  const form = formation(timeoutMode && timeoutView === 'receive');
   const rcv = form && !form.none && !ui.showBase ? form : null;
+  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : rcv?.spots;
   if (!form.receiving || form.none || ui.showBase) { editingReceive = false; $('receiveStatus').textContent = ''; }
+  if (timeoutMode) $('receiveStatus').textContent = timeoutView === 'receive'
+    ? 'Timeout · drag players to adjust serve receive. Legal order and spacing are enforced. Tap Done with timeout to return to the set.'
+    : 'Timeout · drag players to adjust base defense. Tap Done with timeout to return to the set.';
   court.classList.toggle('editing', editingReceive);
-  $('editReceive').disabled = !form.receiving || form.none;
-  $('editReceive').hidden = !form.receiving || form.none;
+  $('editReceive').disabled = timeoutMode || !form.receiving || form.none;
+  $('editReceive').hidden = timeoutMode || !form.receiving || form.none;
   $('editReceive').textContent = editingReceive ? 'Done' : 'Adjust receive';
   $('editReceive').setAttribute('aria-pressed', String(editingReceive));
-  $('resetReceive').hidden = !editingReceive;
+  $('resetReceive').hidden = timeoutMode || !editingReceive;
   const needPlayer = ui.pendingCode || ui.mode;
   [4, 3, 2, 5, 6, 1].forEach((pos, i) => {
     const slot = slotAt(pos), p = S.onCourt[slot], info = ROSTER[p] || { n: '', r: '' };
     const z = court.querySelector(`[data-slot="${slot}"]`);
     const isLib = S.libero && S.libero.slot === slot;
     let cls = `zone ${i < 3 ? 'front' : 'backrow'}`;
-    if (rcv) cls += ' rcv';
+    if (rcv || timeoutMode) cls += ' rcv';
+    if (timeoutMode) cls += ' tactical';
     if (ui.pendingSlot === slot) cls += ' selected';
     if (needPlayer) cls += canPick(pos, slot) ? ' pick' : ' nopick';
     z.className = cls;
-    if (rcv) {
+    if (activeSpots) {
       // Hit area: a square around the dot, centered on the receive spot.
-      const c = rcv.spots[slot], h = 9;
+      const c = activeSpots[slot], h = 9;
       Object.assign(z.style, { left: c.left - h + '%', top: c.top - h + '%', width: 2 * h + '%', height: 2 * h + '%' });
     } else {
       // Tap areas split between the two rows of players (42%), not on the attack line.
@@ -348,7 +395,7 @@ function render() {
     const disc = `disc ${isLib ? 'lib' : SLOTS[slot].role}${!isFront(pos) && !isLib ? ' back' : ''}`;
     const plan = SLOTS[slot].plan;
     const swapTag = plan && !isLib && !rcv ? `<span class="swap-tag">⇄ #${S.onCourt[slot] === plan.back ? plan.front : plan.back}</span>` : '';
-    const serving = pos === 1 && S.serving === 'us';
+    const serving = !timeoutMode && pos === 1 && S.serving === 'us';
     z.innerHTML = `<span class="pos">P${pos}</span>
       <span class="dwrap"><span class="${disc}">${p}</span>${formMark(p)}${serving ? '<span class="ball"><svg viewBox="0 0 512 512"><use href="#vb"/></svg></span>' : ''}${swapTag}</span>
       <span class="name">${info.n}<small>${info.r}</small></span>`;
@@ -356,7 +403,8 @@ function render() {
 
   // Court view (label on the court; controls in the Us pad)
   const mode = S.serving === 'them' ? 'SERVE RECEIVE' : 'SERVING';
-  court.querySelector('.court-mark').textContent = `${!rcv ? 'ROTATION SPOTS' : mode} · ${rotLabel().replace(' · ', ' · ')}`;
+  const viewTitle = timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : !rcv ? 'ROTATION SPOTS' : mode;
+  court.querySelector('.court-mark').textContent = `${viewTitle} · ${rotLabel().replace(' · ', ' · ')}`;
   const tools = document.querySelector('.court-tools'), inCourt = document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
   if (!inCourt && tools.parentElement === court) $('courtWrap').appendChild(tools);
@@ -364,22 +412,34 @@ function render() {
   $('rcvPassers').innerHTML = form && !form.none && form.options.length > 1
     ? form.options.map(o => `<button class="pill" data-pass="${o}" aria-pressed="${o === form.passer && !ui.showBase}">${PASS_LABEL[o]}</button>`).join('')
     : '';
-  $('rcvPassers').querySelectorAll('[data-pass]').forEach(b => b.onclick = () => selectReceive(b.dataset.pass));
+  $('rcvPassers').querySelectorAll('[data-pass]').forEach(b => b.onclick = () => {
+    if (timeoutMode) {
+      if (ui.timeoutPasser !== b.dataset.pass) { ui.timeoutPasser = b.dataset.pass; ui.timeoutPositions.receive = {}; render(); }
+    } else selectReceive(b.dataset.pass);
+  });
+  $('rcvPassers').hidden = timeoutMode && timeoutView !== 'receive';
+  $('rcvToggle').hidden = timeoutMode;
+  $('rcvToggle').textContent = 'Rotation spots';
   $('rcvToggle').setAttribute('aria-pressed', ui.showBase ? 'true' : 'false');
-  $('rcvToggle').disabled = !!(form && form.none);
-  $('rcvToggle').title = form && form.none ? 'No formation yet for a front-row setter' : 'Show who is legally where';
+  $('rcvToggle').disabled = !!(form && form.none) && !timeoutMode;
+  $('rcvToggle').title = form && form.none ? 'No formation yet for a front-row setter' : 'Show the rotation spots';
+  $('timeoutTools').hidden = !timeoutMode;
+  $('timeoutTools').querySelectorAll('[data-timeout-view]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.timeoutView === timeoutView));
+    button.onclick = () => { ui.timeoutView = button.dataset.timeoutView; ui.pendingSlot = null; render(); };
+  });
 
   // Pads
   document.querySelectorAll('.code').forEach(b => {
     const team = b.dataset.team, code = b.dataset.code;
-    b.disabled = editingReceive || session.state.status==='ended' || !possible(team, code);
+    b.disabled = timeoutMode || editingReceive || session.state.status==='ended' || !possible(team, code);
     b.classList.toggle('pending', ui.pendingCode === code && team === 'us');
     const auto = team === 'us' && (code === 'SA' || code === 'SE');
     if (auto && !b.querySelector('.auto')) b.insertAdjacentHTML('beforeend', '<span class="auto">AUTO</span>');
   });
   const tb = $('teamBtn');
   const teamOk = ui.pendingCode && !EARNED.includes(ui.pendingCode);
-  tb.disabled = !teamOk; tb.classList.toggle('ready', !!teamOk);
+  tb.disabled = timeoutMode || !teamOk; tb.classList.toggle('ready', !!teamOk);
   let hint;
   if (ui.mode === 'sub') hint = '<b>Sub:</b> tap the player coming out. <a href="#" id="cx">Cancel</a>';
   else if (ui.mode === 'libero') hint = '<b>Libero:</b> tap the back-row player the libero replaces. <a href="#" id="cx">Cancel</a>';
@@ -391,11 +451,11 @@ function render() {
 
   // Actions
   $('actSub').classList.toggle('on', ui.mode === 'sub');
-  $('actSub').disabled = editingReceive;
-  $('actLib').disabled = editingReceive || !LIBEROS.length;
+  $('actSub').disabled = timeoutMode || editingReceive;
+  $('actLib').disabled = timeoutMode || editingReceive || !LIBEROS.length;
   $('actLib').classList.toggle('on', ui.mode === 'libero' || !!S.libero);
   $('actLibSm').textContent = S.libero ? `#${S.libero.player} in for #${S.libero.replaced}` : `Off · plan: ${S.liberoFor === 'none' ? 'none' : PAIR_NAME[S.liberoFor]}`;
-  $('toUsBtn').disabled = editingReceive || !S.toUs; $('toThemBtn').disabled = editingReceive || !S.toThem;
+  $('toUsBtn').disabled = timeoutMode || editingReceive || !S.toUs; $('toThemBtn').disabled = timeoutMode || editingReceive || !S.toThem;
 
   // Log
   const log = $('log');
@@ -427,12 +487,12 @@ function render() {
   renderCorner();
 
   // Undo
-  $('undoBtn').disabled = editingReceive || history.length === 0;
+  $('undoBtn').disabled = timeoutMode || editingReceive || history.length === 0;
   $('undoSm').textContent = history.length ? history[history.length - 1].desc : 'nothing to undo';
 
   // Banners
   const bn = $('banners'); bn.innerHTML = '';
-  S.banners.forEach((b, i) => {
+  if (!timeoutMode) S.banners.forEach((b, i) => {
     const d = document.createElement('div');
     d.className = 'banner' + (b.kind === 'info' ? ' info' : '');
     d.innerHTML = `<div class="t">${b.text}${b.sub ? `<small>${b.sub}</small>` : ''}</div>` +
@@ -446,7 +506,7 @@ function render() {
     };
     bn.appendChild(d);
   });
-  $('calloutBanner').style.display = S.banners.length ? '' : 'none';
+  $('calloutBanner').style.display = !timeoutMode && S.banners.length ? '' : 'none';
   if(session.state.status==='ended') {
     for(const id of ['actSub','actLib','toUsBtn','toThemBtn','teamBtn','editReceive']) $(id).disabled=true;
   }
@@ -732,6 +792,7 @@ function onCode(team, code) {
 }
 
 function onTile(pos, slot) {
+  if (ui.timeoutMode) return;
   if (editingReceive) return;
   if (ui.mode === 'sub') { ui.mode = null; openBench(slot); return; }
   if (ui.mode === 'libero') {
@@ -787,7 +848,18 @@ function movedReceive(original, pos, target) {
 const editCourt=$('court');
 editCourt.addEventListener('pointerdown', e => {
   const tile=e.target.closest('[data-slot]');
-  if(saving || failedCommand || !editingReceive || !tile || (e.button !== 0 && e.pointerType==='mouse')) return;
+  if(saving || failedCommand || !tile || (e.button !== 0 && e.pointerType==='mouse')) return;
+  if (ui.timeoutMode && !editingReceive) {
+    if (tacticalDrag || receiveDrag) return;
+    const view=ui.timeoutView, form=formation(view === 'receive'), spots=timeoutSpots(form,view), slot=tile.dataset.slot;
+    const spot=spots?.[slot];if(!spot)return;
+    const rect=editCourt.getBoundingClientRect();
+    tacticalDrag={id:e.pointerId,slot,view,context:JSON.stringify([S.order,S.onCourt,S.rotation,S.serving,SYSTEM,ui.timeoutMode,ui.timeoutView]),
+      offset:{left:(e.clientX-rect.left)/rect.width*100-spot.left,top:(e.clientY-rect.top)/rect.height*100-spot.top},
+      before:clone(ui.timeoutPositions?.[view] || {}),moved:false,start:{x:e.clientX,y:e.clientY}};
+    editCourt.setPointerCapture(e.pointerId);e.preventDefault();return;
+  }
+  if (!editingReceive) return;
   if (receiveDrag) return;
   const form=formation();
   const rect=editCourt.getBoundingClientRect(), spot=form.spots[+tile.dataset.slot];
@@ -797,6 +869,24 @@ editCourt.addEventListener('pointerdown', e => {
   editCourt.setPointerCapture(e.pointerId); e.preventDefault();
 });
 editCourt.addEventListener('pointermove', e => {
+  if(tacticalDrag && tacticalDrag.id===e.pointerId) {
+    const d=tacticalDrag;
+    if(d.context!==JSON.stringify([S.order,S.onCourt,S.rotation,S.serving,SYSTEM,ui.timeoutMode,ui.timeoutView])) {finishTacticalDrag(e,true);return;}
+    const rect=editCourt.getBoundingClientRect();
+    const target={left:(e.clientX-rect.left)/rect.width*100-d.offset.left,top:(e.clientY-rect.top)/rect.height*100-d.offset.top};
+    target.left=Math.max(7,Math.min(93,target.left));target.top=Math.max(7,Math.min(93,target.top));
+    if(!d.moved && Math.hypot(e.clientX-d.start.x,e.clientY-d.start.y)>3)d.moved=true;
+    if(d.moved) {
+      if(d.view==='receive') {
+        const form=formation(true), spots=timeoutSpots(form,'receive'), error=timeoutReceiveError(spots,d.slot,target);
+        if(error) {$('receiveStatus').textContent=`Move blocked: ${error}`;return;}
+      }
+      ui.timeoutPositions={...(ui.timeoutPositions||{}),[d.view]:{...(ui.timeoutPositions?.[d.view]||d.before),[d.slot]:target}};
+      render();
+      if(d.view==='receive')$('receiveStatus').textContent='Legal order maintained · release to keep this position.';
+    }
+    return;
+  }
   if(!receiveDrag || receiveDrag.id!==e.pointerId) return;
   const d=receiveDrag;
   if(d.context !== JSON.stringify([S.order,S.onCourt,S.serving,SYSTEM,ui.passer,ui.showBase])) {
@@ -823,13 +913,36 @@ async function finishReceiveDrag(e, cancel) {
   if(editCourt.hasPointerCapture(e.pointerId)) editCourt.releasePointerCapture(e.pointerId);
   render();
 }
-editCourt.addEventListener('pointerup', e=>finishReceiveDrag(e,false));
-editCourt.addEventListener('pointercancel', e=>finishReceiveDrag(e,true));
-editCourt.addEventListener('lostpointercapture', e=>finishReceiveDrag(e,true));
+function finishTacticalDrag(e,cancel) {
+  if(!tacticalDrag || tacticalDrag.id!==e.pointerId)return;
+  const d=tacticalDrag;tacticalDrag=null;
+  cancel=cancel||d.context!==JSON.stringify([S.order,S.onCourt,S.rotation,S.serving,SYSTEM,ui.timeoutMode,ui.timeoutView]);
+  if(cancel)ui.timeoutPositions={...(ui.timeoutPositions||{}),[d.view]:d.before};
+  if(editCourt.hasPointerCapture(e.pointerId))editCourt.releasePointerCapture(e.pointerId);
+  render();
+}
+editCourt.addEventListener('pointerup', e=>tacticalDrag?finishTacticalDrag(e,false):finishReceiveDrag(e,false));
+editCourt.addEventListener('pointercancel', e=>tacticalDrag?finishTacticalDrag(e,true):finishReceiveDrag(e,true));
+editCourt.addEventListener('lostpointercapture', e=>tacticalDrag?finishTacticalDrag(e,true):finishReceiveDrag(e,true));
 editCourt.addEventListener('keydown', async e=>{
   const tile=e.target.closest('[data-slot]'), delta={ArrowLeft:[-2,0],ArrowRight:[2,0],ArrowUp:[0,-2],ArrowDown:[0,2]}[e.key];
-  if(saving || failedCommand || !editingReceive || !tile || !delta) return;
+  if(saving || failedCommand || !tile || !delta) return;
   e.preventDefault();
+  if(ui.timeoutMode) {
+    const view=ui.timeoutView,form=formation(view==='receive'),spots=timeoutSpots(form,view),slot=tile.dataset.slot,current=spots?.[slot];
+    if(!current)return;
+    const target={left:Math.max(7,Math.min(93,current.left+delta[0])),top:Math.max(7,Math.min(93,current.top+delta[1]))};
+    if(view==='receive') {
+      const error=timeoutReceiveError(spots,slot,target);
+      if(error) {$('receiveStatus').textContent=`Move blocked: ${error}`;return;}
+    }
+    const previous=ui.timeoutPositions?.[view]||{};
+    ui.timeoutPositions={...(ui.timeoutPositions||{}),[view]:{...previous,[slot]:target}};
+    render();
+    if(view==='receive')$('receiveStatus').textContent='Legal order maintained · adjustment retained for this timeout.';
+    return;
+  }
+  if(!editingReceive)return;
   const form=formation(), original=receivePositions(form), pos=posOf(+tile.dataset.slot);
   const result=movedReceive(original,pos,{left:original[pos].left+delta[0],top:original[pos].top+delta[1]});
   const error=receiveLayoutError(result);
@@ -840,7 +953,19 @@ editCourt.addEventListener('keydown', async e=>{
   } else $('receiveStatus').textContent=`Move blocked: ${error}`;
 });
 
-$('rcvToggle').onclick = () => { if(receiveDrag) return; ui.showBase = !ui.showBase; render(); };
+$('rcvToggle').onclick = () => {
+  if (receiveDrag || tacticalDrag || ui.timeoutMode) return;
+  ui.showBase = !ui.showBase;
+  render();
+};
+
+$('timeoutDone').onclick = () => {
+  if (!ui.timeoutMode || tacticalDrag) return;
+  ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null,
+    pendingCode: null, pendingSlot: null, mode: null, showBase: false };
+  $('receiveStatus').textContent = '';
+  render();status('Timeout ended · ready to continue the set.');
+};
 
 $('teamBtn').onclick = () => { if (ui.pendingCode) { commit('us', ui.pendingCode, null); } };
 
@@ -972,7 +1097,8 @@ async function start() {
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
     $('matchLink').textContent=`Match · Set ${record.config.setNumber??currentIndex+1}`;
     session=new SetSession(store,record); syncState();
-    ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false};
+    ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
+      timeoutMode:false,timeoutView:null,timeoutPasser:null,timeoutPositions:null};
     failedCommand=null; document.body.classList.remove('failed'); $('reloadSaved').hidden=true; $('retrySave').hidden=true;
     render();fit();status(session.state.status==='ended'?'Set ended · saved on this device':'Saved on this device');
   } catch(e) {status(e.message,true);document.body.classList.add('failed');$('reloadSaved').hidden=false;}
