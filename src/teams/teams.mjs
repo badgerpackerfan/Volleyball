@@ -8,6 +8,7 @@ import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme, loadSettings, saveSettings, applyColorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
 import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats } from './stats-model.mjs';
+import { matchSummary, rotationReport } from '../app/team-menu.mjs';
 registerApp();
 const $=id=>document.getElementById(id);
 applyColorTheme(loadSettings().theme);
@@ -34,6 +35,13 @@ const themeButton=$('themeButton'),themeDialog=$('themeDialog'),themeDone=$('the
 if(themeButton&&themeDialog)themeButton.onclick=()=>{$('themeTitle').textContent='App theme';renderThemeOptions();themeDialog.showModal();};
 if(themeDone&&themeDialog)themeDone.onclick=()=>themeDialog.close();
 if(themeDialog)themeDialog.onclick=e=>{if(e.target===themeDialog)themeDialog.close();};
+const reportDialog=$('reportDialog'),reportBody=$('reportBody');
+function openReport(html,wide=false){
+ reportBody.innerHTML=html;reportDialog.classList.toggle('wide',wide);
+ if(!reportDialog.open)reportDialog.showModal();
+}
+reportBody?.addEventListener('click',e=>{if(e.target.closest('#shCancel'))reportDialog.close();});
+reportDialog?.addEventListener('click',e=>{if(e.target===reportDialog)reportDialog.close();});
 renderThemeOptions();
 const identity=()=>crypto.randomUUID();
 const expected=()=>active?{id:active.config.id,revision:active.actions.length}:null;
@@ -144,6 +152,23 @@ const leave=()=>!dirty||confirm('Discard your unsaved changes?');
 $('backButton').onclick=()=>{if(!leave())return;dirty=false;notice();backAction?.();};
 $('liveLink').onclick=()=>{if(!leave())return;dirty=false;location.href='./index.html';};
 const item=(color,main,actions,extra='')=>`<article class="card item ${extra}" style="--team-color:${color}"><div class="item-main">${main}</div><div class="item-actions">${actions}</div></article>`;
+function matchReportContext(team,match,record){
+ return {record,state:replaySet(record),teams:{us:team.name,them:match.opponent||'Opponent'},matchRecords:()=>match.sets,open:openReport};
+}
+function showMatchSummary(team,match){
+ const record=match.sets.at(-1);if(record)matchSummary(matchReportContext(team,match,record));
+}
+function showRotationReportPicker(team,match){
+ const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1}));
+ openReport(`<h4>Rotation Report · ${esc(team.name)} vs ${esc(match.opponent||'Opponent')}</h4>
+  <p>Choose a set to view its rotation by rotation rally record.</p>
+  <div class="report-set-picker">${sets.map(({record,state,number})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
+  <button class="cancel" id="shCancel" type="button">Close</button>`);
+ reportBody.querySelectorAll('[data-report-set]').forEach(button=>button.onclick=()=>{
+  const record=match.sets.find(set=>set.config.id===button.dataset.reportSet);
+  if(record)rotationReport(matchReportContext(team,match,record));
+ });
+}
 function statTable(rows){
  if(!rows.length)return '<div class="stats-empty">No serving or passing results recorded.</div>';
  return `<div class="stats-table-scroll"><table class="stats-table"><thead><tr><th>Player</th><th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
@@ -257,8 +282,11 @@ function home(){
   $('content').innerHTML=`${team.logo?`<div class="team-brand" style="--team-color:${team.color}">${logoMarkup(team.logo,team.name)}<div><strong>${esc(team.name)}</strong><span>${esc(colorTheme(team.teamTheme).name)} theme</span></div></div>`:''}<div class="toolbar">${team.editable?`<button data-start="${esc(team.id)}" class="primary" ${team.players.length<6?'disabled':''}>New match</button><button id="startPractice" class="primary" ${team.players.length?'':'disabled'}>New practice</button><button id="teamLineups">Lineups</button><button data-edit="${esc(team.id)}">Edit roster</button>`:''}<button id="teamStats">View stats</button><button id="deleteTeam" class="danger">Delete team</button></div>
    ${team.editable&&team.players.length<6?'<p class="muted">Add at least six players to start a match.</p>':''}
    <h2 class="list-title">Matches</h2>
-   <div class="list">${team.matches.length?team.matches.map(m=>item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}`:'Not started'}</p><p class="muted">${!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost'):m.inProgress?'Set in progress':'All recorded sets finished'}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
-    `<button data-match="${esc(m.id)}" class="primary">Open match</button><button data-delete-match="${esc(m.id)}" class="danger">Delete match</button>`)).join(''):'<div class="card"><p>No matches yet. Choose New match to set up the opponent and first set.</p></div>'}</div>
+   <div class="list">${team.matches.length?team.matches.map(m=>{
+    const reportsAvailable=Boolean(m.winner&&m.sets.length);
+    return item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}`:'Not started'}</p><p class="muted">${!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost'):m.inProgress?'Set in progress':'All recorded sets finished'}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
+     `<button data-match="${esc(m.id)}" class="primary">Open match</button>${reportsAvailable?`<button data-match-summary="${esc(m.id)}">Match Summary</button><button data-rotation-report="${esc(m.id)}">Rotation Report</button>`:''}<button data-delete-match="${esc(m.id)}" class="danger">Delete match</button>`,'match-card');
+   }).join(''):'<div class="card"><p>No matches yet. Choose New match to set up the opponent and first set.</p></div>'}</div>
    <h2 class="list-title">Practices</h2>
    <div class="list">${teamPractices.length?teamPractices.map(p=>item(team.color,`<h3>Practice · ${esc(p.date)}</h3><p>${plural(p.events.length,'recorded result')} · ${new Date(p.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</p>`,
     `<button data-practice="${esc(p.id)}" class="primary">Open practice</button><button data-delete-practice="${esc(p.id)}" class="danger">Delete practice</button>`,'practice-card')).join(''):'<div class="card"><p>No practices recorded yet. Start a practice to track serves and serve receive for this roster.</p></div>'}</div>`;
@@ -273,6 +301,8 @@ function home(){
   }));
   document.querySelector('[data-edit]')?.addEventListener('click',()=>editTeam(teams.find(t=>t.id===team.id)));
   document.querySelectorAll('[data-match]').forEach(b=>b.onclick=()=>go(team.id,b.dataset.match));
+  document.querySelectorAll('[data-match-summary]').forEach(b=>b.onclick=()=>showMatchSummary(team,team.matches.find(m=>m.id===b.dataset.matchSummary)));
+  document.querySelectorAll('[data-rotation-report]').forEach(b=>b.onclick=()=>showRotationReportPicker(team,team.matches.find(m=>m.id===b.dataset.rotationReport)));
   $('deleteTeam').onclick=()=>deleteTeam(team);
   document.querySelectorAll('[data-delete-match]').forEach(b=>b.onclick=()=>deleteMatch(team,team.matches.find(m=>m.id===b.dataset.deleteMatch)));
   document.querySelectorAll('[data-practice]').forEach(b=>b.onclick=()=>{location.href=`./practice.html?id=${encodeURIComponent(b.dataset.practice)}`;});
