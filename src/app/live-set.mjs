@@ -1097,15 +1097,20 @@ document.querySelectorAll('input[name=tools]').forEach(r => r.onchange = () => {
 
 
 function fit() {
-  const avail = window.innerWidth;
-  const k = Math.min(1, avail / 1366);
+  const viewport = window.visualViewport;
+  const width = viewport?.width ?? window.innerWidth;
+  const height = viewport?.height ?? window.innerHeight;
+  const k = Math.min(1, width / 1366, height / 1024);
+  const stage = document.querySelector('.stage');
+  stage.style.height = `${height}px`;
   const sc = $('scaler');
   sc.style.transform = `scale(${k})`;
-  sc.style.marginLeft = `${Math.max(0, (window.innerWidth - 1366 * k) / 2)}px`;
-  sc.style.height = (1024 * k) + 'px';
+  sc.style.left = `${Math.max(0, (width - 1366 * k) / 2)}px`;
+  sc.style.top = `${Math.max(0, (height - 1024 * k) / 2)}px`;
   document.querySelector('.notes').style.maxWidth = (1366 * k) + 'px';
 }
 window.addEventListener('resize', fit);
+window.visualViewport?.addEventListener('resize', fit);
 // Player dots scale with the court.
 new ResizeObserver(([e]) => { $('court').style.setProperty('--cw', e.contentRect.width + 'px'); $('courtWrap').style.setProperty('--cw', e.contentRect.width + 'px'); }).observe($('court'));
 
