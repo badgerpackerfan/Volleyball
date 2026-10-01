@@ -231,6 +231,15 @@ function home(){
  const hierarchy=teamHierarchy(teams,sets),params=new URLSearchParams(location.hash.slice(1));
  const team=hierarchy.find(t=>t.id===params.get('team'));
  const match=team?.matches.find(m=>m.id===params.get('match'));
+ if(team?.editable&&match&&params.get('view')==='setup'){
+  const nextSet=match.sets.length+1;
+  const optionalThird=match.bestOf===3&&nextSet===3&&match.sets.length===2&&Boolean(match.winner);
+  const canSetup=!match.inProgress&&match.bestOf&&nextSet<=match.bestOf&&(!match.winner||optionalThird);
+  // The setup route is a one-shot handoff from the live set. Strip it before
+  // opening the form so Cancel returns to the match page instead of reopening it.
+  history.replaceState(null,'',`${location.pathname}${location.search}#${route(team.id,match.id)}`);
+  if(canSetup){matchSetup(team,match);return;}
+ }
  if(team&&!match&&params.get('view')==='stats'){bar('Season stats',team.name,{label:team.name,action:()=>go(team.id)});teamStatsPage(team);return;}
  if(team?.editable&&params.get('view')==='lineups'){bar('Lineups',team.name,{label:team.name,action:()=>go(team.id)});lineupLibrary(teams.find(t=>t.id===team.id));return;}
  if(!team){
@@ -275,9 +284,11 @@ function home(){
   return;
  }
  const next=match.sets.length+1;
+ const optionalThird=match.bestOf===3&&next===3&&match.sets.length===2&&Boolean(match.winner);
+ const canStartNext=team.editable&&!match.inProgress&&match.bestOf&&next<=match.bestOf&&(!match.winner||optionalThird);
  bar(match.opponent,[team.name,match.date].filter(Boolean).join(' · '),{label:team.name,action:()=>go(team.id)});
  $('content').innerHTML=`<div class="card match-summary" style="--team-color:${team.color}"><p class="set-score">Sets ${match.wins.us}–${match.wins.them}</p><p>${match.winner?`<strong class="match-result">${match.winner==='us'?'Match won':'Match lost'}</strong> · `:''}${match.bestOf?`Best of ${match.bestOf}`:'Match format not set'}</p></div>
-  <div class="toolbar">${!match.winner&&team.editable?`<button id="nextSet" class="primary" ${match.inProgress||team.players.length<6?'disabled':''}>${match.sets.length?`Start set ${next}`:'Set up set 1'}</button>`:''}<button id="deleteMatch" class="danger">Delete match</button></div>
+  <div class="toolbar">${canStartNext?`<button id="nextSet" class="primary" ${team.players.length<6?'disabled':''}>${optionalThird?'Record optional set 3':match.sets.length?`Set up set ${next}`:'Set up set 1'}</button>`:''}<button id="deleteMatch" class="danger">Delete match</button></div>
   ${match.inProgress?'<p class="muted">Finish the set in progress before starting another set in this match.</p>':''}
   ${match.sets.length?'<h2 class="list-title">Sets</h2>':''}
   <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1;return item(team.color,`<h3>Set ${n}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target}</p>`,
