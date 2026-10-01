@@ -31,18 +31,19 @@ function render(){
   const events=practice.events.slice(-12).reverse();
   const stats=new Map(practiceStats(practice).map(row=>[row.player.id,row]));
   $('content').innerHTML=`<div class="practice-intro"><h2>${esc(practice.teamName)} practice</h2><span class="muted">${practice.events.length} results saved on this device</span></div>
-    <p class="practice-hint">Tap a result to log it. Aces count as serves in.</p>
+    <p class="practice-hint">Tap a result to log it. Serve In% includes aces; Ace% shows aces as a share of attempts.</p>
     <section class="player-practice-list" aria-label="Player practice tracking">${practice.players.map(p=>{
       const {serves,passes}=stats.get(p.id);
       const attempts=serves.ace+serves.in+serves.error;
       const successful=serves.ace+serves.in;
       const passAverage=passes.total?(passes.sum/passes.total).toFixed(2):'—';
       const servePercent=attempts?`${Math.round(successful*100/attempts)}%`:'—';
+      const acePercent=attempts?`${Math.round(serves.ace*100/attempts)}%`:'—';
       const label=`#${esc(p.jersey)} · ${esc(p.name)}`;
       const canUndo=practice.events.some(event=>event.playerId===p.id);
       return `<article class="player-practice card">
         <div class="player-practice-heading"><h2>${label}</h2><button type="button" class="player-undo" data-undo-player="${esc(p.id)}" ${canUndo?'':'disabled'} aria-label="Undo latest result for ${label}">Undo</button></div>
-        <div class="player-summary"><span>Pass avg <strong>${passAverage}</strong><small>n=${passes.total}</small></span><span>Serve in <strong>${servePercent}</strong><small>n=${attempts}</small></span></div>
+        <div class="player-summary"><span>Pass avg <strong>${passAverage}</strong><small>n=${passes.total}</small></span><span>Serve In % <strong>${servePercent}</strong><small>n=${attempts}</small></span><span>Ace % <strong>${acePercent}</strong><small>n=${attempts}</small></span></div>
         <div class="player-skills">
           <section class="player-skill"><h3>Serving</h3><div class="result-buttons serve-buttons" aria-label="Serving results for ${label}">
             <button type="button" data-skill="serve" data-player="${esc(p.id)}" data-result="ace" aria-label="Record ace for ${label}">Ace</button>
