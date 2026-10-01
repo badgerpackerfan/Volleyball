@@ -7,7 +7,7 @@ import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme, loadSettings, saveSettings, applyColorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
-import { buildTeamStats } from './stats-model.mjs';
+import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats } from './stats-model.mjs';
 registerApp();
 const $=id=>document.getElementById(id);
 applyColorTheme(loadSettings().theme);
@@ -154,13 +154,65 @@ function statTable(rows){
   return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
+const analysisPercent=(part,total)=>total?`${Math.round(part*100/total)}%`:'—';
+const analysisSigned=value=>value>0?`+${value}`:String(value);
+function lineupPlayerTable(players){
+ const rows=players.filter(({passing,serving})=>passing.count||serving.attempts);
+ if(!rows.length)return '<div class="stats-empty">No serve attempts or pass scores recorded for this lineup.</div>';
+ return `<div class="stats-table-scroll"><table class="stats-table lineup-player-table"><thead><tr><th>Player</th><th>Serve points W–L</th><th>Serve In %</th><th>Ace %</th><th>Pass avg</th><th>Pass scores · 0 / 1 / 2 / 3</th></tr></thead><tbody>${rows.map(({player,passing,serving})=>{
+  const serveRecord=serving.attempts?`${serving.pointsWon}–${serving.pointsLost} <small>n=${serving.attempts}</small>`:'—';
+  const inPercent=serving.attempts?`${analysisPercent(serving.in,serving.attempts)} <small>n=${serving.attempts}</small>`:'—';
+  const acePercent=serving.attempts?`${analysisPercent(serving.aces,serving.attempts)} <small>n=${serving.attempts}</small>`:'—';
+  const passAverage=passing.count?`${(passing.sum/passing.count).toFixed(2)} <small>n=${passing.count}</small>`:'—';
+  const distribution=passing.count?[0,1,2,3].map(r=>passing.ratings[r]).join(' / '):'—';
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${serveRecord}</td><td>${inPercent}</td><td>${acePercent}</td><td>${passAverage}</td><td>${distribution}</td></tr>`;
+ }).join('')}</tbody></table></div>`;
+}
+function lineupAnalysisMarkup(lineups){
+ if(!lineups.length)return '<div class="stats-empty">No match lineup data yet. Start recording sets to compare lineups and rotations.</div>';
+ return `<div class="stats-breakdowns lineup-analysis-list">${lineups.map((lineup,index)=>{
+  const rotationCards=[1,2,3,4,5,6].map(number=>{
+   const r=lineup.rotations[number],pass=r.passing,passAvg=pass.count?(pass.sum/pass.count).toFixed(2):'—';
+   const distribution=pass.count?[0,1,2,3].map(score=>`${score}: ${pass.ratings[score]}`).join(' · '):'No pass scores';
+   return `<section class="analysis-rotation ${r.won-r.lost>0?'positive':r.won-r.lost<0?'negative':''}">
+    <h4>R${number}<span>${r.won}–${r.lost} · ${analysisSigned(r.won-r.lost)}</span></h4>
+    <p class="analysis-volume">${r.rallies} rallies${r.rallies<10?' · small sample':''}</p>
+    <dl><dt>Side-out</dt><dd>${analysisPercent(r.wonReceiving,r.received)} <small>${r.wonReceiving}/${r.received} received</small></dd>
+     <dt>Point-scoring</dt><dd>${analysisPercent(r.wonServing,r.served)} <small>${r.wonServing}/${r.served} served</small></dd>
+     <dt>Pass average</dt><dd>${passAvg} <small>n=${pass.count}</small></dd>
+     <dt>Pass scores</dt><dd class="analysis-distribution">${distribution}</dd>
+     <dt>Pass to side-out</dt><dd>${analysisPercent(pass.sideoutWins,pass.linked)} <small>n=${pass.linked} linked</small></dd>
+     <dt>Best run</dt><dd>${r.bestRun}</dd><dt>Longest run allowed</dt><dd>${r.longestRunAllowed}</dd></dl>
+   </section>`;
+  }).join('');
+  return `<details class="stats-group lineup-analysis-group" ${index===0?'open':''}>
+   <summary><strong>${esc(lineup.name)}</strong><span>${esc(lineup.system)} · ${lineup.matches} matches · ${lineup.setsWon}–${lineup.setsLost} sets · ${lineup.won}–${lineup.lost} rallies · ${analysisSigned(lineup.won-lineup.lost)}</span></summary>
+   <div class="lineup-analysis-body"><p class="muted"><strong>R1:</strong> ${esc(lineup.starterLabel)} · <strong>Setters:</strong> ${esc(lineup.setterLabel)} · ${lineup.rallies} rallies in ${lineup.setsPlayed} sets. Cells with fewer than 10 rallies are marked as small samples.</p>
+    <div class="analysis-rotation-grid">${rotationCards}</div>
+    <details class="stats-set analysis-players"><summary>Serving and passing by player</summary>${lineupPlayerTable(lineup.players)}</details>
+   </div>
+  </details>`;
+ }).join('')}</div>`;
+}
+function lineupSuggestionMarkup(suggestion,teamColor,savedLineupCount){
+ if(!suggestion)return `<section class="card lineup-suggestion" style="--team-color:${esc(teamColor)}"><div><h3>Set lineup suggestion</h3><p>${savedLineupCount?'No saved lineup has 12 completed match rallies yet. Keep recording sets and a recommendation will appear here.':'Save a lineup and record at least 12 completed match rallies with it to get a recommendation.'}</p></div></section>`;
+ const {lineup,stats,rotation,rotationStats}=suggestion;
+ const pointRate=analysisPercent(stats.completedWon,stats.completedRallies);
+ const rotationText=rotationStats?`The strongest sampled starting rotation for this lineup is R${rotation} (${analysisPercent(rotationStats.won,rotationStats.rallies)} across ${rotationStats.rallies} rallies; side-out ${analysisPercent(rotationStats.wonReceiving,rotationStats.received)}, point-scoring ${analysisPercent(rotationStats.wonServing,rotationStats.served)}).`:'No rotation has 10 completed rallies yet, so use the automatic start or choose a rotation yourself.';
+ const limited=stats.completedRallies<40?' This is an early signal; review the sample count.':'';
+ return `<section class="card lineup-suggestion" style="--team-color:${esc(teamColor)}"><div><h3>Set lineup suggestion</h3><p><strong>${esc(lineup.name)}</strong> · ${esc(lineup.system)} · ${stats.setsWon}–${stats.setsLost} sets · ${stats.completedWon}–${stats.completedLost} rallies (${pointRate}, n=${stats.completedRallies}).</p><p><strong>R1:</strong> ${esc(stats.starterLabel)} · <strong>Setters:</strong> ${esc(stats.setterLabel)}</p><p>${rotationText}${limited}</p><p class="muted">Ranked by completed-rally win rate; set win rate and sample size break ties. Opponent and matchup are not considered.</p></div><button type="button" id="applyLineupSuggestion" class="primary">Use suggestion${rotation?` · R${rotation}`:''}</button></section>`;
+}
 function teamStatsPage(team){
  const stats=buildTeamStats(team,practices);
+ const lineupAnalysis=buildLineupAnalysis(team);
  const totalRows=stats.players.map(row=>({player:row.player,stats:row.total}));
  $('content').innerHTML=`<section class="season-stats-summary card" style="--team-color:${team.color}">
    <div><h2>${esc(team.name)} · ${esc(team.season||'Season stats')}</h2><p>${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.matches,'match')} · ${plural(stats.counts.sets,'set')} · ${plural(stats.counts.practiceResults,'practice result')}</p></div>
    <p class="muted">Totals combine all saved practices and match sets linked to this team. Practice results are tapped individually; match serve attempts come from completed rallies. Serve In % includes aces; Ace % shows aces as a share of attempts.</p>
   </section>
+  <h2 class="list-title">Lineup and rotation analysis</h2>
+  <p class="help">Rally outcomes are grouped by the lineup used in each set and the rotation at the start of each rally. Pass-to-side-out rates include scores linked to a recorded rally.</p>
+  ${lineupAnalysisMarkup(lineupAnalysis)}
   <h2 class="list-title">Season totals · all saved results</h2>
   ${statTable(totalRows)}
   <h2 class="list-title">Matches and sets</h2>
@@ -309,12 +361,15 @@ function editLineup(team,lineup=null){
 function matchSetup(team,match=null){
  team=teams.find(t=>t.id===team.id);notice();
  const setNumber=match?match.sets.length+1:1,planned=match&&!match.sets.length;
+ const historyTeam=teamHierarchy(teams,sets).find(t=>t.id===team.id)??{...team,matches:[]};
+ const lineupSuggestion=buildLineupSuggestion(team,historyTeam);
  bar(match&&!planned?`Set ${setNumber}`:planned?match.opponent:'New match',match?`${team.name} · ${planned?'Saved match':match.opponent}`:team.name,{label:match?match.opponent:team.name,action:home});
  const previousSet=match?.sets.at(-1),previous=previousSet?.config;
  const today=new Date();const date=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
  const previousRotation=previousSet?replaySet(previousSet).rotation:null;
  const lineupOptions=()=>`<option value="">Custom lineup${previous?' / previous set':''}</option>`+team.lineups.map(l=>`<option value="${esc(l.id)}">${esc(l.name)} · ${l.system}${lineupIssue(team,l)?' (needs review)':''}</option>`).join('');
  $('content').innerHTML=`<form id="matchForm"><div class="grid"><label>Opponent<input id="opponent" required maxlength="100" autocomplete="off"></label><label>Match date<input id="date" type="date" required value="${date}"></label><label>Match format<select id="bestOf" ${match?.bestOf&&!planned?'disabled':''}><option value="3">Best of 3</option><option value="5">Best of 5</option></select></label><label id="firstServeLabel">First serve<select id="firstServe"><option value="them">${esc(team.name)} receives</option><option value="us">${esc(team.name)} serves</option></select></label></div><p id="setRules" class="help"></p>
+ ${lineupSuggestionMarkup(lineupSuggestion,team.color,team.lineups.length)}
  <fieldset><legend>Choose lineup</legend><label>Saved lineup<select id="lineupSelect">${lineupOptions()}</select></label><p id="lineupNote" class="muted">${previous?'Previous set’s base R1 lineup copied below. You can choose another saved lineup.':'Choose a saved lineup or build one below.'}</p><fieldset id="lineupFields"></fieldset>
  <details id="saveLineupDetails" class="save-lineup"><summary>Save this lineup for later</summary><label>New lineup name<input id="saveLineupName" maxlength="100" placeholder="Standard 6-2"></label><button type="button" id="saveLineup">Save as new lineup</button></details></fieldset>
  <fieldset><legend>Starting rotation</legend><div class="grid"><label>Start choice<select id="rotationMode"><option value="auto">Serve R1 / receive R6</option><option value="manual">Choose a rotation</option><option value="carry" ${previousSet?'':'disabled'}>${previousSet?`Carry previous set’s ending rotation (R${previousRotation})`:'Carry previous set’s ending rotation (no previous set)'}</option></select></label><label id="manualRotationLabel" hidden>Rotation<select id="startingRotation">${[1,2,3,4,5,6].map(n=>`<option value="${n}">R${n}</option>`).join('')}</select></label></div>
@@ -341,6 +396,12 @@ function matchSetup(team,match=null){
    return `<div data-preview-position="${pos}" class="lineup-player ${[1,5,6].includes(pos)?'back':''} ${p?'':'empty'}" style="--column:${i%3};--row:${Math.floor(i/3)};--player-color:${color}"><small class="lineup-position">P${pos}${pos===1&&$('firstServe').value==='us'?' · server':''}</small><span class="lineup-disc"><strong class="lineup-number">${p?esc(p.jersey):'—'}</strong></span><span class="lineup-name">${p?esc(p.name):'Choose a player'}</span></div>`;
   }).join('');
  }
+ $('applyLineupSuggestion')?.addEventListener('click',()=>{
+  $('lineupSelect').value=lineupSuggestion.lineup.id;
+  $('lineupSelect').onchange();
+  if(lineupSuggestion.rotation){$('rotationMode').value='manual';$('startingRotation').value=String(lineupSuggestion.rotation);}
+  preview();
+ });
  $('lineupSelect').onchange=()=>{
   const value=team.lineups.find(l=>l.id===$('lineupSelect').value);
   editor.write(value??initial);selectedLineupId=value?.id??'';
