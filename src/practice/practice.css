@@ -8,10 +8,10 @@
 .player-practice-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
 .player-practice-heading h2{margin:0;font-size:17px;overflow-wrap:anywhere}
 .player-undo{min-height:44px;padding:6px 12px;font-size:14px}
-.player-summary{display:flex;justify-content:space-between;gap:6px;padding:5px 0 7px;font-size:13px;font-variant-numeric:tabular-nums}
-.player-summary>span{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.player-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;padding:5px 0 7px;font-size:13px;font-variant-numeric:tabular-nums}
+.player-summary>span{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:1px 5px;min-width:0;white-space:normal}
 .player-summary strong{font-size:17px}
-.player-summary small{color:#617580;font-size:11px}
+.player-summary small{grid-column:1/-1;color:#617580;font-size:10px;line-height:1.25}
 .player-skills{display:grid;gap:6px}
 .player-skill{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:6px}
 .player-skill h3{margin:0;font-size:12px;line-height:1.1;color:#526873}
