@@ -536,6 +536,17 @@ export function getSetStats(state) {
     rotation[won ? 'won' : 'lost']++; rotation[served ? 'served' : 'received']++;
     if (won) rotation[served ? 'wonServing' : 'wonReceiving']++;
     codes[r.team][r.code] = (codes[r.team][r.code] ?? 0) + 1;
+    // Each completed rally is exactly one serve attempt for the recorded server.
+    // An ace is in; a serve error is out. Both remain a single attempt.
+    if (served && r.serverId !== null && r.serverId !== undefined) {
+      const p = players.get(r.serverId) ?? { earned: 0, errors: 0, codes: {} };
+      p.serving ??= { attempts: 0, in: 0, aces: 0, errors: 0 };
+      p.serving.attempts++;
+      if (r.team === 'us' && r.code === 'SE') p.serving.errors++;
+      else p.serving.in++;
+      if (r.team === 'us' && r.code === 'SA') p.serving.aces++;
+      players.set(r.serverId, p);
+    }
     if (r.team === 'us' && r.playerId !== null) {
       const p = players.get(r.playerId) ?? { earned: 0, errors: 0, codes: {} };
       p[ACTION_CODES[r.code] === 'earned' ? 'earned' : 'errors']++;
