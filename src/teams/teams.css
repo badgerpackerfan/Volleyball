@@ -53,6 +53,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .team-brand>div{display:grid;gap:2px}.team-brand strong{font-size:17px}.team-brand span{font-size:13px;color:#60727e}
 .item-actions{display:flex;gap:10px;flex-shrink:0}
 .item-actions button{min-width:112px}
+.match-card .item-actions{flex-wrap:wrap;justify-content:flex-end}
 .set-score{font-size:28px;font-weight:750;color:#273842!important;font-variant-numeric:tabular-nums;margin:0}
 .match-summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 18px}
 .match-summary p{margin:0}
@@ -139,6 +140,7 @@ body.busy{cursor:progress}
  .item-actions{display:grid;grid-template-columns:1fr 1fr}
  .item.three .item-actions{grid-template-columns:repeat(3,1fr)}
  .item-actions button{min-width:0;padding:11px 8px;white-space:nowrap}
+ .match-card .item-actions button{min-height:44px;padding:9px 6px;font-size:13px;line-height:1.15;white-space:normal}
  .grid{grid-template-columns:1fr}
  .team-theme-field .theme-picker{grid-template-columns:1fr}
  .team-logo-field{grid-template-columns:1fr auto}
@@ -213,4 +215,59 @@ body.busy{cursor:progress}
  .lineup-analysis-group>summary>span{max-width:100%;text-align:left}
  .analysis-rotation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .analysis-rotation{padding:9px}
+}
+
+/* Match reports opened directly from the Teams page. */
+.report-dialog{width:min(1060px,calc(100vw - 24px));max-width:none;max-height:92dvh;overflow:hidden;padding:0;border:0;border-radius:18px;background:#fff;color:#273842;box-shadow:0 20px 60px #0006;--line:#d9e1e6;--card:#fff;--chalk:#fff;--ink-dim:#60727e;--bg:#f3f6f7}
+.report-dialog.wide{width:min(1320px,calc(100vw - 24px))}
+.report-dialog::backdrop{background:#0a0e12a6}
+.report-body{max-height:92dvh;overflow:auto;padding:22px}
+.report-body h4{font-size:21px;margin:0 0 8px}
+.report-body h5{margin:14px 0 6px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#60727e}
+.report-body>p{color:#60727e;line-height:1.45}
+.report-body .cancel{width:100%;margin-top:14px}
+.report-body .lib-table{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:10px}
+.report-body .lib-table th{text-align:right;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#60727e;padding:2px 6px}
+.report-body .lib-table td{padding:4px 6px;border-top:1px solid var(--line)}
+.report-body .lib-table td+td{text-align:right;font-variant-numeric:tabular-nums}
+.report-body .stat-table td:first-child{text-align:left}
+.report-body .stat-table td.pos{color:var(--win);font-weight:800}.report-body .stat-table td.neg{color:var(--lose);font-weight:800}
+.report-body .fix-list{margin:0 0 8px;padding-left:20px;font-size:15px;line-height:1.5}
+.report-body .rr{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}
+.report-body .rr-col{min-width:0;padding:8px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.report-body .rr-col.best{background:color-mix(in srgb,var(--win) 9%,#fff)}.report-body .rr-col.worst{background:color-mix(in srgb,var(--lose) 9%,#fff)}
+.report-body .rr-col header{display:flex;justify-content:space-between;align-items:baseline;font-size:20px;margin-bottom:6px}
+.report-body .rr-col header span{font-size:15px;color:#60727e;font-weight:800}
+.report-body .mini-court{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--court);border:2px solid #fff;border-top-width:5px;border-radius:4px}
+.report-body .mini-court div{display:flex;flex-direction:column;min-width:0;padding:4px 2px;color:#fff;text-align:center}
+.report-body .mini-court div:nth-child(n+4){border-top:1px dashed #ffffff99}
+.report-body .mini-court .srv{background:#ffffff3d}
+.report-body .mini-court small{font-size:10px;opacity:.8;font-weight:700}
+.report-body .mini-court b{font-size:20px;line-height:1.15}
+.report-body .mini-court span,.report-body .rr .mini-court span{display:none}
+.report-body .rr-log{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px;margin:6px 0;font-variant-numeric:tabular-nums}
+.report-body .rr-log th{padding:2px;color:#60727e;font-size:10px;font-weight:800;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.report-body .rr-log td{text-align:center;padding:3px 1px;border-top:1px solid var(--line)}
+.report-body .rr-log tr.won td:nth-child(3){color:var(--win);font-weight:800}.report-body .rr-log tr.lost td:nth-child(4){color:var(--lose);font-weight:800}
+.report-body .rr-log tr.edited td:nth-child(2)::after{content:'*';color:var(--accent)}
+.report-body .rr-log .empty{color:#60727e;font-size:12px}
+.report-body .rr-tot{display:grid;grid-template-columns:1fr auto;gap:2px 6px;margin:0;font-size:13px}
+.report-body .rr-tot dt{color:#60727e}.report-body .rr-tot dd{margin:0;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.report-body .set-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.report-body .set-chips div{display:flex;flex-direction:column;border-radius:12px;padding:8px 14px;background:#f3f6f7}
+.report-body .set-chips .won{background:color-mix(in srgb,var(--win) 12%,#fff);color:var(--win)}
+.report-body .set-chips .lost{background:color-mix(in srgb,var(--lose) 12%,#fff);color:var(--lose)}
+.report-body .set-chips .live{background:#f3f6f7;color:#273842}
+.report-body .set-chips b{font-size:24px;font-variant-numeric:tabular-nums}
+.report-body .summary-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+.report-set-picker{display:grid;gap:8px;margin:14px 0}
+.report-set-picker button{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left}
+.report-set-picker span{color:#60727e;font-size:14px}
+@media(max-width:900px){.report-body .rr{grid-template-columns:repeat(6,minmax(125px,1fr));width:max-content}.report-dialog.wide{width:calc(100vw - 16px)}}
+@media(max-width:700px){
+ .report-dialog,.report-dialog.wide{width:calc(100vw - 16px);max-height:94dvh}
+ .report-body{max-height:94dvh;padding:15px}
+ .report-body .summary-grid{grid-template-columns:1fr;gap:8px}
+ .report-body .lib-table{display:block;overflow-x:auto;white-space:nowrap}
+ .report-set-picker button{align-items:flex-start;flex-direction:column;gap:2px}
 }
