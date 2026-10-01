@@ -64,9 +64,6 @@ function configureLive(record, savedTeam=null) {
     ...(slot.plan?{plan:{front:numberFor(slot.plan.frontPlayerId),back:numberFor(slot.plan.backPlayerId)}}:{})}];}));
   $('teamMenu').innerHTML=`${savedTeam?.logo?`<img class="team-logo-mini" src="${esc(savedTeam.logo)}" alt="">`:''}<span>${esc(TEAM_NAMES.us)}</span><span class="caret">▾</span>`;
   document.querySelector('#padThem h2').textContent=TEAM_NAMES.them;
-  $('liveTitle').textContent=c.teamName ? 'Live set' : 'Live set · sample roster';
-  $('matchLink').href='./teams.html#'+new URLSearchParams({team:c.teamId,match:c.matchId});
-  $('matchLink').textContent=`Match · Set ${c.setNumber??1}`;
   for(const id of ['pastSetsUs','pastSetsThem']) $(id).setAttribute('aria-label',`Previous sets, ${TEAM_NAMES.us}–${TEAM_NAMES.them} score order`);
 }
 let PAST_SETS = [];
@@ -1100,10 +1097,11 @@ document.querySelectorAll('input[name=tools]').forEach(r => r.onchange = () => {
 
 
 function fit() {
-  const avail = window.innerWidth - 36;
-  const k = Math.min(1, avail / 1386);
+  const avail = window.innerWidth;
+  const k = Math.min(1, avail / 1366);
   const sc = $('scaler');
   sc.style.transform = `scale(${k})`;
+  sc.style.marginLeft = `${Math.max(0, (window.innerWidth - 1366 * k) / 2)}px`;
   sc.style.height = (1024 * k) + 'px';
   document.querySelector('.notes').style.maxWidth = (1366 * k) + 'px';
 }
@@ -1123,7 +1121,6 @@ async function start() {
     const currentIndex=siblings.findIndex(r=>r.config.id===record.config.id);MATCH_RECORDS=siblings;
     PAST_SETS=siblings.slice(0,currentIndex).flatMap((r,i)=>{const state=replaySet(r);return state.status==='ended'?[{...state.score,number:r.config.setNumber??i+1}]:[];});
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
-    $('matchLink').textContent=`Match · Set ${record.config.setNumber??currentIndex+1}`;
     session=new SetSession(store,record); syncState();
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
       timeoutMode:false,timeoutView:null,timeoutPasser:null,timeoutPositions:null};
@@ -1138,14 +1135,9 @@ $('retrySave').onclick=async()=>{
   await perform(pending.cmd,pending.clear);
 };
 $('reloadSaved').onclick=()=>{editingReceive=false;receiveDrag=null;$('sheet').classList.remove('open');start();};
-$('exportSet').onclick=()=>{
-  if(!session)return;
-  const url=URL.createObjectURL(new Blob([JSON.stringify(session.record,null,2)],{type:'application/json'}));
-  const a=document.createElement('a');a.href=url;a.download='volleyball-set.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-};
 // Prevent keyboard activation as well as pointer input while an action is unresolved.
 for(const event of ['click','keydown','pointerdown']) document.addEventListener(event,e=>{
-  if((saving || document.body.classList.contains('saving') || failedCommand || document.body.classList.contains('failed')) && e.target.closest('.stage, #teamsLink, #matchLink')) {
+  if((saving || document.body.classList.contains('saving') || failedCommand || document.body.classList.contains('failed')) && e.target.closest('.stage')) {
     e.preventDefault();e.stopImmediatePropagation();
   }
 },true);
