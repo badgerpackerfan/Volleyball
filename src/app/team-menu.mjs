@@ -182,8 +182,8 @@ export function matchSummary(ctx) {
     <p>${esc(c.matchDate || '')}${c.bestOf ? ` · Best of ${c.bestOf}` : ''} · Sets ${won}–${lost}</p>
     <div class="set-chips">${sets.map((x, i) => `<div class="${x.state.status === 'ended' ? (x.state.winner === 'us' ? 'won' : 'lost') : 'live'}"><small>Set ${x.record.config.setNumber ?? i + 1}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b></div>`).join('')}</div>
     ${takeaways.length ? `<h5>Takeaways</h5><ul class="fix-list">${takeaways.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
-    <div class="summary-grid"><div><h5>Key stats</h5><table class="lib-table stat-table"><thead><tr><th></th>${head}</tr></thead><tbody>
-      ${row('Our earned points (K, BK, SA)', m => m.ourE)}${row('Our errors', m => m.ourX)}${row('Their earned points', m => m.theirE)}${row('Their errors', m => m.theirX)}
+    <div class="summary-grid"><div><h5>Point source</h5><p>Won = our kills, blocks, or aces; received = opponent errors; gifted = our errors; lost = opponent kills, blocks, or aces.</p><table class="lib-table stat-table"><thead><tr><th></th>${head}</tr></thead><tbody>
+      ${row('Won by us · K/BK/SA', m => m.ourE)}${row('Received · opponent errors', m => m.theirX)}${row('Gifted · our errors', m => m.ourX)}${row('Lost · opponent K/BK/SA', m => m.theirE)}
       ${row('Points given away', m => m.given, pct)}${row('Free points received', m => m.free, pct)}</tbody></table>
       <h5>Rotation +/- by set</h5><table class="lib-table stat-table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map(r => `<th>R${r}</th>`).join('')}</tr></thead><tbody>
       ${sets.map((x, i) => `<tr><td>Set ${x.record.config.setNumber ?? i + 1}</td>${[1, 2, 3, 4, 5, 6].map(r => { const t = x.stats.rotations[r]; return `<td class="${t.net > 0 ? 'pos' : t.net < 0 ? 'neg' : ''}">${t.won + t.lost ? signed(t.net) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
