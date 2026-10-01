@@ -1,10 +1,16 @@
 import { createSet, replaySet } from '../engine/set-engine.mjs';
 
 export function lineupConfig(team, lineup) {
+  const slots=lineup.starters.map((playerId,i)=>({id:String(i+1),playerId}));
+  const secondSetter=lineup.setters[1],firstSetterIndex=lineup.starters.indexOf(lineup.setters[0]);
+  if(lineup.system==='6-2'&&firstSetterIndex>=0&&secondSetter&&!lineup.starters.includes(secondSetter)){
+    const oppositeIndex=(firstSetterIndex+3)%6,frontPlayerId=lineup.starters[oppositeIndex];
+    slots[oppositeIndex].plan={frontPlayerId,backPlayerId:secondSetter};
+  }
   return {
     system:lineup.system,
     players:team.players.map(p=>({id:p.id,athleteId:p.athleteId,jersey:p.jersey,name:p.name,position:p.position,available:true})),
-    slots:lineup.starters.map((playerId,i)=>({id:String(i+1),playerId})),
+    slots,
     setters:[...lineup.setters],liberos:[...lineup.liberos],
   };
 }
