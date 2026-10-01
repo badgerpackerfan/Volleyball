@@ -291,6 +291,11 @@
     backdrop-filter: blur(2px);
   }
   .court .court-tools .pill[aria-pressed="true"] { background: #fff; color: var(--accent); border-color: #fff; }
+  .timeout-tools { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; }
+  .timeout-tools[hidden] { display: none !important; }
+  .timeout-tools .pill { min-height: 36px; font-size: 13px; padding: 2px 10px; }
+  .timeout-tools .pill[aria-pressed="true"] { background: #fff; color: var(--accent); border-color: #fff; }
+  .timeout-tools .timeout-done { min-height: 36px; padding: 2px 12px; border: 1px solid #fff; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 800; }
   .tools-lbl { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); text-align: center; }
   .corner .more-tips { display: grid; place-items: center; font-size: 14px; font-weight: 800; color: var(--accent); border: 1px dashed var(--line); border-radius: 11px; }
 
@@ -391,6 +396,9 @@
   .court.editing .zone { touch-action: none; cursor: grab; transition: none; }
   .court.editing .zone:active { cursor: grabbing; }
   .court.editing .disc { transition: none; }
+  .zone.tactical { touch-action: none; cursor: grab; transition: none; }
+  .zone.tactical:active { cursor: grabbing; }
+  .zone.tactical .disc { transition: none; }
   .zone:active .disc { transform: scale(.97); }
   .disc.set { background: var(--c-set); }
   .disc.oh  { background: var(--c-oh); }
@@ -1189,6 +1197,11 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
           <button class="pill" id="rcvToggle" aria-pressed="false">Rotation spots</button>
           <button id="editReceive" class="pill" aria-pressed="false">Adjust receive</button>
           <button id="resetReceive" class="pill" hidden>Reset</button>
+          <div id="timeoutTools" class="timeout-tools" hidden>
+            <button type="button" class="pill" data-timeout-view="receive">Serve receive</button>
+            <button type="button" class="pill" data-timeout-view="defense">Base defense</button>
+            <button type="button" id="timeoutDone" class="timeout-done">Done with timeout</button>
+          </div>
         </div>
       </section>
 
