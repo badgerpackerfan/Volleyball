@@ -158,10 +158,11 @@ export function matchSummary(ctx) {
   total.given = total.ourX + total.theirE ? total.ourX / (total.ourX + total.theirE) : null; total.free = total.ourE + total.theirX ? total.theirX / (total.ourE + total.theirX) : null;
   const players = new Map();
   for (const { record, stats } of sets) for (const [id, p] of Object.entries(stats.players)) {
-    const who = record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, errors: 0, net: 0, passCount: 0, passSum: 0 };
+    const who = record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0 };
     for (const code of ['K', 'BK', 'SA']) row[code] += p.codes[code] ?? 0;
     row.errors += p.errors; row.net += p.net;
     row.passCount += p.passing?.count ?? 0; row.passSum += p.passing?.sum ?? 0;
+    row.serveAttempts += p.serving?.attempts ?? 0; row.servesIn += p.serving?.in ?? 0;
     players.set(id, row);
   }
   const ranked = [...players.values()].sort((a, b) => b.net - a.net || Number(a.jersey) - Number(b.jersey));
@@ -186,8 +187,9 @@ export function matchSummary(ctx) {
       ${row('Points given away', m => m.given, pct)}${row('Free points received', m => m.free, pct)}</tbody></table>
       <h5>Rotation +/- by set</h5><table class="lib-table stat-table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map(r => `<th>R${r}</th>`).join('')}</tr></thead><tbody>
       ${sets.map((x, i) => `<tr><td>Set ${x.record.config.setNumber ?? i + 1}</td>${[1, 2, 3, 4, 5, 6].map(r => { const t = x.stats.rotations[r]; return `<td class="${t.net > 0 ? 'pos' : t.net < 0 ? 'neg' : ''}">${t.won + t.lost ? signed(t.net) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
-      <div><h5>Players · match</h5><table class="lib-table stat-table"><thead><tr><th>Player</th><th>K</th><th>BK</th><th>SA</th><th>Err</th><th>Pass avg</th><th>+/-</th></tr></thead><tbody>
-      ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td><td>${p.K}</td><td>${p.BK}</td><td>${p.SA}</td><td>${p.errors}</td><td>${p.passCount ? `${(p.passSum / p.passCount).toFixed(2)} (n=${p.passCount})` : '—'}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="7">No player stats yet</td></tr>'}</tbody></table>
+      <div><h5>Players · match</h5><table class="lib-table stat-table"><thead><tr><th>Player</th><th>K</th><th>BK</th><th>Aces</th><th>Serve in</th><th>Err</th><th>Pass avg</th><th>+/-</th></tr></thead><tbody>
+      ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td><td>${p.K}</td><td>${p.BK}</td><td>${p.SA}</td><td>${p.serveAttempts ? `${Math.round(p.servesIn * 100 / p.serveAttempts)}% (${p.servesIn}/${p.serveAttempts})` : '—'}</td><td>${p.errors}</td><td>${p.passCount ? `${(p.passSum / p.passCount).toFixed(2)} (n=${p.passCount})` : '—'}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="8">No player stats yet</td></tr>'}</tbody></table>
+      <p>Serve in counts each rally-ending serve once: aces count in, serve errors count out.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
 }
