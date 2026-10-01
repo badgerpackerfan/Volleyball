@@ -152,3 +152,35 @@ body.busy{cursor:progress}
  .form-actions{margin:24px -16px -16px;padding-left:16px;padding-right:16px}
  #lineupFields>label{max-width:none}
 }
+
+/* Season serving and passing summaries */
+.season-stats-summary{display:grid;gap:8px;margin-bottom:20px}
+.season-stats-summary h2{font-size:20px;margin:0 0 4px}
+.season-stats-summary p{margin:0}
+.stats-table-scroll{max-width:100%;overflow-x:auto;border:1px solid #d9e1e6;border-radius:12px;background:#fff}
+.stats-table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.stats-table th,.stats-table td{padding:10px 12px;border-bottom:1px solid #e1e7eb;text-align:left;white-space:nowrap}
+.stats-table thead th{background:#f3f6f7;color:#536873;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.stats-table tbody tr:last-child th,.stats-table tbody tr:last-child td{border-bottom:0}
+.stats-table tbody th{font-weight:650}
+.stats-table small{display:block;color:#687c86;font-size:11px;font-weight:500}
+.stats-breakdowns{display:grid;gap:10px}
+.stats-group,.stats-set{border:1px solid #d9e1e6;border-radius:14px;background:#fff;overflow:hidden}
+.stats-group>summary,.stats-set>summary{display:flex;align-items:center;gap:8px;min-height:52px;padding:10px 14px;cursor:pointer;list-style:none}
+.stats-group>summary::-webkit-details-marker,.stats-set>summary::-webkit-details-marker{display:none}
+.stats-group>summary::after,.stats-set>summary::after{content:'+';margin-left:auto;color:var(--accent);font-size:20px;font-weight:700}
+.stats-group[open]>summary::after,.stats-set[open]>summary::after{content:'−'}
+.stats-group>summary>span{margin-left:auto;color:#60727e;font-size:13px;text-align:right}
+.stats-match-total{padding:0 12px 12px}
+.stats-match-total h3{font-size:15px;margin:2px 0 8px}
+.stats-set-list{display:grid;gap:8px;padding:0 12px 12px}
+.stats-set{background:#f8fafb}
+.stats-set>summary{min-height:46px;font-size:14px}
+.stats-empty{padding:14px 16px;border:1px solid #d9e1e6;border-radius:12px;background:#fff;color:#60727e}
+@media(max-width:700px){
+ .season-stats-summary{padding:15px}
+ .stats-group>summary{align-items:flex-start;flex-direction:column;gap:2px}
+ .stats-group>summary>span{margin:0;text-align:left}
+ .stats-group>summary::after{position:absolute;right:30px}
+ .stats-group>summary{position:relative;padding-right:46px}
+}
