@@ -167,11 +167,13 @@ body.busy{cursor:progress}
 .lineup-suggestion button{flex:none}
 .stats-table-scroll{max-width:100%;overflow-x:auto;border:1px solid #d9e1e6;border-radius:12px;background:#fff}
 .stats-table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.stats-table.match-stats{min-width:760px}
 .stats-table th,.stats-table td{padding:10px 12px;border-bottom:1px solid #e1e7eb;text-align:left;white-space:nowrap}
 .stats-table thead th{background:#f3f6f7;color:#536873;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 .stats-table tbody tr:last-child th,.stats-table tbody tr:last-child td{border-bottom:0}
 .stats-table tbody th{font-weight:650}
 .stats-table small{display:block;color:#687c86;font-size:11px;font-weight:500}
+.stats-table td.pos{color:var(--win,#16713c);font-weight:750}.stats-table td.neg{color:var(--lose,#b3251f);font-weight:750}
 .stats-breakdowns{display:grid;gap:10px}
 .stats-group,.stats-set{border:1px solid #d9e1e6;border-radius:14px;background:#fff;overflow:hidden}
 .stats-group>summary,.stats-set>summary{display:flex;align-items:center;gap:8px;min-height:52px;padding:10px 14px;cursor:pointer;list-style:none}
@@ -184,6 +186,7 @@ body.busy{cursor:progress}
 .stats-set-list{display:grid;gap:8px;padding:0 12px 12px}
 .stats-set{background:#f8fafb}
 .stats-set>summary{min-height:46px;font-size:14px}
+.stats-set-lineup{padding:8px 12px 0;color:#60727e;font-size:13px}
 .stats-empty{padding:14px 16px;border:1px solid #d9e1e6;border-radius:12px;background:#fff;color:#60727e}
 .lineup-analysis-group>summary{align-items:flex-start}
 .lineup-analysis-group>summary>strong{flex:none}
@@ -259,6 +262,7 @@ body.busy{cursor:progress}
 .report-body .set-chips .lost{background:color-mix(in srgb,var(--lose) 12%,#fff);color:var(--lose)}
 .report-body .set-chips .live{background:#f3f6f7;color:#273842}
 .report-body .set-chips b{font-size:24px;font-variant-numeric:tabular-nums}
+.report-body .set-chips .set-lineup{max-width:190px;margin-top:3px;font-size:11px;line-height:1.25;overflow-wrap:anywhere}
 .report-body .summary-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
 .report-set-picker{display:grid;gap:8px;margin:14px 0}
 .report-set-picker button{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left}
@@ -270,4 +274,15 @@ body.busy{cursor:progress}
  .report-body .summary-grid{grid-template-columns:1fr;gap:8px}
  .report-body .lib-table{display:block;overflow-x:auto;white-space:nowrap}
  .report-set-picker button{align-items:flex-start;flex-direction:column;gap:2px}
+}
+.season-totals{margin:28px 0}
+.season-totals-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}
+.season-totals-heading .list-title{margin:0 0 3px}
+.season-totals-heading .muted{margin:0}
+.season-source-toggle{display:flex;gap:4px;padding:4px;border:1px solid #d9e1e6;border-radius:13px;background:#edf2f4}
+.season-source-toggle button{min-height:42px;padding:8px 16px;border-color:transparent;background:transparent;color:#536873;font-size:14px}
+.season-source-toggle button[aria-pressed="true"]{border-color:#d9e1e6;background:#fff;color:var(--accent);box-shadow:0 1px 3px #00000012}
+@media(max-width:700px){
+ .season-totals-heading{align-items:stretch;flex-direction:column}
+ .season-source-toggle button{flex:1}
 }
