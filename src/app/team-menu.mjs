@@ -19,12 +19,13 @@ const sheet = () => document.getElementById('sheetCard');
 
 export const TIP_CATEGORIES = [['timeout', 'Timeouts and runs'], ['passing', 'Passing and libero'], ['attacking', 'Attacking'],
   ['serving', 'Serving'], ['rotation', 'Rotations'], ['management', 'Subs and other']];
-function people(config) {
+function people(config, currentRoster = []) {
   const byId = new Map(config.players.map(p => [p.id, p]));
+  currentRoster.forEach(player => byId.set(player.id, player));
   return { jersey: id => byId.get(id)?.jersey ?? '', name: id => esc(byId.get(id)?.name || `#${byId.get(id)?.jersey ?? '?'}`) };
 }
-function miniCourt(config, order, onCourt, { serving = false, label = '' } = {}) {
-  const { jersey, name } = people(config);
+function miniCourt(config, order, onCourt, { serving = false, label = '', roster = [] } = {}) {
+  const { jersey, name } = people(config, roster);
   return `<div class="mini-court" aria-label="${esc(label)}">${COURT.map(pos => {
     const id = onCourt[order[pos - 1]];
     return `<div class="${pos === 1 && serving ? 'srv' : ''}${[5, 6, 1].includes(pos) ? ' back' : ''}"><small>P${pos}</small><b>${esc(jersey(id))}</b><span>${name(id)}</span></div>`;
@@ -34,7 +35,7 @@ function setterAt(config, order, onCourt) { return setterPosition(config, { orde
 
 /* Rotation report: the paper sheet's six columns. */
 export function rotationReport(ctx) {
-  const { record, state } = ctx, c = record.config, { jersey } = people(c), stats = getSetStats(state).rotations;
+  const { record, state } = ctx, c = record.config, { jersey } = people(c, ctx.players), stats = getSetStats(state).rotations;
   const records = ctx.matchRecords?.() ?? [record];
   const index = records.findIndex(item => item.config.id === c.id);
   const lineup = matchSetLineups(records)[index < 0 ? 0 : index]
@@ -48,7 +49,7 @@ export function rotationReport(ctx) {
     const heat = t.won + t.lost && best !== worst ? (t.net === best ? ' best' : t.net === worst ? ' worst' : '') : '';
     return `<section class="rr-col${heat}${r === state.rotation && state.status === 'live' ? ' now' : ''}" data-rotation="${r}">
       <header><b>R${r}</b><span>${sp ? `S${sp}` : 'S–'}</span></header>
-      ${miniCourt(c, order, starters, { serving: true, label: `R${r} starting positions` })}
+      ${miniCourt(c, order, starters, { serving: true, label: `R${r} starting positions`, roster: ctx.players })}
       <table class="rr-log"><colgroup><col class="j"><col><col><col><col></colgroup><thead><tr><th colspan="3">${esc(ctx.teams.us)}</th><th colspan="2">${esc(ctx.teams.them)}</th></tr></thead><tbody>
       ${rallies.map(x => `<tr class="${x.winner === 'us' ? 'won' : 'lost'}${x.edited ? ' edited' : ''}"><td>${x.team === 'us' && x.playerId ? esc(jersey(x.playerId)) : ''}</td><td>${x.team === 'us' ? x.code : ''}</td><td>${x.score.us}</td><td>${x.score.them}</td><td>${x.team === 'them' ? x.code : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No rallies</td></tr>'}
       </tbody></table>
@@ -60,12 +61,12 @@ export function rotationReport(ctx) {
     <p>${esc(ctx.teams.us)} ${state.score.us}–${state.score.them} ${esc(ctx.teams.them)} · ${c.system} · ${esc(lineup.name)}${lineup.inheritedFromSet ? ` (continued from Set ${lineup.inheritedFromSet})` : ''}. Each rally is listed in the rotation we were in when it was played. Sideout = rallies won when receiving; point-scoring = rallies won when serving.${best !== null && best !== worst ? ' Best and worst rotations are highlighted.' : ''}</p>
     <div class="rr">${columns}</div>
     ${fixes ? `<h5>Scoresheet fixes</h5><ul class="fix-list">${fixes}</ul>` : ''}
-    <button class="cancel" id="shCancel">Close</button>`, true);
+    <button class="cancel" id="shCancel">${esc(ctx.closeLabel || 'Close')}</button>`, true);
 }
 
 /* Lineup: this set's lineup, current court, planned swaps, libero plan, and substitutions. */
 export function lineupSheet(ctx) {
-  const { record, state } = ctx, c = record.config, { jersey, name } = people(c);
+  const { record, state } = ctx, c = record.config, { jersey, name } = people(c, ctx.players);
   const start = Object.fromEntries(c.slots.map(s => [s.id, s.playerId]));
   const initial = rotated(c.order, c.startingRotation ?? 1);
   const plans = c.slots.filter(s => s.plan).map(s => `<li>#${esc(jersey(s.plan.frontPlayerId))} front row ⇄ #${esc(jersey(s.plan.backPlayerId))} back row</li>`).join('');
@@ -73,8 +74,8 @@ export function lineupSheet(ctx) {
   const libero = { mid: 'For the middles', oh: 'For the outsides', none: 'No libero' }[state.liberoFor];
   ctx.open(`<h4>Lineup · Set ${c.setNumber ?? 1}</h4>
     <p>${c.system}${c.lineupTemplate ? ` · ${esc(c.lineupTemplate.name)}` : ''} · Setter${c.setters.length > 1 ? 's' : ''} ${c.setters.map(id => `#${esc(jersey(id))} ${name(id)}`).join(', ')}${c.liberos.length ? ` · Libero${c.liberos.length > 1 ? 's' : ''} ${c.liberos.map(id => `#${esc(jersey(id))} ${name(id)}`).join(', ')}` : ''}</p>
-    <div class="two-courts"><div><h5>Started in R${c.startingRotation ?? 1}</h5>${miniCourt(c, initial, start, { serving: c.firstServe === 'us', label: 'Starting court' })}</div>
-      <div><h5>Now · R${state.rotation}</h5>${miniCourt(c, state.order, state.onCourt, { serving: state.servingTeam === 'us', label: 'Current court' })}</div></div>
+    <div class="two-courts"><div><h5>Started in R${c.startingRotation ?? 1}</h5>${miniCourt(c, initial, start, { serving: c.firstServe === 'us', label: 'Starting court', roster: ctx.players })}</div>
+      <div><h5>Now · R${state.rotation}</h5>${miniCourt(c, state.order, state.onCourt, { serving: state.servingTeam === 'us', label: 'Current court', roster: ctx.players })}</div></div>
     <div class="lineup-facts"><div><h5>Planned swaps</h5>${plans ? `<ul>${plans}</ul>` : '<p>None</p>'}</div>
       <div><h5>Libero plan</h5><p>${c.liberos.length ? libero : 'No libero designated'}</p>${c.liberos.length ? '<button class="pill" id="lineupLibero">Change libero plan</button>' : ''}</div>
       <div><h5>Substitutions · ${state.substitutionsUsed} of ${c.rules.substitutionLimit} used</h5>${subs ? `<ul>${subs}</ul>` : '<p>None yet</p>'}</div></div>
@@ -163,8 +164,9 @@ export function matchSummary(ctx) {
   const all = sets.map(metrics), total = all.reduce((a, m) => ({ ourE: a.ourE + m.ourE, ourX: a.ourX + m.ourX, theirE: a.theirE + m.theirE, theirX: a.theirX + m.theirX }), { ourE: 0, ourX: 0, theirE: 0, theirX: 0 });
   total.given = total.ourX + total.theirE ? total.ourX / (total.ourX + total.theirE) : null; total.free = total.ourE + total.theirX ? total.theirX / (total.ourE + total.theirX) : null;
   const players = new Map();
+  const currentRoster = new Map((ctx.players ?? []).map(player => [player.id, player]));
   for (const { record, stats } of sets) for (const [id, p] of Object.entries(stats.players)) {
-    const who = record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, HE: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0 };
+    const who = currentRoster.get(id) ?? record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, HE: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0 };
     for (const code of ['K', 'BK', 'SA', 'HE']) row[code] += p.codes[code] ?? 0;
     row.errors += p.errors; row.net += p.net;
     row.passCount += p.passing?.count ?? 0; row.passSum += p.passing?.sum ?? 0;
