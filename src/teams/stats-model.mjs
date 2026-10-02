@@ -28,14 +28,16 @@ function fromPractice(row) {
     attacking: { kills: 0, hittingErrors: 0, plusMinus: 0, actions: 0 },
   };
 }
-function rowsForPractice(practice) {
-  return practiceStats(practice).map(row => ({ player: profile(row.player), stats: fromPractice(row) }));
+function rowsForPractice(practice, currentPlayers = new Map()) {
+  return practiceStats(practice).map(row => ({
+    player: profile(currentPlayers.get(row.player.id) ?? row.player), stats: fromPractice(row),
+  }));
 }
-function rowsForSet(record) {
+function rowsForSet(record, currentPlayers = new Map()) {
   const state = replaySet(record), stats = getSetStats(state);
   const players = new Map(record.config.players.map(player => [player.id, profile(player)]));
   return Object.entries(stats.players).map(([id, row]) => ({
-    player: players.get(id) || { id, name: '', jersey: '?' },
+    player: currentPlayers.has(id) ? profile(currentPlayers.get(id)) : players.get(id) || { id, name: '', jersey: '?' },
     stats: {
       passing: { count: row.passing?.count ?? 0, sum: row.passing?.sum ?? 0 },
       serving: { attempts: row.serving?.attempts ?? 0, in: row.serving?.in ?? 0,
@@ -65,11 +67,12 @@ function combineRows(rows) {
 
 /** Aggregate practice events and match-set ratings for one team's saved season. */
 export function buildTeamStats(team, allPractices) {
+  const currentPlayers = new Map((team.players || []).map(player => [player.id, player]));
   const teamPractices = allPractices.filter(practice => practice.teamId === team.id)
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   const practices = teamPractices.map(practice => ({
     id: practice.id, date: practice.date, createdAt: practice.createdAt,
-    resultCount: practice.events.length, rows: rowsForPractice(practice),
+    resultCount: practice.events.length, rows: rowsForPractice(practice, currentPlayers),
   }));
 
   const seasonRows = new Map();
@@ -94,7 +97,7 @@ export function buildTeamStats(team, allPractices) {
     const lineups = matchSetLineups(match.sets);
     const sets = match.sets.map((record, index) => {
       setCount++;
-      const state = replaySet(record), rows = rowsForSet(record);
+      const state = replaySet(record), rows = rowsForSet(record, currentPlayers);
       for (const row of rows) {
         const season = ensure(row.player);
         add(season.matches, row.stats);
@@ -198,13 +201,13 @@ export function matchSetLineups(records) {
   });
 }
 
-function lineupDescription(record, template = record.config.lineupTemplate) {
+function lineupDescription(record, template = record.config.lineupTemplate, currentPlayers = new Map()) {
   const c = record.config;
   const slots = new Map(c.slots.map(slot => [slot.id, slot]));
   const starters = (c.order ?? c.slots.map(slot => slot.id)).map(id => slots.get(id)?.playerId ?? null);
   const signature = lineupSignature(c);
   const templateId = template?.id ?? 'custom';
-  const players = new Map(c.players.map(player => [player.id, profile(player)]));
+  const players = new Map(c.players.map(player => [player.id, profile(currentPlayers.get(player.id) ?? player)]));
   const starterLabel = starters.map(id => {
     const player = players.get(id);
     return player ? `#${player.jersey}` : 'missing';
@@ -259,10 +262,11 @@ function orderedAnalysisPlayers(players) {
 /** Aggregate match outcomes by the exact saved lineup and rotation used. */
 export function buildLineupAnalysis(team) {
   const groups = new Map();
+  const currentPlayers = new Map((team.players || []).map(player => [player.id, player]));
   for (const match of team.matches ?? []) {
     const records = match.sets ?? [], lineups = matchSetLineups(records);
     for (const [index, record] of records.entries()) {
-    const state = replaySet(record), info = lineupDescription(record, lineups[index].template);
+    const state = replaySet(record), info = lineupDescription(record, lineups[index].template, currentPlayers);
     let lineup = groups.get(info.key);
     if (!lineup) { lineup = makeLineupAnalysis(info); groups.set(info.key, lineup); }
     lineup.matches.add(match.id);
