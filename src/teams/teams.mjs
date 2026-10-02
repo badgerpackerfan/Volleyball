@@ -36,18 +36,15 @@ if(themeButton&&themeDialog)themeButton.onclick=()=>{$('themeTitle').textContent
 if(themeDone&&themeDialog)themeDone.onclick=()=>themeDialog.close();
 if(themeDialog)themeDialog.onclick=e=>{if(e.target===themeDialog)themeDialog.close();};
 const reportDialog=$('reportDialog'),reportBody=$('reportBody');
-let reportReturn=null;
 function openReport(html,wide=false){
  reportBody.innerHTML=html;reportDialog.classList.toggle('wide',wide);
  if(!reportDialog.open)reportDialog.showModal();
 }
 reportBody?.addEventListener('click',e=>{
  if(!e.target.closest('#shCancel'))return;
- if(reportReturn){const back=reportReturn;reportReturn=null;back();}
- else reportDialog.close();
+ reportDialog.close();
 });
 reportDialog?.addEventListener('click',e=>{if(e.target===reportDialog)reportDialog.close();});
-reportDialog?.addEventListener('close',()=>{reportReturn=null;});
 renderThemeOptions();
 const identity=()=>crypto.randomUUID();
 const expected=()=>active?{id:active.config.id,revision:active.actions.length}:null;
@@ -219,11 +216,19 @@ function showRotationReportPicker(team,match){
  openReport(`<h4>Rotation Report · ${esc(team.name)} vs ${esc(match.opponent||'Opponent')}</h4>
   <p>Choose a set to view its rotation by rotation rally record.</p>
   <div class="report-set-picker">${sets.map(({record,state,number,lineup})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number} · ${esc(lineup.name)}${lineup.inheritedFromSet?` (continued from Set ${lineup.inheritedFromSet})`:''}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
-  <button class="cancel" id="shCancel" type="button">Close</button>`);
+ <button class="cancel" id="shCancel" type="button">Close</button>`);
  reportBody.querySelectorAll('[data-report-set]').forEach(button=>button.onclick=()=>{
   const record=match.sets.find(set=>set.config.id===button.dataset.reportSet);
-  if(record){reportReturn=()=>showRotationReportPicker(team,match);rotationReport(matchReportContext(team,match,record));}
+  if(record)showRotationReportSet(team,match,record);
  });
+}
+function showRotationReportSet(team,match,record){
+ rotationReport(matchReportContext(team,match,record));
+ const close=reportBody.querySelector('#shCancel');
+ close?.addEventListener('click',event=>{
+  event.preventDefault();event.stopPropagation();
+  showRotationReportPicker(team,match);
+ },{once:true});
 }
 function statTable(rows,matchStats=false){
  if(!rows.length)return `<div class="stats-empty">No ${matchStats?'player match':'serving or passing'} results recorded.</div>`;
