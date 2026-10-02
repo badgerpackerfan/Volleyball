@@ -146,6 +146,47 @@ export function openSetStore({ indexedDB = globalThis.indexedDB, name = 'volleyb
             });
           });
         }),
+        updateSetRecord:(original,input)=>{
+          const next=structuredClone(input);replaySet(next);
+          return transaction(['sets'],'readwrite',(tx,done,guard)=>{
+            const table=tx.objectStore('sets'),r=table.get(original.config.id);
+            r.onsuccess=()=>guard(()=>{
+              if(!r.result)throw new Error('This set no longer exists.');
+              if(JSON.stringify(r.result)!==JSON.stringify(original))throw new StorageConflict();
+              if(next.config.id!==original.config.id||next.config.teamId!==original.config.teamId
+                ||next.config.matchId!==original.config.matchId||next.config.setNumber!==original.config.setNumber)
+                throw new Error('A correction cannot move a set to another match.');
+              table.put(next);done(next);
+            });
+          });
+        },
+        updateMatchDetails:({teamId,matchId,teamRevision,expectedSetIds,opponent,date})=>
+          transaction(['teams','sets'],'readwrite',(tx,done,guard)=>{
+            const teamTable=tx.objectStore('teams'),setTable=tx.objectStore('sets');
+            const teamRequest=teamTable.get(teamId),setsRequest=setTable.getAll();
+            let savedTeam,savedSets,teamReady=false,setsReady=false;
+            const apply=()=>guard(()=>{
+              if(!teamReady||!setsReady)return;
+              if(!savedTeam||savedTeam.revision!==teamRevision)throw new Error('The roster changed. Reload Teams before editing this match.');
+              const siblings=orderMatchSets(savedSets.filter(record=>record.config.teamId===teamId&&record.config.matchId===matchId));
+              if(expectedSetIds&&JSON.stringify(siblings.map(record=>record.config.id))!==JSON.stringify(expectedSetIds))
+                throw new StorageConflict();
+              const planned=(savedTeam.plannedMatches??[]).find(match=>match.id===matchId);
+              if(!siblings.length&&!planned)throw new Error('This match no longer exists.');
+              for(const record of siblings){
+                record.config.opponentName=opponent;record.config.matchDate=date;
+                replaySet(record);setTable.put(record);
+              }
+              if(planned){
+                const updated=validateTeam({...savedTeam,revision:savedTeam.revision+1,
+                  plannedMatches:savedTeam.plannedMatches.map(match=>match.id===matchId?{...match,opponent,date}:match)});
+                teamTable.put(updated);
+              }
+              done({sets:siblings.length,planned:Boolean(planned)});
+            });
+            teamRequest.onsuccess=()=>{savedTeam=teamRequest.result;teamReady=true;apply();};
+            setsRequest.onsuccess=()=>{savedSets=setsRequest.result;setsReady=true;apply();};
+          }),
         // Delete a team (with its roster, lineups, matches and sets), one match, or
         // the latest set of a match. Clears the live pointer if it pointed at a deleted set.
         deleteData:({teamId,matchId=null,setId=null,teamRevision=null,practiceId=null,practiceRevision=null})=>transaction(['teams','sets','meta','practices'],'readwrite',(tx,done,guard)=>{
