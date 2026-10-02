@@ -12,6 +12,57 @@ export function setPlan({bestOf,setNumber,previousSet}) {
   return {deciding,target:deciding?15:25,
     firstServe:chooseServe?null:previousSet.config.firstServe==='us'?'them':'us'};
 }
+
+/** Correct the first server for Set 1 or the deciding set while retaining its score history. */
+export function correctSetFirstServe(record, servingTeam) {
+  if(!['us','them'].includes(servingTeam))throw new Error('Choose which team served first.');
+  const before=replaySet(record),c=record.config,setNumber=c.setNumber??1;
+  if(setNumber!==1&&setNumber!==c.bestOf)throw new Error('First serve can only be corrected for Set 1 or the deciding set.');
+  if(c.firstServe===servingTeam)return {record:structuredClone(record),droppedReceiveActions:0,reclassifiedFirstRally:false};
+  const next=structuredClone(record),oldServer=c.firstServe;
+  next.config.firstServe=servingTeam;
+  if(!c.startingRotationSource||c.startingRotationSource.mode==='auto')
+    next.config.startingRotation=servingTeam==='us'?1:6;
+
+  let droppedReceiveActions=0;
+  const firstRally=before.rallies[0];
+  const active=new Set(before.activeActionIds);
+  if(servingTeam==='us'){
+    const firstIndex=firstRally?next.actions.findIndex(action=>action.id===firstRally.actionId):next.actions.length;
+    const receiveTypes=new Set(['receive.rating','receive.select','receive.edit']);
+    const invalidReceiveIds=new Set(next.actions
+      .filter((action,index)=>index<firstIndex&&receiveTypes.has(action.type))
+      .map(action=>action.id));
+    next.actions=next.actions.filter((action,index)=>{
+      const removeReceive=index<firstIndex&&receiveTypes.has(action.type);
+      const removeUndo=action.type==='undo'&&invalidReceiveIds.has(action.payload.targetActionId);
+      if(removeReceive&&active.has(action.id))droppedReceiveActions++;
+      return !removeReceive&&!removeUndo;
+    });
+  }
+
+  let reclassifiedFirstRally=false;
+  if(firstRally){
+    let replacement=null;
+    if(['SA','SE'].includes(firstRally.code)&&firstRally.team===oldServer){
+      replacement={team:servingTeam,code:firstRally.code==='SA'?'SE':'SA',playerId:null};
+    }else if(firstRally.code==='SrE'&&firstRally.team===servingTeam){
+      replacement={team:servingTeam,code:'SE',playerId:null};
+    }
+    if(replacement){
+      const edits=next.actions.filter(action=>active.has(action.id)&&action.type==='rally.edit'
+        &&action.payload.targetActionId===firstRally.actionId);
+      const target=edits.at(-1)??next.actions.find(action=>action.id===firstRally.actionId);
+      target.payload={...target.payload,...replacement};
+      reclassifiedFirstRally=true;
+    }
+  }
+
+  next.actions.forEach((action,index)=>{action.seq=index+1;});
+  replaySet(next);
+  return {record:next,droppedReceiveActions,reclassifiedFirstRally};
+}
+
 export const matchWinner=(wins,bestOf)=>bestOf?(['us','them'].find(side=>wins[side]>bestOf/2)??null):null;
 
 export function orderMatchSets(records) {
