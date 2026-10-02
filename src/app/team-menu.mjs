@@ -2,9 +2,8 @@
 // scoresheet corrections, match summary, and settings. Every change goes through
 // the same journal as scoring, so it is saved, replayed, and undoable.
 import { ACTION_CODES, getSetStats, replaySet, setterPosition } from '../engine/set-engine.mjs';
-import { COLOR_THEMES } from './themes.mjs';
 import { matchSetLineups } from '../teams/stats-model.mjs';
-export { COLOR_THEMES, DEFAULT_SETTINGS, loadSettings } from './themes.mjs';
+export { DEFAULT_SETTINGS, loadSettings } from './themes.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CODES = Object.keys(ACTION_CODES);
@@ -16,6 +15,75 @@ const COURT = [4, 3, 2, 5, 6, 1];
 const rotated = (order, r) => [...order.slice(r - 1), ...order.slice(0, r - 1)];
 // Scoring pads share data-team/data-code attributes, so every lookup stays inside the sheet.
 const sheet = () => document.getElementById('sheetCard');
+
+/* Turn report statistic headings into accessible touch targets and sort each
+   table in place. Rally logs remain chronological and are intentionally left alone. */
+export function makeStatsTablesSortable(root) {
+  if (!root) return;
+  root.querySelectorAll('table.stats-table, table.stat-table').forEach(table => {
+    if (!table.tHead || !table.tBodies.length) return;
+    const headers = [...table.tHead.rows[0].cells];
+    headers.forEach((th, column) => {
+      if (th.querySelector('button[data-sort-column]')) return;
+      const label = th.textContent.trim();
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'stats-sort';
+      button.dataset.sortColumn = String(column);
+      button.dataset.sortKind = /player/i.test(label) ? 'player'
+        : /pass scores/i.test(label) ? 'text' : label ? 'number' : 'text';
+      button.setAttribute('aria-label', `Sort by ${label || 'statistic'}`);
+      const title = document.createElement('span'); title.innerHTML = th.innerHTML;
+      const indicator = document.createElement('span'); indicator.className = 'stats-sort-indicator';
+      indicator.setAttribute('aria-hidden', 'true'); indicator.textContent = '↕';
+      button.append(title, indicator); th.replaceChildren(button); th.setAttribute('aria-sort', 'none');
+    });
+    if (table.dataset.statsSortBound === 'true') return;
+    table.dataset.statsSortBound = 'true';
+    table.addEventListener('click', event => {
+      const button = event.target.closest('button[data-sort-column]');
+      if (!button || !table.contains(button)) return;
+      const column = Number(button.dataset.sortColumn), same = table.dataset.sortColumn === String(column);
+      const direction = same && table.dataset.sortDirection === 'ascending' ? 'descending' : 'ascending';
+      const factor = direction === 'ascending' ? 1 : -1, kind = button.dataset.sortKind;
+      const body = table.tBodies[0];
+      const rows = [...body.rows].map((row, index) => {
+        const text = row.cells[column]?.textContent.trim() ?? '';
+        let key = null;
+        if (text && !text.startsWith('—')) {
+          if (kind === 'player') {
+            const match = /^#?(\d+)\s*(.*)$/.exec(text);
+            key = match ? [Number(match[1]), match[2].toLocaleLowerCase()]
+              : [Number.POSITIVE_INFINITY, text.toLocaleLowerCase()];
+          } else if (kind === 'number') {
+            const match = /[-+]?\d+(?:\.\d+)?/.exec(text);
+            key = match ? Number(match[0]) : null;
+          } else key = text.toLocaleLowerCase();
+        }
+        return { row, index, key };
+      });
+      rows.sort((a, b) => {
+        if (a.key === null) return b.key === null ? a.index - b.index : 1;
+        if (b.key === null) return -1;
+        let compare;
+        if (Array.isArray(a.key)) compare = a.key[0] - b.key[0] || a.key[1].localeCompare(b.key[1]);
+        else compare = typeof a.key === 'number' && typeof b.key === 'number'
+          ? a.key - b.key : String(a.key).localeCompare(String(b.key));
+        return compare ? factor * compare : a.index - b.index;
+      });
+      rows.forEach(({ row }) => body.append(row));
+      table.dataset.sortColumn = String(column); table.dataset.sortDirection = direction;
+      table.tHead.querySelectorAll('th').forEach((th, index) => {
+        const active = index === column, state = active ? direction : 'none';
+        th.setAttribute('aria-sort', state);
+        const sortButton = th.querySelector('button[data-sort-column]');
+        if (sortButton) {
+          sortButton.querySelector('.stats-sort-indicator').textContent = active ? direction === 'ascending' ? '↑' : '↓' : '↕';
+          sortButton.setAttribute('aria-label', `Sort by ${sortButton.querySelector('span').textContent.trim() || 'statistic'}${active ? `, ${direction}` : ''}`);
+        }
+      });
+    });
+  });
+}
 
 export const TIP_CATEGORIES = [['timeout', 'Timeouts and runs'], ['passing', 'Passing and libero'], ['attacking', 'Attacking'],
   ['serving', 'Serving'], ['rotation', 'Rotations'], ['management', 'Subs and other']];
@@ -62,6 +130,7 @@ export function rotationReport(ctx) {
     <div class="rr">${columns}</div>
     ${fixes ? `<h5>Scoresheet fixes</h5><ul class="fix-list">${fixes}</ul>` : ''}
     <button class="cancel" id="shCancel">${esc(ctx.closeLabel || 'Close')}</button>`, true);
+  makeStatsTablesSortable(sheet());
 }
 
 /* Lineup: this set's lineup, current court, planned swaps, libero plan, and substitutions. */
@@ -201,6 +270,7 @@ export function matchSummary(ctx) {
       <p>Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
+  makeStatsTablesSortable(sheet());
 }
 
 /* Settings: saved on this device and applied immediately. */
@@ -211,15 +281,11 @@ export function settingsSheet(ctx) {
     ctx.open(`<h4>Settings</h4><p>Saved on this device.</p>
       <h5>Code buttons</h5>${seg('labels', [['words', 'Words'], ['codes', 'Codes']])}
       <h5>Appearance</h5>${seg('appearance', [['device', 'Match device'], ['light', 'Light'], ['dark', 'Dark']])}
-      <h5>Color theme</h5><div class="theme-picker">${COLOR_THEMES.map(t => `<button type="button" class="theme-option" data-theme-choice="${t.id}" aria-pressed="${st.theme === t.id}">
-        <span class="theme-preview" style="--preview-court:${t.court};--preview-court-2:${t.court2};--preview-accent:${t.accent};--preview-set:${t.set};--preview-oh:${t.oh};--preview-mid:${t.mid};--preview-win:${t.win};--preview-lose:${t.lose}"><span class="theme-preview-roles"><i class="set"></i><i class="oh"></i><i class="mid"></i></span><span class="theme-preview-results"><i class="win"></i><i class="lose"></i><b></b></span></span>
-        <span class="theme-copy"><strong>${t.name}</strong><small>${t.description}</small></span></button>`).join('')}</div>
       <h5>Coach’s corner</h5>${seg('corner', [[true, 'On'], [false, 'Off']])}
       <h5>Suggestion types</h5><div class="toggle-grid">${TIP_CATEGORIES.map(([id, label]) => `<button data-cat="${id}" class="${st.categories[id] === false ? '' : 'on'}" aria-pressed="${st.categories[id] !== false}" ${st.corner ? '' : 'disabled'}>${label}</button>`).join('')}</div>
       <h5>Rules for this set</h5><p>To ${rules.target}, win by ${rules.winBy}${rules.cap ? `, cap ${rules.cap}` : ''} · ${rules.substitutionLimit} subs · ${rules.timeoutsPerTeam} timeouts per team · libero ${rules.liberoMayServe ? 'may serve from P1' : 'may not serve'}. Targets come from the match format chosen in Teams.</p>
       <button class="cancel" id="shCancel">Done</button>`);
     sheet().querySelectorAll('[data-set]').forEach(b => b.onclick = () => { const v = b.dataset.v; ctx.saveSettings({ ...ctx.settings(), [b.dataset.set]: v === 'true' ? true : v === 'false' ? false : v }); draw(); });
-    sheet().querySelectorAll('[data-theme-choice]').forEach(b => b.onclick = () => { ctx.saveSettings({ ...ctx.settings(), theme: b.dataset.themeChoice }); draw(); });
     sheet().querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { const s = ctx.settings(); ctx.saveSettings({ ...s, categories: { ...s.categories, [b.dataset.cat]: s.categories[b.dataset.cat] === false } }); draw(); });
   };
   draw();
