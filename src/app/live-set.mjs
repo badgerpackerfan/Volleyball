@@ -53,7 +53,7 @@ const numberFor=id=>playerNumbers.get(id);
 const playerId=number=>ROSTER[number]?.id;
 function configureLive(record, savedTeam=null) {
   const c=record.config;
-  ACTIVE_THEME=c.teamTheme||savedTeam?.teamTheme||SETTINGS.theme;
+  ACTIVE_THEME=savedTeam?.teamTheme||c.teamTheme||'evergreen';
   SYSTEM=c.system;SUB_LIMIT=c.rules.substitutionLimit;SET_TARGET=c.rules.target;
   TEAM_NAMES={us:c.teamName || '8th Grade',them:c.opponentName || 'West Fargo'};
   playerNumbers=new Map(c.players.map(p=>[p.id,Number(p.jersey)]));
@@ -1036,10 +1036,10 @@ const menuContext = {
   open: (html, wide) => openSheet(html, wide), close: () => closeSheet(),
   command: (type, payload) => command(type, payload), check: cmd => checkCommand(session.record, cmd),
   openLiberoPlan: () => openLiberoPlan(),
-  settings: () => ({...SETTINGS,theme:ACTIVE_THEME||SETTINGS.theme}), saveSettings: next => { SETTINGS = next; ACTIVE_THEME=next.theme; saveSettings(next); applySettings(); render(); },
+  settings: () => ({...SETTINGS}), saveSettings: next => { SETTINGS = next; saveSettings(next); applySettings(); render(); },
 };
 function applySettings() {
-  applyColorTheme(ACTIVE_THEME||SETTINGS.theme);
+  applyColorTheme(ACTIVE_THEME||'evergreen');
   document.body.classList.toggle('words', SETTINGS.labels !== 'codes');
   html.classList.toggle('dark', SETTINGS.appearance === 'dark'); html.classList.toggle('light', SETTINGS.appearance === 'light');
   document.body.classList.toggle('corner-off', !SETTINGS.corner);
