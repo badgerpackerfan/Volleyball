@@ -16,8 +16,8 @@ const rotated = (order, r) => [...order.slice(r - 1), ...order.slice(0, r - 1)];
 // Scoring pads share data-team/data-code attributes, so every lookup stays inside the sheet.
 const sheet = () => document.getElementById('sheetCard');
 
-/* Turn report statistic headings into accessible touch targets and sort each
-   table in place. Rally logs remain chronological and are intentionally left alone. */
+/* Turn season-total headings into accessible touch targets and sort that
+   aggregated table in place. Match and set reports stay in their recorded order. */
 export function makeStatsTablesSortable(root) {
   if (!root) return;
   root.querySelectorAll('table.stats-table, table.stat-table').forEach(table => {
@@ -130,7 +130,6 @@ export function rotationReport(ctx) {
     <div class="rr">${columns}</div>
     ${fixes ? `<h5>Scoresheet fixes</h5><ul class="fix-list">${fixes}</ul>` : ''}
     <button class="cancel" id="shCancel">${esc(ctx.closeLabel || 'Close')}</button>`, true);
-  makeStatsTablesSortable(sheet());
 }
 
 /* Lineup: this set's lineup, current court, planned swaps, libero plan, and substitutions. */
@@ -270,7 +269,6 @@ export function matchSummary(ctx) {
       <p>Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
-  makeStatsTablesSortable(sheet());
 }
 
 /* Settings: saved on this device and applied immediately. */
