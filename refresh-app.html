@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef2f4">
+  <title>Refresh Volleyball app</title>
+  <style>
+    :root{font:16px/1.5 system-ui,-apple-system,sans-serif;color:#263640;background:#eef2f4}
+    body{box-sizing:border-box;max-width:38rem;margin:0 auto;padding:2rem 1rem}
+    main{padding:1.25rem;background:#fff;border:1px solid #d5dfe3;border-radius:1rem}
+    h1{margin-top:0;font-size:1.5rem}
+    button{min-height:48px;padding:.7rem 1rem;border:0;border-radius:.65rem;background:#315d73;color:white;font:inherit;font-weight:700}
+    button:disabled{opacity:.65}
+    #status{min-height:1.5em}
+    .note{color:#50616a;font-size:.94rem}
+    .error{color:#9a2637}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Refresh Volleyball app files</h1>
+    <p>This removes only Volleyball’s downloaded app files and service worker. Your teams, matches, practices, and settings are stored separately and will not be cleared.</p>
+    <p class="note">Use this if Teams stays on its loading message after the app update. Keep this page open until it says the refresh is complete.</p>
+    <button id="refresh" type="button">Refresh app files</button>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const button = document.getElementById('refresh');
+    const status = document.getElementById('status');
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      status.className = '';
+      status.textContent = 'Removing downloaded app files…';
+      try {
+        const appPath = new URL('./', location.href).pathname;
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.filter(registration => {
+            const scope = new URL(registration.scope);
+            return scope.origin === location.origin && scope.pathname === appPath;
+          }).map(registration => registration.unregister()));
+        }
+        if ('caches' in window) {
+          const names = await caches.keys();
+          await Promise.all(names.filter(name => name.startsWith('volleyball-set-tracker-shell-'))
+            .map(name => caches.delete(name)));
+        }
+        status.textContent = 'App files refreshed. Close this Safari tab, then reopen Teams at the usual address. Your saved data was not changed.';
+      } catch (error) {
+        button.disabled = false;
+        status.className = 'error';
+        status.textContent = `Refresh could not finish: ${error?.message ?? error}. Your saved data was not changed.`;
+      }
+    });
+  </script>
+</body>
+</html>
