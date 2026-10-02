@@ -27,14 +27,12 @@ export function inferColorTheme(color) {
   }, { theme: COLOR_THEMES[0], distance: Infinity }).theme;
 }
 
-export const DEFAULT_SETTINGS = { labels: 'words', appearance: 'device', theme: 'evergreen', corner: true, categories: {} };
-const RENAMED_THEMES = { sage: 'evergreen', redwood: 'terracotta', night: 'blue_hour' };
+export const DEFAULT_SETTINGS = { labels: 'words', appearance: 'device', corner: true, categories: {} };
 
 export function loadSettings(storage = globalThis.localStorage) {
   try {
-    const saved = JSON.parse(storage?.getItem(SETTINGS_KEY) || '{}') || {};
-    const theme = RENAMED_THEMES[saved.theme] || saved.theme;
-    return { ...DEFAULT_SETTINGS, ...saved, theme };
+    const { theme: _legacyTheme, ...saved } = JSON.parse(storage?.getItem(SETTINGS_KEY) || '{}') || {};
+    return { ...DEFAULT_SETTINGS, ...saved };
   }
   catch { return { ...DEFAULT_SETTINGS }; }
 }
