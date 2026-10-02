@@ -175,6 +175,25 @@ function passesByRally(record, state) {
   return linked;
 }
 
+/* A credited serve-receive error is one zero pass. Replace any tap recorded
+   for that same point instead of counting the failed reception twice. */
+function passingEventsByRally(record, state) {
+  const linked = passesByRally(record, state), errors = new Map(), events = [];
+  for (const rally of state.rallies) {
+    if (rally.team !== 'us' || rally.code !== 'SrE' || !rally.playerId) continue;
+    const before = scoreBeforeRally(rally);
+    errors.set(`${rally.rotation}:${before.us}:${before.them}`, rally);
+  }
+  for (const pass of state.receiveRatings ?? []) {
+    const key = `${pass.rotation}:${pass.score?.us}:${pass.score?.them}`;
+    if (errors.has(key)) continue;
+    events.push({ ...pass, rally: linked.get(pass.actionId) ?? null });
+  }
+  for (const rally of errors.values())
+    events.push({ playerId: rally.playerId, rating: 0, rotation: rally.rotation, rally });
+  return events;
+}
+
 function lineupSignature(c) {
   const slots = new Map(c.slots.map(slot => [slot.id, slot]));
   const starters = (c.order ?? c.slots.map(slot => slot.id)).map(id => slots.get(id)?.playerId ?? null);
@@ -274,13 +293,12 @@ export function buildLineupAnalysis(team) {
     const completed = state.status === 'ended';
     if (completed) lineup[state.winner === 'us' ? 'setsWon' : 'setsLost']++;
 
-    const linkedPasses = passesByRally(record, state);
-    for (const pass of state.receiveRatings ?? []) {
+    for (const pass of passingEventsByRally(record, state)) {
       const rotation = lineup.rotations[pass.rotation];
       if (!rotation) continue;
       const player = analysisPlayer(lineup, pass.playerId);
       addPass(rotation.passing, pass); addPass(player.passing, pass);
-      const rally = linkedPasses.get(pass.actionId);
+      const rally = pass.rally;
       if (rally) {
         rotation.passing.linked++; player.passing.linked++;
         if (rally.winner === 'us') {
