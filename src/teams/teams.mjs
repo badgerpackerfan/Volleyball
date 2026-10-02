@@ -5,39 +5,21 @@ import { mountLineupEditor } from './lineup-editor.mjs';
 import { teamHierarchy, setPlan, correctSetFirstServe } from './match-model.mjs';
 import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
-import { COLOR_THEMES, colorTheme, loadSettings, saveSettings, applyColorTheme } from '../app/themes.mjs';
+import { COLOR_THEMES, colorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
 import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats, matchSetLineups } from './stats-model.mjs';
-import { matchSummary, rotationReport } from '../app/team-menu.mjs';
+import { makeStatsTablesSortable, matchSummary, rotationReport } from '../app/team-menu.mjs';
 registerApp();
 const $=id=>document.getElementById(id);
-applyColorTheme(loadSettings().theme);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let store,teams=[],sets=[],practices=[],active=null,busy=false,dirty=false;
 function themePreviewMarkup(theme){
  return `<span class="theme-preview" style="--preview-court:${theme.court};--preview-court-2:${theme.court2};--preview-accent:${theme.accent};--preview-set:${theme.set};--preview-oh:${theme.oh};--preview-mid:${theme.mid};--preview-win:${theme.win};--preview-lose:${theme.lose}"><span class="theme-preview-roles"><i class="set"></i><i class="oh"></i><i class="mid"></i></span><span class="theme-preview-results"><i class="win"></i><i class="lose"></i><b></b></span></span>`;
 }
-function themeOptionMarkup(theme, selected, attribute='data-theme-choice'){
- return `<button type="button" class="theme-option" ${attribute}="${theme.id}" aria-pressed="${selected===theme.id}">
-  ${themePreviewMarkup(theme)}
-  <span class="theme-copy"><strong>${esc(theme.name)}</strong><small>${esc(theme.description)}</small></span></button>`;
-}
-function renderThemeOptions(){
- const selected=colorTheme(loadSettings().theme).id;
- $('themeOptions').innerHTML=COLOR_THEMES.map(t=>themeOptionMarkup(t,selected)).join('');
- $('themeOptions').querySelectorAll('[data-theme-choice]').forEach(button=>button.onclick=()=>{
-  const settings=loadSettings();settings.theme=button.dataset.themeChoice;const saved=saveSettings(settings);applyColorTheme(settings.theme);renderThemeOptions();
-  const name=colorTheme(settings.theme).name;$('themeTitle').textContent=`App theme · ${name}`;themeButton.textContent=`Theme · ${name}`;themeButton.setAttribute('aria-label',`App theme: ${name}`);notice(saved?`${name} theme applied.`:`${name} theme applied for this page, but could not be saved on this device.`);
- });
- const name=colorTheme(selected).name;themeButton.textContent=`Theme · ${name}`;themeButton.setAttribute('aria-label',`App theme: ${name}`);
-}
-const themeButton=$('themeButton'),themeDialog=$('themeDialog'),themeDone=$('themeDone');
-if(themeButton&&themeDialog)themeButton.onclick=()=>{$('themeTitle').textContent='App theme';renderThemeOptions();themeDialog.showModal();};
-if(themeDone&&themeDialog)themeDone.onclick=()=>themeDialog.close();
-if(themeDialog)themeDialog.onclick=e=>{if(e.target===themeDialog)themeDialog.close();};
 const reportDialog=$('reportDialog'),reportBody=$('reportBody');
 function openReport(html,wide=false){
  reportBody.innerHTML=html;reportDialog.classList.toggle('wide',wide);
+ makeStatsTablesSortable(reportBody);
  if(!reportDialog.open)reportDialog.showModal();
 }
 reportBody?.addEventListener('click',e=>{
@@ -322,12 +304,14 @@ function teamStatsPage(team){
   }).join(''):'<div class="stats-empty">No matches recorded for this team.</div>'}</div>
   <h2 class="list-title">Practices</h2>
   <div class="stats-breakdowns">${stats.practices.length?stats.practices.map(practice=>`<details class="stats-group stats-practice"><summary><strong>Practice · ${esc(practice.date)}</strong><span>${plural(practice.resultCount,'result')} · ${new Date(practice.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</span></summary>${statTable(practice.rows)}</details>`).join(''):'<div class="stats-empty">No practices recorded for this team.</div>'}</div>`;
+ makeStatsTablesSortable($('content'));
  const sourceButtons=[...$('content').querySelectorAll('[data-season-source]')];
  sourceButtons.forEach(button=>button.onclick=()=>{
   const source=button.dataset.seasonSource;
   sourceButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
   $('seasonTotalsContext').textContent=seasonSourceText(source);
   $('seasonTotalsTable').innerHTML=statTable(seasonRows(source),source==='matches');
+  makeStatsTablesSortable($('seasonTotalsTable'));
  });
 }
 function home(){
@@ -420,7 +404,7 @@ function home(){
 }
 window.addEventListener('hashchange',()=>{notice();home();});
 function editTeam(team){
- const defaultTheme=colorTheme(loadSettings().theme).id;
+ const defaultTheme=COLOR_THEMES[0].id;
  const draft=team?structuredClone(team):{id:identity(),schemaVersion:1,revision:0,name:'',level:'Jr High',season:String(new Date().getFullYear()),teamTheme:defaultTheme,color:colorTheme(defaultTheme).accent,logo:null,players:[]};
  notice();bar(team?'Edit roster':'Create team',team?.name??'',{label:team?team.name:'Teams',action:home});
  $('content').innerHTML=`<form id="teamForm"><p class="help">Save your roster here. Choose starters, setters, and liberos for each match.</p><div class="grid"><label>Team name<input id="teamName" required maxlength="100" value="${esc(draft.name)}" autocomplete="organization"></label><label>Level<select id="level">${['Jr High','JV','Varsity','Club','Other'].map(v=>`<option ${v===draft.level?'selected':''}>${v}</option>`).join('')}</select></label><label>Season / year<input id="season" required maxlength="100" value="${esc(draft.season)}"></label><div class="team-theme-field"><label for="teamTheme">Team theme<select id="teamTheme">${COLOR_THEMES.map(t=>`<option value="${t.id}" ${draft.teamTheme===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label><div id="teamThemePreview" class="team-theme-preview" aria-live="polite"></div><p class="muted">Choose a palette for this team and its live sets.</p></div></div><div class="team-logo-field"><div><h2>Team logo</h2><p class="muted">Upload an SVG, PNG, or JPG image up to 512 KB.</p></div><div class="team-logo-preview" id="teamLogoPreview">${draft.logo?logoMarkup(draft.logo,draft.name||'Team','team-logo-large'):'<span>No logo selected</span>'}</div><label class="upload-label">Choose logo<input id="teamLogoFile" type="file" accept="image/svg+xml,image/png,image/jpeg,.svg,.png,.jpg,.jpeg"></label><button type="button" id="removeTeamLogo" class="danger" ${draft.logo?'':'hidden'}>Remove logo</button></div><div class="section-head"><h2>Players</h2><button type="button" id="addPlayer">Add player</button></div><p class="muted">Jersey numbers 0–99 must be unique within this team. Changing a number keeps recorded stats with that player.</p><div id="players"></div><div class="actions form-actions"><button type="submit" class="primary">Save team</button><button type="button" id="cancel">Cancel</button></div></form>`;
