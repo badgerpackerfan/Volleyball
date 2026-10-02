@@ -18,7 +18,6 @@ button.back>span:first-child{font-size:28px;line-height:.7;margin-top:-3px}
 #backLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 button.live{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:650}
 .appbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-button.theme{min-height:44px;padding:8px 14px;color:var(--accent);font-weight:650}
 
 main{max-width:1000px;margin:auto;padding:20px max(16px,env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
 #notice:empty{display:none}#notice{background:#e2edf0;padding:12px 16px;border-radius:12px;margin-bottom:16px}#notice.error{background:#f8e1e1;color:#852d35}
@@ -109,14 +108,7 @@ body.busy{cursor:progress}
 @media(prefers-reduced-motion:reduce){.lineup-disc{transition:none}}
 .lineup-preview .lineup-player{cursor:default}
 
-/* Shared color-theme chooser, also used in Live set settings. */
-.theme-dialog{width:min(560px,calc(100vw - 28px));max-width:none;padding:20px;border:0;border-radius:18px;background:#fff;color:#273842;box-shadow:0 20px 60px #0006}
-.theme-dialog::backdrop{background:#0a0e12a6}
-.theme-dialog h2{margin:0 0 4px}
-.theme-help{margin:0 0 14px;color:#60727e}
-.theme-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.theme-option{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:10px;min-width:0;min-height:70px;padding:8px;border:1px solid #cbd6dd;border-radius:12px;background:#fff;text-align:left}
-.theme-option[aria-pressed="true"]{border:2px solid var(--accent);padding:7px;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 15%,transparent)}
+/* Color preview for the per-team palette selector. */
 .theme-preview{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:88px;height:48px;overflow:hidden;border:2px solid #fff;border-radius:7px;background:linear-gradient(var(--preview-court),var(--preview-court-2));box-shadow:0 1px 3px #0003}
 .theme-preview::after{content:'';position:absolute;top:33%;left:0;right:0;border-top:1px dashed #ffffffa6}
 .theme-preview-roles{z-index:1;display:flex;gap:5px}
@@ -127,7 +119,6 @@ body.busy{cursor:progress}
 .theme-preview-results .win{background:var(--preview-win)}.theme-preview-results .lose{background:var(--preview-lose)}
 .theme-preview-results b{width:16px;height:5px;margin-left:auto;border-radius:4px;background:var(--preview-accent)}
 .theme-copy{display:flex;flex-direction:column;gap:2px;min-width:0}.theme-copy strong{font-size:14px}.theme-copy small{color:#60727e;font-size:10px;line-height:1.2}
-.theme-dialog-actions{display:flex;justify-content:flex-end;margin-top:16px}
 
 /* Phones */
 @media(max-width:700px){
@@ -142,7 +133,6 @@ body.busy{cursor:progress}
  .item-actions button{min-width:0;padding:11px 8px;white-space:nowrap}
  .match-card .item-actions button{min-height:44px;padding:9px 6px;font-size:13px;line-height:1.15;white-space:normal}
  .grid{grid-template-columns:1fr}
- .team-theme-field .theme-picker{grid-template-columns:1fr}
  .team-logo-field{grid-template-columns:1fr auto}
  .team-logo-field>div:first-child{grid-column:1/-1}
  .team-logo-preview{grid-row:2;grid-column:2}
@@ -170,6 +160,9 @@ body.busy{cursor:progress}
 .stats-table.match-stats{min-width:760px}
 .stats-table th,.stats-table td{padding:10px 12px;border-bottom:1px solid #e1e7eb;text-align:left;white-space:nowrap}
 .stats-table thead th{background:#f3f6f7;color:#536873;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.stats-table thead th,.stat-table thead th{padding:0}
+.stats-sort{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;padding:8px 10px;border:0;border-radius:0;background:transparent;color:inherit;text-align:inherit;text-transform:inherit;letter-spacing:inherit;font-size:inherit;font-weight:inherit}
+.stats-sort>span:first-child{flex:1}.stats-sort-indicator{flex:none;color:#71828b;font-size:14px}
 .stats-table tbody tr:last-child th,.stats-table tbody tr:last-child td{border-bottom:0}
 .stats-table tbody th{font-weight:650}
 .stats-table small{display:block;color:#687c86;font-size:11px;font-weight:500}
