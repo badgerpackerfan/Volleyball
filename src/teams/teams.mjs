@@ -19,7 +19,6 @@ function themePreviewMarkup(theme){
 const reportDialog=$('reportDialog'),reportBody=$('reportBody');
 function openReport(html,wide=false){
  reportBody.innerHTML=html;reportDialog.classList.toggle('wide',wide);
- makeStatsTablesSortable(reportBody);
  if(!reportDialog.open)reportDialog.showModal();
 }
 reportBody?.addEventListener('click',e=>{
@@ -27,7 +26,6 @@ reportBody?.addEventListener('click',e=>{
  reportDialog.close();
 });
 reportDialog?.addEventListener('click',e=>{if(e.target===reportDialog)reportDialog.close();});
-renderThemeOptions();
 const identity=()=>crypto.randomUUID();
 const expected=()=>active?{id:active.config.id,revision:active.actions.length}:null;
 function notice(message='',error=false){$('notice').textContent=message;$('notice').classList.toggle('error',error);}
@@ -304,7 +302,7 @@ function teamStatsPage(team){
   }).join(''):'<div class="stats-empty">No matches recorded for this team.</div>'}</div>
   <h2 class="list-title">Practices</h2>
   <div class="stats-breakdowns">${stats.practices.length?stats.practices.map(practice=>`<details class="stats-group stats-practice"><summary><strong>Practice · ${esc(practice.date)}</strong><span>${plural(practice.resultCount,'result')} · ${new Date(practice.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</span></summary>${statTable(practice.rows)}</details>`).join(''):'<div class="stats-empty">No practices recorded for this team.</div>'}</div>`;
- makeStatsTablesSortable($('content'));
+ makeStatsTablesSortable($('seasonTotalsTable'));
  const sourceButtons=[...$('content').querySelectorAll('[data-season-source]')];
  sourceButtons.forEach(button=>button.onclick=()=>{
   const source=button.dataset.seasonSource;
