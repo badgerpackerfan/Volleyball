@@ -553,12 +553,25 @@ export function getSetStats(state) {
       p.codes[r.code] = (p.codes[r.code] ?? 0) + 1; players.set(r.playerId, p);
     }
   }
-  for (const pass of state.receiveRatings ?? []) {
-    const p = players.get(pass.playerId) ?? { earned: 0, errors: 0, codes: {} };
-    p.passing ??= { count: 0, sum: 0, ratings: { 0: 0, 1: 0, 2: 0, 3: 0 } };
-    p.passing.count++; p.passing.sum += pass.rating; p.passing.ratings[pass.rating]++;
-    players.set(pass.playerId, p);
+  const receiveErrors = new Map();
+  for (const rally of state.rallies) {
+    if (rally.team !== 'us' || rally.code !== 'SrE' || !rally.playerId) continue;
+    const beforeUs = rally.score.us - (rally.winner === 'us' ? 1 : 0);
+    const beforeThem = rally.score.them - (rally.winner === 'them' ? 1 : 0);
+    receiveErrors.set(`${rally.rotation}:${beforeUs}:${beforeThem}`, rally);
   }
+  const recordPass = (playerId, rating) => {
+    const p = players.get(playerId) ?? { earned: 0, errors: 0, codes: {} };
+    p.passing ??= { count: 0, sum: 0, ratings: { 0: 0, 1: 0, 2: 0, 3: 0 } };
+    p.passing.count++; p.passing.sum += rating; p.passing.ratings[rating]++;
+    players.set(playerId, p);
+  };
+  for (const pass of state.receiveRatings ?? []) {
+    const key = `${pass.rotation}:${pass.score?.us}:${pass.score?.them}`;
+    if (receiveErrors.has(key)) continue;
+    recordPass(pass.playerId, pass.rating);
+  }
+  for (const rally of receiveErrors.values()) recordPass(rally.playerId, 0);
   return {
     codes,
     players: Object.fromEntries([...players].map(([id, p]) => [id, { ...p, net: p.earned - p.errors }])),
