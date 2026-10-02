@@ -2,7 +2,7 @@ import { openSetStore } from '../storage/indexeddb.mjs';
 import { replaySet } from '../engine/set-engine.mjs';
 import { validateLineup, lineupIssue, startingRotation, lineupFromSet } from './lineup-model.mjs';
 import { mountLineupEditor } from './lineup-editor.mjs';
-import { teamHierarchy, setPlan } from './match-model.mjs';
+import { teamHierarchy, setPlan, correctSetFirstServe } from './match-model.mjs';
 import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme, loadSettings, saveSettings, applyColorTheme } from '../app/themes.mjs';
@@ -36,12 +36,18 @@ if(themeButton&&themeDialog)themeButton.onclick=()=>{$('themeTitle').textContent
 if(themeDone&&themeDialog)themeDone.onclick=()=>themeDialog.close();
 if(themeDialog)themeDialog.onclick=e=>{if(e.target===themeDialog)themeDialog.close();};
 const reportDialog=$('reportDialog'),reportBody=$('reportBody');
+let reportReturn=null;
 function openReport(html,wide=false){
  reportBody.innerHTML=html;reportDialog.classList.toggle('wide',wide);
  if(!reportDialog.open)reportDialog.showModal();
 }
-reportBody?.addEventListener('click',e=>{if(e.target.closest('#shCancel'))reportDialog.close();});
+reportBody?.addEventListener('click',e=>{
+ if(!e.target.closest('#shCancel'))return;
+ if(reportReturn){const back=reportReturn;reportReturn=null;back();}
+ else reportDialog.close();
+});
 reportDialog?.addEventListener('click',e=>{if(e.target===reportDialog)reportDialog.close();});
+reportDialog?.addEventListener('close',()=>{reportReturn=null;});
 renderThemeOptions();
 const identity=()=>crypto.randomUUID();
 const expected=()=>active?{id:active.config.id,revision:active.actions.length}:null;
@@ -119,7 +125,7 @@ async function readTeamLogo(file){
 }
 function remove(message,request,after){
  if(!confirm(message+'\n\nThis cannot be undone.'))return;
- save(async()=>{await store.deleteData(request);await load();after();});
+ save(async()=>{await withFreshStore(()=>store.deleteData(request));await load();after();});
 }
 function deleteTeam(team){
  const setCount=team.matches.reduce((n,m)=>n+m.sets.length,0),practiceCount=practices.filter(p=>p.teamId===team.id).length,revision=teams.find(t=>t.id===team.id)?.revision??null;
@@ -130,8 +136,24 @@ function deleteMatch(team,match){
  remove(`Delete the match vs ${match.opponent}${match.date?' on '+match.date:''}${match.sets.length?` and its ${plural(match.sets.length,'set')}`:''}?`,
   {teamId:team.id,matchId:match.id},()=>{go(team.id);notice(`Match vs ${match.opponent} deleted.`);});
 }
+function editMatchDetails(team,match){
+ dirty=false;notice();
+ bar('Edit match details',match.opponent,{label:match.opponent,action:()=>go(team.id,match.id)});
+ $('content').innerHTML=`<form id="matchDetailsForm"><p class="help">Changing the opponent or date updates every saved set in this match and keeps the existing rally statistics.</p>
+  <div class="grid"><label>Opponent<input id="matchOpponent" required maxlength="100" value="${esc(match.opponent)}"></label><label>Match date<input id="matchDate" type="date" value="${esc(match.date)}"></label></div>
+  <div class="actions form-actions"><button type="submit" class="primary">Save match details</button><button type="button" id="cancelMatchDetails">Cancel</button></div></form>`;
+ $('matchDetailsForm').oninput=()=>{dirty=true;};
+ $('cancelMatchDetails').onclick=()=>{dirty=false;go(team.id,match.id);};
+ $('matchDetailsForm').onsubmit=e=>{e.preventDefault();save(async()=>{
+  const opponent=$('matchOpponent').value.trim(),date=$('matchDate').value||match.date||'';
+  if(!opponent)throw new Error('Enter an opponent.');
+  await withFreshStore(()=>store.updateMatchDetails({teamId:team.id,matchId:match.id,teamRevision:team.revision,
+   expectedSetIds:match.sets.map(record=>record.config.id),opponent,date}));
+  dirty=false;await load();go(team.id,match.id);notice(`Match details updated for vs ${opponent}.`);
+ });};
+}
 async function load(){
- [teams,sets,practices,active]=await Promise.all([store.listTeams(),store.listSets(),store.listPractices(),store.loadActive()]);
+ [teams,sets,practices,active]=await withFreshStore(()=>Promise.all([store.listTeams(),store.listSets(),store.listPractices(),store.loadActive()]));
  teams.sort((a,b)=>a.name.localeCompare(b.name));$('liveLink').hidden=!active;
 }
 function route(teamId,matchId,view){
@@ -153,7 +175,30 @@ $('backButton').onclick=()=>{if(!leave())return;dirty=false;notice();backAction?
 $('liveLink').onclick=()=>{if(!leave())return;dirty=false;location.href='./index.html';};
 const item=(color,main,actions,extra='')=>`<article class="card item ${extra}" style="--team-color:${color}"><div class="item-main">${main}</div><div class="item-actions">${actions}</div></article>`;
 function matchReportContext(team,match,record){
- return {record,state:replaySet(record),teams:{us:team.name,them:match.opponent||'Opponent'},matchRecords:()=>match.sets,open:openReport};
+ return {record,state:replaySet(record),teams:{us:team.name,them:match.opponent||'Opponent'},players:team.players,
+  matchRecords:()=>match.sets,open:openReport,closeLabel:'Choose another set'};
+}
+function editSetFirstServe(team,match,record){
+ const setNumber=record.config.setNumber??1;
+ openReport(`<h4>Correct first server · Set ${setNumber}</h4>
+  <p>Choose the team that actually served first. The score history is retained, and the set’s server and rotation stats are recalculated.</p>
+  <label>First server<select id="correctFirstServer"><option value="us" ${record.config.firstServe==='us'?'selected':''}>${esc(team.name)} served</option><option value="them" ${record.config.firstServe==='them'?'selected':''}>${esc(match.opponent||'Opponent')} served</option></select></label>
+  <div class="actions"><button type="button" id="saveFirstServer" class="primary">Save correction</button><button type="button" id="shCancel" class="cancel">Cancel</button></div>`);
+ reportBody.querySelector('#saveFirstServer').onclick=()=>{
+  const firstServer=reportBody.querySelector('#correctFirstServer').value;
+  let correction;
+  try{correction=correctSetFirstServe(record,firstServer);}
+  catch(error){notice(`Correction could not be applied: ${error.message} No saved data was changed.`,true);return;}
+  if(firstServer===record.config.firstServe){reportDialog.close();return;}
+  const details=[`Set ${setNumber} will start with ${firstServer==='us'?team.name:match.opponent||'the opponent'} serving.`];
+  if(correction.droppedReceiveActions)details.push(`${correction.droppedReceiveActions} receive rating or formation action${correction.droppedReceiveActions===1?'':'s'} logged before the first rally will be removed because your team was serving.`);
+  if(correction.reclassifiedFirstRally)details.push('The first rally’s serve outcome will be reclassified to preserve which team won that point.');
+  if(!confirm(details.join('\n\n')+'\n\nSave this correction?'))return;
+  save(async()=>{
+   await withFreshStore(()=>store.updateSetRecord(record,correction.record));
+   await load();reportDialog.close();go(team.id,match.id);notice(`Set ${setNumber} first server corrected.`);
+  });
+ };
 }
 function showMatchSummary(team,match){
  const record=match.sets.at(-1);if(record)matchSummary(matchReportContext(team,match,record));
@@ -177,7 +222,7 @@ function showRotationReportPicker(team,match){
   <button class="cancel" id="shCancel" type="button">Close</button>`);
  reportBody.querySelectorAll('[data-report-set]').forEach(button=>button.onclick=()=>{
   const record=match.sets.find(set=>set.config.id===button.dataset.reportSet);
-  if(record)rotationReport(matchReportContext(team,match,record));
+  if(record){reportReturn=()=>showRotationReportPicker(team,match);rotationReport(matchReportContext(team,match,record));}
  });
 }
 function statTable(rows,matchStats=false){
@@ -285,6 +330,7 @@ function home(){
  const hierarchy=teamHierarchy(teams,sets),params=new URLSearchParams(location.hash.slice(1));
  const team=hierarchy.find(t=>t.id===params.get('team'));
  const match=team?.matches.find(m=>m.id===params.get('match'));
+ if(team?.editable&&match&&params.get('view')==='edit-match'){editMatchDetails(teams.find(t=>t.id===team.id),match);return;}
  if(team?.editable&&match&&params.get('view')==='setup'){
   const nextSet=match.sets.length+1;
   const optionalThird=match.bestOf===3&&nextSet===3&&match.sets.length===2&&Boolean(match.winner);
@@ -349,25 +395,30 @@ function home(){
  const canStartNext=team.editable&&!match.inProgress&&match.bestOf&&next<=match.bestOf&&(!match.winner||optionalThird);
  bar(match.opponent,[team.name,match.date].filter(Boolean).join(' · '),{label:team.name,action:()=>go(team.id)});
  $('content').innerHTML=`<div class="card match-summary" style="--team-color:${team.color}"><p class="set-score">Sets ${match.wins.us}–${match.wins.them}</p><p>${match.winner?`<strong class="match-result">${match.winner==='us'?'Match won':'Match lost'}</strong> · `:''}${match.bestOf?`Best of ${match.bestOf}`:'Match format not set'}</p></div>
-  <div class="toolbar">${canStartNext?`<button id="nextSet" class="primary" ${team.players.length<6?'disabled':''}>${optionalThird?'Record optional set 3':match.sets.length?`Set up set ${next}`:'Set up set 1'}</button>`:''}<button id="deleteMatch" class="danger">Delete match</button></div>
+  <div class="toolbar">${canStartNext?`<button id="nextSet" class="primary" ${team.players.length<6?'disabled':''}>${optionalThird?'Record optional set 3':match.sets.length?`Set up set ${next}`:'Set up set 1'}</button>`:''}${team.editable?'<button id="editMatchDetails">Edit match details</button>':''}<button id="deleteMatch" class="danger">Delete match</button></div>
   ${match.inProgress?'<p class="muted">Finish the set in progress before starting another set in this match.</p>':''}
   ${match.sets.length?'<h2 class="list-title">Sets</h2>':''}
-  <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1;return item(team.color,`<h3>Set ${n}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target}</p>`,
-   `<button data-resume="${esc(r.config.id)}" class="primary">${state.status==='ended'?'Open set':'Resume set'}</button>${i===match.sets.length-1?`<button data-delete-set="${esc(r.config.id)}" class="danger">Delete set</button>`:''}`,'set-card');}).join('')}</div>
+  <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1,canCorrectServe=n===1||n===match.bestOf;return item(team.color,`<h3>Set ${n}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target} · ${r.config.firstServe==='us'?esc(team.name):esc(match.opponent||'Opponent')} served first</p>`,
+   `<button data-resume="${esc(r.config.id)}" class="primary">${state.status==='ended'?'Open set':'Resume set'}</button>${canCorrectServe?`<button data-correct-first-serve="${esc(r.config.id)}">Correct first serve</button>`:''}${i===match.sets.length-1?`<button data-delete-set="${esc(r.config.id)}" class="danger">Delete set</button>`:''}`,'set-card');}).join('')}</div>
   ${match.sets.length?'':`<div class="card"><p>Not started · ${esc(match.date)} · Best of ${match.bestOf}. Choose Set up set 1 to change the details or pick the lineup and first serve.</p></div>`}
   ${match.sets.length>1?'<p class="muted">Only the latest set can be deleted, so set numbers and first serve stay in order.</p>':''}`;
  $('deleteMatch').onclick=()=>deleteMatch(team,match);
+ $('editMatchDetails')?.addEventListener('click',()=>go(team.id,match.id,'edit-match'));
+ document.querySelectorAll('[data-correct-first-serve]').forEach(button=>button.onclick=()=>{
+  const record=match.sets.find(set=>set.config.id===button.dataset.correctFirstServe);
+  if(record)editSetFirstServe(team,match,record);
+ });
  document.querySelector('[data-delete-set]')?.addEventListener('click',()=>remove(`Delete set ${match.sets.length} vs ${match.opponent} and all of its rallies?`,
   {teamId:team.id,setId:match.sets.at(-1).config.id},()=>{if(match.sets.length>1)home();else go(team.id);notice(`Set ${match.sets.length} deleted.`);}));
  $('nextSet')?.addEventListener('click',()=>matchSetup(team,match));
- document.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>save(async()=>{await store.activateSet(b.dataset.resume,expected());busy=false;location.href='./index.html';}));
+ document.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>save(async()=>{await withFreshStore(()=>store.activateSet(b.dataset.resume,expected()));busy=false;location.href='./index.html';}));
 }
 window.addEventListener('hashchange',()=>{notice();home();});
 function editTeam(team){
  const defaultTheme=colorTheme(loadSettings().theme).id;
  const draft=team?structuredClone(team):{id:identity(),schemaVersion:1,revision:0,name:'',level:'Jr High',season:String(new Date().getFullYear()),teamTheme:defaultTheme,color:colorTheme(defaultTheme).accent,logo:null,players:[]};
  notice();bar(team?'Edit roster':'Create team',team?.name??'',{label:team?team.name:'Teams',action:home});
- $('content').innerHTML=`<form id="teamForm"><p class="help">Save your roster here. Choose starters, setters, and liberos for each match.</p><div class="grid"><label>Team name<input id="teamName" required maxlength="100" value="${esc(draft.name)}" autocomplete="organization"></label><label>Level<select id="level">${['Jr High','JV','Varsity','Club','Other'].map(v=>`<option ${v===draft.level?'selected':''}>${v}</option>`).join('')}</select></label><label>Season / year<input id="season" required maxlength="100" value="${esc(draft.season)}"></label><div class="team-theme-field"><label for="teamTheme">Team theme<select id="teamTheme">${COLOR_THEMES.map(t=>`<option value="${t.id}" ${draft.teamTheme===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label><div id="teamThemePreview" class="team-theme-preview" aria-live="polite"></div><p class="muted">Choose a palette for this team and its live sets.</p></div></div><div class="team-logo-field"><div><h2>Team logo</h2><p class="muted">Upload an SVG, PNG, or JPG image up to 512 KB.</p></div><div class="team-logo-preview" id="teamLogoPreview">${draft.logo?logoMarkup(draft.logo,draft.name||'Team','team-logo-large'):'<span>No logo selected</span>'}</div><label class="upload-label">Choose logo<input id="teamLogoFile" type="file" accept="image/svg+xml,image/png,image/jpeg,.svg,.png,.jpg,.jpeg"></label><button type="button" id="removeTeamLogo" class="danger" ${draft.logo?'':'hidden'}>Remove logo</button></div><div class="section-head"><h2>Players</h2><button type="button" id="addPlayer">Add player</button></div><p class="muted">Jersey numbers 0–99 must be unique within this team.</p><div id="players"></div><div class="actions form-actions"><button type="submit" class="primary">Save team</button><button type="button" id="cancel">Cancel</button></div></form>`;
+ $('content').innerHTML=`<form id="teamForm"><p class="help">Save your roster here. Choose starters, setters, and liberos for each match.</p><div class="grid"><label>Team name<input id="teamName" required maxlength="100" value="${esc(draft.name)}" autocomplete="organization"></label><label>Level<select id="level">${['Jr High','JV','Varsity','Club','Other'].map(v=>`<option ${v===draft.level?'selected':''}>${v}</option>`).join('')}</select></label><label>Season / year<input id="season" required maxlength="100" value="${esc(draft.season)}"></label><div class="team-theme-field"><label for="teamTheme">Team theme<select id="teamTheme">${COLOR_THEMES.map(t=>`<option value="${t.id}" ${draft.teamTheme===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label><div id="teamThemePreview" class="team-theme-preview" aria-live="polite"></div><p class="muted">Choose a palette for this team and its live sets.</p></div></div><div class="team-logo-field"><div><h2>Team logo</h2><p class="muted">Upload an SVG, PNG, or JPG image up to 512 KB.</p></div><div class="team-logo-preview" id="teamLogoPreview">${draft.logo?logoMarkup(draft.logo,draft.name||'Team','team-logo-large'):'<span>No logo selected</span>'}</div><label class="upload-label">Choose logo<input id="teamLogoFile" type="file" accept="image/svg+xml,image/png,image/jpeg,.svg,.png,.jpg,.jpeg"></label><button type="button" id="removeTeamLogo" class="danger" ${draft.logo?'':'hidden'}>Remove logo</button></div><div class="section-head"><h2>Players</h2><button type="button" id="addPlayer">Add player</button></div><p class="muted">Jersey numbers 0–99 must be unique within this team. Changing a number keeps recorded stats with that player.</p><div id="players"></div><div class="actions form-actions"><button type="submit" class="primary">Save team</button><button type="button" id="cancel">Cancel</button></div></form>`;
  function renderTeamThemePreview(){
   const theme=colorTheme(draft.teamTheme);
   $('teamTheme').value=theme.id;
@@ -399,7 +450,7 @@ function editTeam(team){
  $('teamForm').onsubmit=e=>{e.preventDefault();
   const input={...draft,revision:draft.revision+1,name:$('teamName').value,level:$('level').value,season:$('season').value,color:colorTheme(draft.teamTheme).accent,
    players:[...$('players').children].map(row=>({id:row.dataset.id,athleteId:row.dataset.athlete,name:row.querySelector('.player-name').value,jersey:row.querySelector('.jersey').value,position:row.querySelector('.position').value}))};
-  save(async()=>{const valid=validateTeam(input);await store.saveTeam(valid,team?.revision??null);dirty=false;await load();go(valid.id);notice(`${valid.name} saved.`);});
+  save(async()=>{const valid=validateTeam(input);await withFreshStore(()=>store.saveTeam(valid,team?.revision??null));dirty=false;await load();go(valid.id);notice(`${valid.name} saved.`);});
  };
  $('teamName').focus();
 }
@@ -413,7 +464,7 @@ function lineupLibrary(team){
  document.querySelectorAll('[data-lineup-delete]').forEach(b=>b.onclick=()=>{
   const l=team.lineups.find(l=>l.id===b.dataset.lineupDelete);
   if(!confirm(`Delete the saved lineup ${l.name}? Sets already played with it keep their lineup.\n\nThis cannot be undone.`))return;
-  save(async()=>{await store.saveTeam({...team,revision:team.revision+1,lineups:team.lineups.filter(x=>x.id!==l.id)},team.revision);await load();home();notice(`${l.name} deleted.`);});
+  save(async()=>{await withFreshStore(()=>store.saveTeam({...team,revision:team.revision+1,lineups:team.lineups.filter(x=>x.id!==l.id)},team.revision));await load();home();notice(`${l.name} deleted.`);});
  });
  document.querySelectorAll('[data-lineup-copy]').forEach(b=>b.onclick=()=>{const l=team.lineups.find(l=>l.id===b.dataset.lineupCopy);editLineup(team,{...l,id:identity(),name:l.name+' copy'});});
 }
@@ -426,7 +477,7 @@ function editLineup(team,lineup=null){
  $('lineupForm').onsubmit=e=>{e.preventDefault();save(async()=>{
   const value=validateLineup(team,{...editor.read(),id:lineup?.id??identity(),name:$('lineupName').value});
   const updated={...team,revision:team.revision+1,lineups:[...team.lineups.filter(l=>l.id!==value.id),value]};
-  await store.saveTeam(updated,team.revision);dirty=false;await load();home();notice(`${value.name} saved.`);
+  await withFreshStore(()=>store.saveTeam(updated,team.revision));dirty=false;await load();home();notice(`${value.name} saved.`);
  });};
  $('lineupName').focus();
 }
@@ -481,7 +532,7 @@ function matchSetup(team,match=null){
  };
  $('saveLineup').onclick=()=>save(async()=>{
   const value=validateLineup(team,{...editor.read(),id:identity(),name:$('saveLineupName').value});
-  await store.saveTeam({...team,revision:team.revision+1,lineups:[...team.lineups,value]},team.revision);
+  await withFreshStore(()=>store.saveTeam({...team,revision:team.revision+1,lineups:[...team.lineups,value]},team.revision));
   await load();team=teams.find(t=>t.id===team.id);$('lineupSelect').innerHTML=lineupOptions();$('lineupSelect').value=value.id;selectedLineupId=value.id;
   $('saveLineupName').value='';preview();notice(`${value.name} saved for ${team.name}.`);
  });
@@ -508,13 +559,13 @@ function matchSetup(team,match=null){
   save(async()=>{
    const entry={id:match?.id??identity(),opponent:$('opponent').value,date:$('date').value,bestOf:Number($('bestOf').value)};
    const updated=validateTeam({...team,revision:team.revision+1,plannedMatches:[...team.plannedMatches.filter(m=>m.id!==entry.id),entry]});
-   await store.saveTeam(updated,team.revision);await load();go(team.id);notice(`Match vs ${updated.plannedMatches.find(m=>m.id===entry.id).opponent} saved.`);
+   await withFreshStore(()=>store.saveTeam(updated,team.revision));await load();go(team.id);notice(`Match vs ${updated.plannedMatches.find(m=>m.id===entry.id).opponent} saved.`);
   });
  });
  $('matchForm').onsubmit=e=>{e.preventDefault();
   const choices={...editor.read(),bestOf:Number($('bestOf').value),opponent:$('opponent').value,date:$('date').value,firstServe:$('firstServe').value,
     rotationMode:$('rotationMode').value,rotation:Number($('startingRotation').value),previousSet,lineupId:selectedLineupId};
-  save(async()=>{const record=makeMatchSet(team,choices,{setId:identity(),matchId:match?.id??identity(),setNumber});await store.startSet(record,expected());busy=false;location.href='./index.html';});
+  save(async()=>{const record=makeMatchSet(team,choices,{setId:identity(),matchId:match?.id??identity(),setNumber});await withFreshStore(()=>store.startSet(record,expected()));busy=false;location.href='./index.html';});
  };
  if(match)$('lineupSelect').focus();else $('opponent').focus();
 }
