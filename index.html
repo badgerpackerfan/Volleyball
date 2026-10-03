@@ -21,6 +21,10 @@
     --court:   #447454;
     --court-2: #356448;
     --chalk:   #ffffff;
+    --action-points: #17613b;
+    --action-errors: #a52e29;
+    --action-receive: #2866a7;
+    --action-attack: #7540a5;
 
     /* Role colors - all >= 4.5:1 against white text. With a 5-1 the
        opposite pairs share a role, so these double as the sheet's pair colors. */
@@ -49,6 +53,7 @@
     :root:not(.light) {
       --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
       --line: #2a343d; --accent: #35a3b3; --page: var(--bg);
+      --action-points: #74d99e; --action-errors: #ff928a; --action-receive: #92c5ff; --action-attack: #d0a4fb;
       --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
       --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
     }
@@ -56,6 +61,7 @@
   :root.dark {
     --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
     --line: #2a343d; --accent: #35a3b3; --page: var(--bg);
+    --action-points: #74d99e; --action-errors: #ff928a; --action-receive: #92c5ff; --action-attack: #d0a4fb;
     --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
     --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
   }
@@ -137,6 +143,7 @@
     background: var(--card); border-radius: var(--radius); border: 1px solid var(--line);
     padding: 14px; display: flex; flex-direction: column; gap: 8px; position: relative; min-height: 0; overflow: hidden;
   }
+  #padUs { gap: 6px; }
   .pad h2 {
     margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: center;
   }
@@ -149,6 +156,13 @@
     margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .1em;
     text-transform: uppercase; color: var(--ink-dim);
   }
+  #padUs .pad-action-heading {
+    min-height: 18px; margin: 0; padding: 0 8px; display: flex; align-items: center;
+    border-left: 4px solid var(--section-color); border-radius: 6px;
+    background: color-mix(in srgb, var(--section-color) 8%, var(--card)); color: var(--section-color);
+  }
+  .points-heading { --section-color: var(--action-points); }
+  .errors-heading { --section-color: var(--action-errors); }
   .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .code {
@@ -193,6 +207,13 @@
   .live-actions { display: grid; gap: 6px; }
   .live-actions[hidden], .pass-score-panel[hidden] { display: none !important; }
   .live-actions h3 { margin-top: 0; }
+  .pass-score-panel {
+    padding: 0 8px 0 7px; border-left: 4px solid var(--action-receive); border-radius: 8px;
+    background: color-mix(in srgb, var(--action-receive) 8%, var(--card));
+  }
+  .pass-score-panel h3 {
+    min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--action-receive);
+  }
   .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .pass-score-grid button { min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
   .pass-score-grid button b { font-size: 23px; line-height: 1; }
@@ -200,7 +221,7 @@
   .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .pass-score-grid button:disabled { opacity: .38; }
   .pass-score-status { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.2; }
-  .attack-action { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); color: var(--ink); font-size: 16px; font-weight: 800; }
+  .attack-action { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--action-attack) 40%, var(--line)); border-left: 4px solid var(--action-attack); border-radius: 11px; background: color-mix(in srgb, var(--action-attack) 8%, var(--card)); color: var(--action-attack); font-size: 16px; font-weight: 800; }
   .attack-action small { color: var(--ink-dim); font-size: 11px; font-weight: 700; }
   .attack-action.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
   .attack-action.on small { color: var(--bg); opacity: .8; }
@@ -1159,18 +1180,18 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <!-- ② Us pad -->
     <section class="pad" id="padUs">
       <h2><button class="team-chip" id="teamMenu" title="Open team menu">8th Grade<span class="caret">▾</span></button></h2>
-      <h3>Our point</h3>
+      <h3 class="pad-action-heading points-heading">Our Points</h3>
       <div class="grid3" id="usEarned"></div>
-      <h3>Our error — their point</h3>
+      <h3 class="pad-action-heading errors-heading">Our Errors</h3>
       <div class="grid3" id="usErr"></div>
       <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
       <div class="live-actions">
+        <button type="button" id="attackAction" class="attack-action"><span>Attack</span><small>Non-terminal attempt</small></button>
         <div class="pass-score-panel" id="passScorePanel" hidden>
-          <h3 id="passScoreTitle">Serve receive · choose score</h3>
+          <h3 id="passScoreTitle">Serve Receive · choose score</h3>
           <div class="pass-score-grid" id="passScoreGrid" role="group" aria-labelledby="passScoreTitle"></div>
           <p class="pass-score-status" id="passScoreStatus" role="status" aria-live="polite" hidden></p>
         </div>
-        <button type="button" id="attackAction" class="attack-action"><span>Attack</span><small>Non-terminal attempt</small></button>
       </div>
       <div class="pad-hint" id="hintUs"></div>
       <!-- ⑤ Sub & Libero -->
