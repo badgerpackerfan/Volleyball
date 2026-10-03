@@ -156,13 +156,15 @@
     margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .1em;
     text-transform: uppercase; color: var(--ink-dim);
   }
-  #padUs .pad-action-heading {
-    min-height: 18px; margin: 0; padding: 0 8px; display: flex; align-items: center;
-    border-left: 4px solid var(--section-color); border-radius: 6px;
-    background: color-mix(in srgb, var(--section-color) 8%, var(--card)); color: var(--section-color);
+  .outcome-group {
+    --group-color: var(--action-points);
+    min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--group-color) 30%, var(--line));
+    border-left: 4px solid var(--group-color); border-radius: 10px;
+    background: color-mix(in srgb, var(--group-color) 5%, var(--card));
   }
-  .points-heading { --section-color: var(--action-points); }
-  .errors-heading { --section-color: var(--action-errors); }
+  .outcome-group h3 { min-height: 18px; margin: 0; color: var(--group-color); }
+  .our-error-group, .their-point-group { --group-color: var(--action-errors); }
   .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .code {
@@ -1180,10 +1182,14 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <!-- ② Us pad -->
     <section class="pad" id="padUs">
       <h2><button class="team-chip" id="teamMenu" title="Open team menu">8th Grade<span class="caret">▾</span></button></h2>
-      <h3 class="pad-action-heading points-heading">Our Points</h3>
-      <div class="grid3" id="usEarned"></div>
-      <h3 class="pad-action-heading errors-heading">Our Errors</h3>
-      <div class="grid3" id="usErr"></div>
+      <section class="outcome-group our-point-group" aria-labelledby="ourPointHeading">
+        <h3 id="ourPointHeading">Our Point</h3>
+        <div class="grid3" id="usEarned"></div>
+      </section>
+      <section class="outcome-group our-error-group" aria-labelledby="ourErrorHeading">
+        <h3 id="ourErrorHeading">Our Error</h3>
+        <div class="grid3" id="usErr"></div>
+      </section>
       <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
       <div class="live-actions">
         <button type="button" id="attackAction" class="attack-action"><span>Attack</span><small>Non-terminal attempt</small></button>
@@ -1244,10 +1250,14 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <!-- ⑥ Them pad -->
     <section class="pad" id="padThem">
       <h2><span class="team-chip opp">West Fargo</span></h2>
-      <h3>Their point</h3>
-      <div class="grid3" id="thEarned"></div>
-      <h3>Their error — our point</h3>
-      <div class="grid3" id="thErr"></div>
+      <section class="outcome-group their-point-group" aria-labelledby="theirPointHeading">
+        <h3 id="theirPointHeading">Their Point</h3>
+        <div class="grid3" id="thEarned"></div>
+      </section>
+      <section class="outcome-group their-error-group" aria-labelledby="theirErrorHeading">
+        <h3 id="theirErrorHeading">Their Error</h3>
+        <div class="grid3" id="thErr"></div>
+      </section>
       <div class="pad-actions them">
         <button class="act act-to" id="toThemBtn">Timeout<span class="dots"><span id="toT1"></span><span id="toT2"></span></span></button>
       </div>
