@@ -4,6 +4,7 @@
 import { ACTION_CODES, getSetStats, replaySet, setterPosition } from '../engine/set-engine.mjs';
 import { matchSetLineups } from '../teams/stats-model.mjs';
 import { isExhibitionSet } from '../teams/match-model.mjs';
+import { PLAYER_PERFORMANCE_HEADERS, playerPerformanceCells } from './player-performance.mjs';
 export { DEFAULT_SETTINGS, loadSettings } from './themes.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,7 +57,7 @@ export function makeStatsTablesSortable(root) {
             key = match ? [Number(match[1]), match[2].toLocaleLowerCase()]
               : [Number.POSITIVE_INFINITY, text.toLocaleLowerCase()];
           } else if (kind === 'number') {
-            const match = /[-+]?\d+(?:\.\d+)?/.exec(text);
+            const match = /[-+]?(?:\d+(?:\.\d+)?|\.\d+)/.exec(text);
             key = match ? Number(match[0]) : null;
           } else key = text.toLocaleLowerCase();
         }
@@ -122,7 +123,7 @@ export function rotationReport(ctx) {
       <table class="rr-log"><colgroup><col class="j"><col><col><col><col></colgroup><thead><tr><th colspan="3">${esc(ctx.teams.us)}</th><th colspan="2">${esc(ctx.teams.them)}</th></tr></thead><tbody>
       ${rallies.map(x => `<tr class="${x.winner === 'us' ? 'won' : 'lost'}${x.edited ? ' edited' : ''}"><td>${x.team === 'us' && x.playerId ? esc(jersey(x.playerId)) : ''}</td><td>${x.team === 'us' ? x.code : ''}</td><td>${x.score.us}</td><td>${x.score.them}</td><td>${x.team === 'them' ? x.code : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No rallies</td></tr>'}
       </tbody></table>
-      <dl class="rr-tot"><dt>Won–lost</dt><dd>${t.won}–${t.lost}</dd><dt>+/-</dt><dd>${signed(t.net)}</dd><dt>Rallies</dt><dd>${t.won + t.lost}</dd>
+      <dl class="rr-tot"><dt>Won–lost</dt><dd>${t.won}–${t.lost}</dd><dt>+/-</dt><dd class="${t.net>0?'pos':t.net<0?'neg':''}">${signed(t.net)}</dd><dt>Rallies</dt><dd>${t.won + t.lost}</dd>
         <dt>Sideout</dt><dd>${pct(t.sideoutRate)}</dd><dt>Point-scoring</dt><dd>${pct(t.scoringRate)}</dd></dl></section>`;
   }).join('');
   const fixes = state.corrections.map(f => `<li>At ${f.from.score.us}–${f.from.score.them} (R${f.from.rotation}): set to ${f.to.score.us}–${f.to.score.them}, R${f.to.rotation}, ${esc(ctx.teams[f.to.servingTeam])} serving${f.reason ? ` · ${esc(f.reason)}` : ''}</li>`).join('');
@@ -269,11 +270,14 @@ export function matchSummary(ctx) {
       ${row('Points given away', m => m.given, pct)}${row('Free points received', m => m.free, pct)}</tbody></table>
       <h5>Rotation +/- by set</h5><table class="lib-table stat-table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map(r => `<th>R${r}</th>`).join('')}</tr></thead><tbody>
       ${sets.map((x, i) => `<tr><td>Set ${x.record.config.setNumber ?? i + 1}</td>${[1, 2, 3, 4, 5, 6].map(r => { const t = x.stats.rotations[r]; return `<td class="${t.net > 0 ? 'pos' : t.net < 0 ? 'neg' : ''}">${t.won + t.lost ? signed(t.net) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
-      <div><h5>Players · match</h5><table class="lib-table stat-table"><thead><tr><th>Player</th><th>Kills</th><th>Hitting errors</th><th>Non-terminal attacks</th><th>BK</th><th>Aces</th><th>Serve in</th><th>Err</th><th>Pass avg</th><th>+/-</th></tr></thead><tbody>
-      ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td><td>${p.K}</td><td>${p.HE}</td><td>${p.nonTerminalAttacks}</td><td>${p.BK}</td><td>${p.SA}</td><td>${p.serveAttempts ? `${Math.round(p.servesIn * 100 / p.serveAttempts)}% (${p.servesIn}/${p.serveAttempts})` : '—'}</td><td>${p.errors}</td><td>${p.passCount ? `${(p.passSum / p.passCount).toFixed(2)} (n=${p.passCount})` : '—'}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="10">No player stats yet</td></tr>'}</tbody></table>
+      <div><h5>Players · match</h5><div class="stats-table-scroll"><table class="lib-table stat-table player-performance-table"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}<th>BK</th><th>Aces</th><th>Err</th><th>+/-</th></tr></thead><tbody>
+      ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td>${playerPerformanceCells({
+        passing:{count:p.passCount,sum:p.passSum},
+        serving:{attempts:p.serveAttempts,in:p.servesIn,aces:p.SA},
+        attacking:{kills:p.K,hittingErrors:p.HE,nonTerminalAttempts:p.nonTerminalAttacks},
+      })}<td>${p.BK}</td><td>${p.SA}</td><td>${p.errors}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="8">No player stats yet</td></tr>'}</tbody></table></div>
       <p>Serve in counts each rally-ending serve once: aces count in, serve errors count out.</p>
-      <p>Non-terminal attacks are tracked separately and do not count as kills, errors, or player +/-.</p>
-      <p>Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
+      <p>Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
 }
