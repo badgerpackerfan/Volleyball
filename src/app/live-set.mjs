@@ -222,14 +222,21 @@ function liberoSwitch(lib) { return command('libero.switch', {outPlayerId:player
 function syncState() {
   const s = session.state;
   SYSTEM = session.record.config.system;
+  const rallies=s.rallies.map(r=>({rot:`R${r.rotation} · S${r.setterPosition ?? '–'}`,rotN:r.rotation,srv:r.servingTeam,
+    sv:r.serverId===null ? null : numberFor(r.serverId),bk:r.backRowPlayerIds.map(numberFor),team:r.team,code:r.code,
+    player:r.playerId===null ? null : numberFor(r.playerId),us:r.score.us,them:r.score.them,winner:r.winner,actionId:r.actionId}));
+  const timeouts=s.timeouts.map(t=>({team:t.team,us:t.score.us,them:t.score.them,actionId:t.actionId}));
+  const visibleEvents=new Map([
+    ...rallies.map(r=>[r.actionId,{kind:'rally',...r}]),
+    ...timeouts.map(t=>[t.actionId,{kind:'timeout',...t}]),
+  ]);
+  const timeline=s.activeActionIds.flatMap(id=>visibleEvents.has(id)?[visibleEvents.get(id)]:[]);
   S = { order:s.order.map(Number), onCourt:Object.fromEntries(Object.entries(s.onCourt).map(([k,v])=>[k,numberFor(v)])),
     libero:s.libero ? {slot:Number(s.libero.slotId), player:numberFor(s.libero.playerId),replaced:numberFor(s.libero.replacedPlayerId)} : null,
     partner:Object.fromEntries(Object.entries(s.partners).map(([k,v])=>[numberFor(k),v.length===1 ? numberFor(v[0]) : null])),
     rotations:s.rotations, rotation:s.rotation, serving:s.servingTeam, us:s.score.us, them:s.score.them,
     subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
-    rallies:s.rallies.map(r=>({rot:`R${r.rotation} · S${r.setterPosition ?? '–'}`,rotN:r.rotation,srv:r.servingTeam,
-      sv:r.serverId===null ? null : numberFor(r.serverId),bk:r.backRowPlayerIds.map(numberFor),team:r.team,code:r.code,
-      player:r.playerId===null ? null : numberFor(r.playerId),us:r.score.us,them:r.score.them,winner:r.winner})),
+    rallies,timeouts,timeline,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
   if (LIBEROS.length && !s.libero && s.liberoFor !== 'none' && SLOTS[S.order[0]].role === s.liberoFor && s.status === 'live')
@@ -498,7 +505,7 @@ function render() {
   // Log
   const log = $('log');
   const previousTrack=log.querySelector('.run-track');
-  const previousCount=Number(previousTrack?.dataset.rallyCount??0);
+  const previousCount=Number(previousTrack?.dataset.itemCount??0);
   const previousScroll=previousTrack?.scrollLeft??0;
   const wasNearEnd=previousTrack
     ? previousTrack.scrollWidth-previousTrack.clientWidth-previousTrack.scrollLeft<=48
@@ -508,15 +515,27 @@ function render() {
   track.className = 'run-track';
   track.tabIndex=0;
   track.setAttribute('role','region');
-  track.setAttribute('aria-label', 'Recent rallies, oldest to newest. Scroll horizontally to review the entire set.');
-  const last = S.rallies;
-  track.dataset.rallyCount=String(last.length);
-  last.forEach((r, i) => {
+  track.setAttribute('aria-label', 'Recent rallies and timeouts, oldest to newest. Timeout markers show the score when called. Scroll horizontally to review the entire set.');
+  const last = S.timeline;
+  track.dataset.itemCount=String(last.length);
+  last.forEach((event, i) => {
+    if(event.kind==='timeout'){
+      const marker=document.createElement('div');
+      marker.className=`timeout-marker${i===last.length-1?' latest':''}`;
+      marker.setAttribute('role','img');
+      marker.setAttribute('aria-label',`${TEAM_NAMES[event.team]} timeout at ${event.us}–${event.them}`);
+      marker.title=`${TEAM_NAMES[event.team]} timeout · ${event.us}–${event.them}`;
+      marker.innerHTML=`<span class="label">${event.team==='us'?'OUR':'THEIR'} TO</span><span class="score">${event.us}–${event.them}</span>`;
+      track.appendChild(marker);
+      return;
+    }
+    const r=event;
     const c = document.createElement('div');
     c.className = `rchip${r.winner === 'them' ? ' lost' : ''}${i === last.length - 1 ? ' latest' : ''}`;
-    c.setAttribute('aria-label', `${TEAM_NAMES[r.winner]} won the point`);
-    const who = r.team === 'us' ? (r.player != null ? `#${r.player}` : TEAM_NAMES.us) : TEAM_NAMES.them;
-    c.innerHTML = `<span class="c">${r.code} <small style="font-weight:600;font-size:12px">${esc(who)}</small></span><span class="s">${r.us}–${r.them}</span>`;
+    c.setAttribute('aria-label', r.winner === 'us' ? `${TEAM_NAMES.us} won the point` : 'Opponent won the point');
+    const who = r.team === 'us' ? (r.player != null ? `#${r.player}` : TEAM_NAMES.us) : '';
+    const whoLabel = who ? ` <small style="font-weight:600;font-size:12px">${esc(who)}</small>` : '';
+    c.innerHTML = `<span class="c">${r.code}${whoLabel}</span><span class="s">${r.us}–${r.them}</span>`;
     track.appendChild(c);
     if (r.srv === 'them' && r.winner === 'us' && i < last.length - 1) {
       const divider = document.createElement('div');
