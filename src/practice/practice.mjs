@@ -28,22 +28,23 @@ function render(){
   $('pageTitle').textContent=`Practice · ${practice.date}`;
   $('backLabel').textContent=practice.teamName;
   document.title=`Practice · ${practice.teamName}`;
-  const events=practice.events.slice(-12).reverse();
+  const events=practice.events.slice(-1).reverse();
   const stats=new Map(practiceStats(practice).map(row=>[row.player.id,row]));
-  $('content').innerHTML=`<div class="practice-intro"><h2>${esc(practice.teamName)} practice</h2><span class="muted">${practice.events.length} results saved on this device</span></div>
-    <p class="practice-hint">Tap a result to log it. Serve In% includes aces; Ace% shows aces as a share of attempts.</p>
+  const summaryRows=practice.players.map(p=>{
+    const {serves,passes,attacks}=stats.get(p.id);
+    const serveAttempts=serves.ace+serves.in+serves.error;
+    const passAverage=passes.total?(passes.sum/passes.total).toFixed(2):'—';
+    const serveIn=serveAttempts?`${Math.round((serves.ace+serves.in)*100/serveAttempts)}%`:'—';
+    const attackSummary=`${attacks.kill} / ${attacks.in} / ${attacks.error}<small>K / In / Error</small>`;
+    return `<tr><th scope="row">#${esc(p.jersey)} ${esc(p.name)}</th><td>${passAverage}<small>n=${passes.total}</small></td><td>${serveIn}<small>n=${serveAttempts}</small></td><td>${attackSummary}</td></tr>`;
+  }).join('');
+  $('practiceSummaryContent').innerHTML=`<p class="practice-summary-key">Serve-in % includes aces. Attack In is non-terminal. Pass 0 is pass quality, not an error.</p><div class="practice-summary-table-scroll"><table class="practice-summary-table"><thead><tr><th>Player</th><th>Pass avg</th><th>Serve In %</th><th>Attack K / In / Error</th></tr></thead><tbody>${summaryRows}</tbody></table></div>`;
+  $('content').innerHTML=`<div class="practice-intro"><div class="practice-intro-copy"><h2>${esc(practice.teamName)} practice</h2><span class="muted">${practice.events.length} results saved</span></div><div class="practice-controls"><button type="button" id="practiceSummary">Practice summary</button><button type="button" id="undoPractice" class="undo-practice" ${practice.events.length&&!busy?'':'disabled'}>Undo last</button></div></div>
+    <p class="practice-hint">Tap a result to record it. Pass 0 is pass quality only; Attack In records a non-terminal attack.</p>
     <section class="player-practice-list" aria-label="Player practice tracking">${practice.players.map(p=>{
-      const {serves,passes}=stats.get(p.id);
-      const attempts=serves.ace+serves.in+serves.error;
-      const successful=serves.ace+serves.in;
-      const passAverage=passes.total?(passes.sum/passes.total).toFixed(2):'—';
-      const servePercent=attempts?`${Math.round(successful*100/attempts)}%`:'—';
-      const acePercent=attempts?`${Math.round(serves.ace*100/attempts)}%`:'—';
       const label=`#${esc(p.jersey)} · ${esc(p.name)}`;
-      const canUndo=practice.events.some(event=>event.playerId===p.id);
       return `<article class="player-practice card">
-        <div class="player-practice-heading"><h2>${label}</h2><button type="button" class="player-undo" data-undo-player="${esc(p.id)}" ${canUndo?'':'disabled'} aria-label="Undo latest result for ${label}">Undo</button></div>
-        <div class="player-summary"><span>Pass avg <strong>${passAverage}</strong><small>n=${passes.total}</small></span><span>Serve In % <strong>${servePercent}</strong><small>n=${attempts}</small></span><span>Ace % <strong>${acePercent}</strong><small>n=${attempts}</small></span></div>
+        <div class="player-practice-heading"><h2>${label}</h2></div>
         <div class="player-skills">
           <section class="player-skill"><h3>Serving</h3><div class="result-buttons serve-buttons" aria-label="Serving results for ${label}">
             <button type="button" data-skill="serve" data-player="${esc(p.id)}" data-result="ace" aria-label="Record ace for ${label}">Ace</button>
@@ -53,17 +54,22 @@ function render(){
           <section class="player-skill"><h3>Serve receive</h3><div class="result-buttons pass-buttons" aria-label="Serve receive ratings for ${label}">
             ${[3,2,1,0].map(rating=>`<button type="button" data-skill="pass" data-player="${esc(p.id)}" data-result="${rating}" aria-label="Record pass ${rating} for ${label}">${rating}</button>`).join('')}
           </div></section>
+          <section class="player-skill"><h3>Attacking</h3><div class="result-buttons attack-buttons" aria-label="Attacking results for ${label}">
+            <button type="button" data-skill="attack" data-player="${esc(p.id)}" data-result="kill" aria-label="Record attack kill for ${label}">Kill</button>
+            <button type="button" data-skill="attack" data-player="${esc(p.id)}" data-result="in" aria-label="Record attack in for ${label}">In</button>
+            <button type="button" data-skill="attack" data-player="${esc(p.id)}" data-result="error" aria-label="Record attack error for ${label}">Error</button>
+          </div></section>
         </div>
       </article>`;
     }).join('')}</section>
-    <details class="practice-history"><summary>Recent results (${practice.events.length})</summary>${events.length?`<div class="practice-events">${events.map(event=>{
+    <details class="practice-history"><summary>Last result</summary>${events.length?`<div class="practice-events">${events.map(event=>{
       const p=player(event.playerId);
       return `<div class="practice-event"><strong>#${esc(p.jersey)} · ${esc(p.name)}</strong><span>${esc(practiceEventLabel(event))}</span><time>${formatTime(event.occurredAt)}</time></div>`;
     }).join('')}</div>`:'<p class="muted">Results you record will appear here.</p>'}</details>`;
   document.querySelectorAll('[data-skill][data-player][data-result]').forEach(button=>button.onclick=()=>record({skill:button.dataset.skill,playerId:button.dataset.player,result:button.dataset.result}));
-  document.querySelectorAll('[data-undo-player]').forEach(button=>button.onclick=()=>undo(button.dataset.undoPlayer));
+  $('practiceSummary').onclick=()=> $('practiceSummaryDialog').showModal();
+  $('undoPractice').onclick=undoLast;
   $('backButton').onclick=returnToTeam;
-  $('teamsLink').onclick=returnToTeam;
 }
 
 function record(action){
@@ -71,37 +77,48 @@ function record(action){
   void processQueue();
 }
 
-function undo(playerId){
-  actionQueue.push({undo:true,playerId});
+function undoLast(){
+  actionQueue.push({undo:true});
   void processQueue();
 }
 
 async function processQueue(){
   if(busy)return;
   busy=true;
+  let savedMessage='Saved on this device.';
+  const undoButton=$('undoPractice');
+  if(undoButton)undoButton.disabled=true;
   try{
     while(actionQueue.length){
       const action=actionQueue.shift();
       if(action.undo){
-        if(!practice.events.some(event=>event.playerId===action.playerId))continue;
+        if(!practice.events.length)continue;
+        const removedEvent=practice.events[practice.events.length-1];
         notice('Saving undo…');
-        const next=undoPracticeResult(practice,action.playerId);
+        const next=undoPracticeResult(practice);
         await withFreshStore(()=>store.savePractice(next,practice.revision));
+        const removedPlayer=player(removedEvent.playerId);
+        savedMessage=`Undid ${practiceEventLabel(removedEvent)} for #${removedPlayer.jersey} · ${removedPlayer.name}.`;
         practice=next;render();
       }else{
         notice('Saving result…');
         const next=recordPracticeResult(practice,action);
         await withFreshStore(()=>store.savePractice(next,practice.revision));
+        const savedEvent=next.events[next.events.length-1];
+        const savedPlayer=player(savedEvent.playerId);
+        savedMessage=`Saved ${practiceEventLabel(savedEvent)} for #${savedPlayer.jersey} · ${savedPlayer.name}.`;
         practice=next;render();
       }
     }
-    notice('Saved on this device.');
+    notice(savedMessage);
   }catch(error){
     actionQueue.length=0;
     render();
     notice(error.message,true);
   }finally{
     busy=false;
+    const undoButton=$('undoPractice');
+    if(undoButton)undoButton.disabled=practice.events.length===0;
     if(actionQueue.length)void processQueue();
   }
 }
@@ -119,7 +136,11 @@ async function start(){
 }
 function reloadPractice(){notice('Reloading saved practice…');start();}
 $('backButton').onclick=returnToTeam;
-$('teamsLink').onclick=returnToTeam;
+$('teamsLink').onclick=()=>{location.href='./teams.html';};
 $('reloadPractice').onclick=reloadPractice;
+$('closePracticeSummary').onclick=()=> $('practiceSummaryDialog').close();
+$('practiceSummaryDialog').addEventListener('click',event=>{
+  if(event.target===$('practiceSummaryDialog'))$('practiceSummaryDialog').close();
+});
 window.addEventListener('pagehide',()=>store?.close());
 start();
