@@ -183,15 +183,54 @@ function editSetFirstServe(team,match,record){
 function showMatchSummary(team,match){
  const record=match.sets.at(-1);if(record)matchSummary(matchReportContext(team,match,record));
 }
+function cleanExportPart(value){
+ return String(value??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'');
+}
+function downloadJson(text,filename){
+ const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));
+ const link=document.createElement('a');link.href=url;link.download=filename;link.hidden=true;document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function shareOrDownloadExport(payload,filename,title){
+ const text=JSON.stringify(payload,null,2);
+ let file=null;
+ try{file=new File([text],filename,{type:'application/json'});}catch{}
+ if(file&&typeof navigator.share==='function'&&typeof navigator.canShare==='function'){
+  try{
+   if(navigator.canShare({files:[file]})){
+    await navigator.share({files:[file],title});notice(`${title} shared.`);return;
+   }
+  }catch(error){
+   if(error?.name==='AbortError')return;
+   downloadJson(text,filename);notice(`${title} downloaded; sharing was unavailable.`);return;
+  }
+ }
+ downloadJson(text,filename);notice(`${title} downloaded.`);
+}
 function exportMatch(team,match){
  const payload={schemaVersion:1,kind:'volleyball-match-export',exportedAt:new Date().toISOString(),
   match:{id:match.id,teamId:team.id,teamName:team.name,opponent:match.opponent,date:match.date,bestOf:match.bestOf,
    setsWon:{us:match.wins.us,them:match.wins.them},winner:match.winner},sets:match.sets};
- const clean=value=>String(value??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'');
- const stem=[team.name,'vs',match.opponent,match.date].map(clean).filter(Boolean).join('-')||'volleyball-match';
- const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
- const link=document.createElement('a');link.href=url;link.download=`${stem}.json`;link.hidden=true;document.body.append(link);link.click();link.remove();
- setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Match export downloaded.');
+ const stem=[team.name,'vs',match.opponent,match.date].map(cleanExportPart).filter(Boolean).join('-')||'volleyball-match';
+ void shareOrDownloadExport(payload,`${stem}.json`,'Match export');
+}
+function exportTeam(team){
+ const sourceTeam=teams.find(item=>item.id===team.id);
+ const exportedAt=new Date().toISOString();
+ const matches=team.matches.map(match=>({
+  id:match.id,opponent:match.opponent,date:match.date,bestOf:match.bestOf,
+  wins:{...match.wins},winner:match.winner,inProgress:match.inProgress,
+  planned:match.planned?structuredClone(match.planned):null,
+  sets:match.sets.map(record=>structuredClone(record)),
+ }));
+ const payload={schemaVersion:1,kind:'volleyball-team-export',exportedAt,
+  team:sourceTeam?structuredClone(sourceTeam):{schemaVersion:null,id:team.id,name:team.name,color:team.color,
+   teamTheme:team.teamTheme??null,logo:team.logo??null,legacy:true},
+  matches,practices:practices.filter(practice=>practice.teamId===team.id).map(practice=>structuredClone(practice)),
+ };
+ const stem=cleanExportPart(team.name)||'volleyball-team';
+ const date=exportedAt.slice(0,10);
+ void shareOrDownloadExport(payload,`${stem}-team-${date}.json`,'Team export');
 }
 function showRotationReportPicker(team,match){
  const lineups=matchSetLineups(match.sets);
@@ -347,7 +386,7 @@ function home(){
  if(!match){
   bar(team.name,team.editable?`${team.level} · ${team.season}`:'Saved team',{label:'Teams',action:()=>go()});
   const teamPractices=practices.filter(p=>p.teamId===team.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  $('content').innerHTML=`${team.logo?`<div class="team-brand" style="--team-color:${team.color}">${logoMarkup(team.logo,team.name)}<div><strong>${esc(team.name)}</strong><span>${esc(colorTheme(team.teamTheme).name)} theme</span></div></div>`:''}<div class="toolbar">${team.editable?`<button data-start="${esc(team.id)}" class="primary" ${team.players.length<6?'disabled':''}>New match</button><button id="startPractice" class="primary" ${team.players.length?'':'disabled'}>New practice</button><button id="teamLineups">Lineups</button><button data-edit="${esc(team.id)}">Edit roster</button>`:''}<button id="teamStats">View stats</button><button id="deleteTeam" class="danger">Delete team</button></div>
+   $('content').innerHTML=`${team.logo?`<div class="team-brand" style="--team-color:${team.color}">${logoMarkup(team.logo,team.name)}<div><strong>${esc(team.name)}</strong><span>${esc(colorTheme(team.teamTheme).name)} theme</span></div></div>`:''}<div class="toolbar">${team.editable?`<button data-start="${esc(team.id)}" class="primary" ${team.players.length<6?'disabled':''}>New match</button><button id="startPractice" class="primary" ${team.players.length?'':'disabled'}>New practice</button><button id="teamLineups">Lineups</button><button data-edit="${esc(team.id)}">Edit roster</button>`:''}<button id="teamStats">View stats</button><button id="exportTeam">Export Team</button><button id="deleteTeam" class="danger">Delete team</button></div>
    ${team.editable&&team.players.length<6?'<p class="muted">Add at least six players to start a match.</p>':''}
    <h2 class="list-title">Matches</h2>
    <div class="list">${team.matches.length?team.matches.map(m=>{
@@ -363,6 +402,7 @@ function home(){
     `<button data-practice="${esc(p.id)}" class="primary">Open practice</button><button data-delete-practice="${esc(p.id)}" class="danger">Delete practice</button>`,'practice-card')).join(''):'<div class="card"><p>No practices recorded yet. Start a practice to track serves and serve receive for this roster.</p></div>'}</div>`;
   $('teamLineups')?.addEventListener('click',()=>go(team.id,null,'lineups'));
   $('teamStats').onclick=()=>go(team.id,null,'stats');
+  $('exportTeam').onclick=()=>exportTeam(team);
   document.querySelector('[data-start]')?.addEventListener('click',()=>matchSetup(team));
   $('startPractice')?.addEventListener('click',()=>save(async()=>{
    const practice=createPractice(teams.find(t=>t.id===team.id),identity());
