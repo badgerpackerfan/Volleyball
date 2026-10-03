@@ -13,5 +13,9 @@
   <button id="teamsLink" class="live" type="button">Teams</button>
 </div></header>
 <main class="practice-main"><p id="notice" role="status" aria-live="polite">Loading practice…</p><button id="reloadPractice" type="button" hidden>Reload saved practice</button><section id="content"></section></main>
+<dialog id="practiceSummaryDialog" class="practice-summary-dialog" aria-labelledby="practiceSummaryTitle">
+  <div class="practice-summary-heading"><h2 id="practiceSummaryTitle">Practice summary</h2><button type="button" id="closePracticeSummary">Done</button></div>
+  <div id="practiceSummaryContent" class="practice-summary-content"></div>
+</dialog>
 <script type="module" src="./src/practice/practice.mjs"></script>
 </body></html>
