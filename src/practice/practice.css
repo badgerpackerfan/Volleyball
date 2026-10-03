@@ -1,17 +1,18 @@
 .practice-main{max-width:1440px;padding-top:12px}
 .practice-main #notice{padding:7px 12px;margin-bottom:10px}
-.practice-intro{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:5px}
+.practice-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:5px}
+.practice-intro-copy{display:flex;align-items:baseline;gap:10px;min-width:0}
 .practice-intro h2{margin:0;font-size:18px}
+.practice-intro .muted{white-space:nowrap}
+.practice-controls{display:flex;gap:8px;flex:none}
+.practice-controls button{min-height:44px;padding:7px 13px}
+.practice-controls .undo-practice{color:#8c2931;border-color:#e2bcc0}
+.practice-controls .undo-practice:disabled{color:#60727e;border-color:#cbd6dd}
 .practice-hint{margin:0 0 10px;color:#526873;font-size:13px}
 .player-practice-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .player-practice{margin:0;padding:11px 12px}
-.player-practice-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.player-practice-heading{display:flex;align-items:center;min-width:0}
 .player-practice-heading h2{margin:0;font-size:17px;overflow-wrap:anywhere}
-.player-undo{min-height:44px;padding:6px 12px;font-size:14px}
-.player-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;padding:5px 0 7px;font-size:13px;font-variant-numeric:tabular-nums}
-.player-summary>span{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:1px 5px;min-width:0;white-space:normal}
-.player-summary strong{font-size:17px}
-.player-summary small{grid-column:1/-1;color:#617580;font-size:10px;line-height:1.25}
 .player-skills{display:grid;gap:6px}
 .player-skill{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:6px}
 .player-skill h3{margin:0;font-size:12px;line-height:1.1;color:#526873}
@@ -25,6 +26,20 @@
 .practice-event{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f6f8f9;border-radius:10px}
 .practice-event strong{flex:1}
 .practice-event time{color:#617580;font-size:13px}
+.practice-summary-dialog{width:min(96vw,960px);max-width:960px;max-height:88vh;max-height:88dvh;overflow:hidden;margin:auto;padding:16px;border:1px solid #d6dfe4;border-radius:16px;background:#fff;color:#273842;box-shadow:0 18px 60px #0004}
+.practice-summary-dialog::backdrop{background:#10202b80;backdrop-filter:blur(2px)}
+.practice-summary-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.practice-summary-heading h2{margin:0;font-size:20px}
+.practice-summary-heading button{min-height:44px;padding:7px 14px}
+.practice-summary-content{min-width:0}
+.practice-summary-key{margin:0 0 10px;color:#60727e;font-size:13px}
+.practice-summary-table-scroll{max-width:100%;max-height:calc(88vh - 120px);max-height:calc(88dvh - 120px);overflow:auto;border:1px solid #d9e1e6;border-radius:12px}
+.practice-summary-table{width:100%;min-width:680px;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.practice-summary-table th,.practice-summary-table td{padding:9px 11px;border-bottom:1px solid #e1e7eb;text-align:left;white-space:nowrap}
+.practice-summary-table thead th{position:sticky;top:0;background:#f3f6f7;color:#536873;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.practice-summary-table tbody th{font-weight:650}
+.practice-summary-table tbody tr:last-child th,.practice-summary-table tbody tr:last-child td{border-bottom:0}
+.practice-summary-table small{display:block;color:#687c86;font-size:10px;font-weight:500}
 #reloadPractice{color:#8c2931}
 #reloadPractice:not([hidden]){margin:0 0 12px}
 @media(min-width:820px){.player-practice-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -34,14 +49,16 @@
  .practice-hint{display:none}
  .player-practice-list{gap:7px}
  .player-practice{padding:8px 10px}
- .player-summary{padding:3px 0 5px}
  .player-skills{gap:4px}
  .result-buttons button{min-height:48px;font-size:16px}
  .pass-buttons button{font-size:19px}
 }
 @media(max-width:700px){
  .practice-main{padding-top:14px}
- .practice-intro{align-items:flex-start;flex-direction:column;gap:2px}
+ .practice-intro{align-items:stretch;flex-direction:column;gap:8px}
+ .practice-intro-copy{align-items:flex-start;flex-direction:column;gap:0}
+ .practice-controls{display:grid;grid-template-columns:1fr 1fr}
+ .practice-controls button{padding:7px 8px}
  .player-practice-list{grid-template-columns:1fr;gap:9px}
  .player-practice{padding:12px}
  .player-skill{grid-template-columns:72px minmax(0,1fr)}
@@ -49,4 +66,6 @@
  .result-buttons button{min-height:58px}
  .practice-event{gap:8px;padding:9px}
  .practice-event time{font-size:12px}
+ .practice-summary-dialog{width:calc(100vw - 20px);max-height:90vh;max-height:90dvh;padding:12px}
+ .practice-summary-table-scroll{max-height:calc(90vh - 112px);max-height:calc(90dvh - 112px)}
 }
