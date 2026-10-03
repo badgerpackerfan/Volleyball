@@ -1,9 +1,10 @@
 import { getSetStats, replaySet } from '../engine/set-engine.mjs';
 import { practiceStats } from '../practice/practice-model.mjs';
 import { lineupConfig } from './lineup-model.mjs';
+import { isExhibitionSet } from './match-model.mjs';
 
 const zero = () => ({ passing: { count: 0, sum: 0 }, serving: { attempts: 0, in: 0, aces: 0, errors: 0 },
-  attacking: { kills: 0, hittingErrors: 0, plusMinus: 0, actions: 0 } });
+  attacking: { kills: 0, hittingErrors: 0, plusMinus: 0, actions: 0, nonTerminalAttempts: 0 } });
 function add(target, source) {
   target.passing.count += source.passing.count;
   target.passing.sum += source.passing.sum;
@@ -15,17 +16,19 @@ function add(target, source) {
   target.attacking.hittingErrors += source.attacking.hittingErrors;
   target.attacking.plusMinus += source.attacking.plusMinus;
   target.attacking.actions += source.attacking.actions;
+  target.attacking.nonTerminalAttempts += source.attacking.nonTerminalAttempts;
 }
 function profile(player) {
   return { id: player.id, name: player.name || '', jersey: String(player.jersey ?? '?') };
 }
 function fromPractice(row) {
-  const { serves, passes } = row;
+  const { serves, passes, attacks } = row;
   return {
     passing: { count: passes.total, sum: passes.sum },
     serving: { attempts: serves.ace + serves.in + serves.error, in: serves.ace + serves.in,
       aces: serves.ace, errors: serves.error },
-    attacking: { kills: 0, hittingErrors: 0, plusMinus: 0, actions: 0 },
+    attacking: { kills: attacks.kill, hittingErrors: attacks.error, plusMinus: 0,
+      actions: attacks.total, nonTerminalAttempts: attacks.in },
   };
 }
 function rowsForPractice(practice, currentPlayers = new Map()) {
@@ -43,10 +46,11 @@ function rowsForSet(record, currentPlayers = new Map()) {
       serving: { attempts: row.serving?.attempts ?? 0, in: row.serving?.in ?? 0,
         aces: row.serving?.aces ?? 0, errors: row.serving?.errors ?? 0 },
       attacking: { kills: row.codes?.K ?? 0, hittingErrors: row.codes?.HE ?? 0, plusMinus: row.net ?? 0,
-        actions: Object.values(row.codes ?? {}).reduce((sum, count) => sum + count, 0) },
+        actions: Object.values(row.codes ?? {}).reduce((sum, count) => sum + count, 0),
+        nonTerminalAttempts: row.attacking?.nonTerminalAttempts ?? 0 },
     },
   })).filter(row => row.stats.passing.count || row.stats.serving.attempts
-    || row.stats.attacking.actions);
+    || row.stats.attacking.actions || row.stats.attacking.nonTerminalAttempts);
 }
 function ordered(rows) {
   return [...rows].sort((a, b) => Number(a.player.jersey) - Number(b.player.jersey)
@@ -106,6 +110,7 @@ export function buildTeamStats(team, allPractices) {
       return {
         id: record.config.id, number: record.config.setNumber ?? 1,
         score: state.score, status: state.status, target: record.config.rules.target,
+        exhibition: isExhibitionSet(record,match.sets),
         lineupName: lineups[index].name, lineupInheritedFromSet: lineups[index].inheritedFromSet,
         rows,
       };
@@ -136,6 +141,7 @@ const playerAnalysisZero = player => ({
   player: profile(player),
   passing: { count: 0, sum: 0, ratings: { 0: 0, 1: 0, 2: 0, 3: 0 }, linked: 0, sideoutWins: 0 },
   serving: { attempts: 0, in: 0, aces: 0, errors: 0, pointsWon: 0, pointsLost: 0 },
+  attacking: { nonTerminalAttempts: 0 },
 });
 const addPass = (target, rating) => {
   target.count++; target.sum += rating.rating; target.ratings[rating.rating]++;
@@ -306,6 +312,9 @@ export function buildLineupAnalysis(team) {
         }
       }
     }
+
+    for (const attempt of state.attackAttempts ?? [])
+      analysisPlayer(lineup, attempt.playerId).attacking.nonTerminalAttempts++;
 
     let runRotation = null, teamRun = 0, opponentRun = 0;
     for (const rally of state.rallies) {
