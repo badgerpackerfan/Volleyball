@@ -1,4 +1,4 @@
-import { matchWinner, orderMatchSets } from '../teams/match-model.mjs';
+import { matchWinner, orderMatchSets, isExhibitionSet } from '../teams/match-model.mjs';
 import { FORMATIONS } from './formations.mjs';
 import { checkCommand, replaySet } from '../engine/set-engine.mjs';
 import { receiveLayoutError } from '../engine/receive-layout.mjs';
@@ -241,6 +241,7 @@ function syncState() {
 function actionLabel(a) {
   if(a.type==='rally') return `${TEAM_NAMES[a.payload.team]} ${a.payload.code}${a.payload.playerId ? ' #'+numberFor(a.payload.playerId) : ''}`;
   if(a.type==='receive.rating') return `Pass #${numberFor(a.payload.playerId)} · ${a.payload.rating}`;
+  if(a.type==='attack.attempt') return `Attack #${numberFor(a.payload.playerId)}`;
   return {'substitution':'Substitution','libero.in':'Libero in','libero.out':'Libero out','libero.switch':'Libero switch',
     'timeout':'Timeout','receive.edit':'Receive formation','receive.select':'Receive formation choice','libero.plan':'Libero plan','set.end':'End set',
     'rally.edit':a.payload.delete ? 'Deleted rally' : 'Rally edit','correction':'Score fix'}[a.type] || a.type;
@@ -276,6 +277,7 @@ async function perform(cmd, clear=true) {
     await session.run(cmd);
     if (cmd.type === 'timeout') {
       ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, showBase: false,
+        pendingPassRating: null, playerAction: null,
         timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
         timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} } };
     } else if (cmd.type === 'rally' || cmd.type === 'correction') {
@@ -284,7 +286,7 @@ async function perform(cmd, clear=true) {
     }
     syncState();
     if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
-    if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null}; $('sheet').classList.remove('open'); }
+    if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,playerAction:null}; $('sheet').classList.remove('open'); }
     status(session.state.status==='ended' ? 'Set ended · saved on this device' : 'Saved on this device');
     return true;
   } catch(e) {
@@ -390,7 +392,7 @@ function render() {
   $('editReceive').textContent = editingReceive ? 'Done' : 'Adjust receive';
   $('editReceive').setAttribute('aria-pressed', String(editingReceive));
   $('resetReceive').hidden = timeoutMode || !editingReceive;
-  const needPlayer = ui.pendingCode || ui.mode;
+  const needPlayer = ui.pendingCode || ui.mode || ui.pendingPassRating !== null || ui.playerAction;
   [4, 3, 2, 5, 6, 1].forEach((pos, i) => {
     const slot = slotAt(pos), p = S.onCourt[slot], info = ROSTER[p] || { n: '', r: '' };
     const z = court.querySelector(`[data-slot="${slot}"]`);
@@ -457,9 +459,28 @@ function render() {
   const tb = $('teamBtn');
   const teamOk = ui.pendingCode && !EARNED.includes(ui.pendingCode);
   tb.disabled = timeoutMode || !teamOk; tb.classList.toggle('ready', !!teamOk);
+  const recordedPass = passRatingForCurrentPoint();
+  const passPanel = $('passScorePanel');
+  passPanel.hidden = S.serving !== 'them' || timeoutMode || session.state.status === 'ended';
+  $('passScoreGrid').innerHTML = PASS_RATINGS.map(([rating,title,description])=>
+    `<button type="button" data-rating="${rating}" class="${ui.pendingPassRating===rating?'on':''}" aria-pressed="${ui.pendingPassRating===rating}" aria-label="Pass score ${rating}: ${title}, ${description}" title="${description}" ${recordedPass||ui.mode||editingReceive?'disabled':''}><b>${rating}</b><span>${title}</span></button>`).join('');
+  $('passScoreGrid').querySelectorAll('[data-rating]').forEach(button=>button.onclick=()=>{
+    if(recordedPass||ui.mode||editingReceive)return;
+    const rating=Number(button.dataset.rating);
+    ui={...ui,pendingCode:null,pendingSlot:null,playerAction:null,
+      pendingPassRating:ui.pendingPassRating===rating?null:rating};
+    render();
+  });
+  $('passScoreStatus').hidden=!recordedPass;
+  if(recordedPass) $('passScoreStatus').textContent=`Recorded: #${numberFor(recordedPass.playerId)} · score ${recordedPass.rating} (Undo to change)`;
+  $('attackAction').disabled=timeoutMode||editingReceive||session.state.status==='ended'||!!ui.mode;
+  $('attackAction').classList.toggle('on',ui.playerAction==='attack');
+  $('attackAction').setAttribute('aria-pressed',String(ui.playerAction==='attack'));
   let hint;
   if (ui.mode === 'sub') hint = '<b>Sub:</b> tap the player coming out. <a href="#" id="cx">Cancel</a>';
   else if (ui.mode === 'libero') hint = '<b>Libero:</b> tap the back-row player the libero replaces. <a href="#" id="cx">Cancel</a>';
+  else if (ui.pendingPassRating !== null) hint = `<b>Pass score ${ui.pendingPassRating}</b> — tap the passer on court. <a href="#" id="cx">Cancel</a>`;
+  else if (ui.playerAction === 'attack') hint = '<b>Attack attempt</b> — tap the attacker on court. <a href="#" id="cx">Cancel</a>';
   else if (ui.pendingCode) hint = `<b>${codeName(ui.pendingCode)}</b> — tap the player on the court${EARNED.includes(ui.pendingCode) ? '' : ', or Team'}. <a href="#" id="cx">Cancel</a>`;
   else if (ui.pendingSlot) hint = `<b>#${S.onCourt[ui.pendingSlot]}</b> selected — now tap a code. <a href="#" id="cx">Cancel</a>`;
   else hint = '';
@@ -793,24 +814,24 @@ function canPick(pos, slot) {
   return true;
 }
 
-function passRatingLoggedForCurrentPoint() {
-  if (!session) return false;
+function passRatingForCurrentPoint() {
+  if (!session) return null;
   const activeActions = new Set(session.state.activeActionIds);
-  const recordedRallies = new Set(session.state.rallies.map(r => r.actionId));
   for (let i = session.record.actions.length - 1; i >= 0; i--) {
     const action = session.record.actions[i];
     if (!activeActions.has(action.id)) continue;
-    if (action.type === 'receive.rating') return true;
-    if (action.type === 'rally' && recordedRallies.has(action.id)) return false;
+    if (action.type === 'receive.rating') return { rating: action.payload.rating, playerId: action.payload.playerId };
+    if (action.type === 'rally') return null;
   }
-  return false;
+  return null;
 }
 
-function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null }; render(); }
+function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, playerAction: null }; render(); }
 
 /* ---------------- Interaction ---------------- */
 function onCode(team, code) {
   if (ui.mode) return;
+  if (ui.pendingPassRating !== null || ui.playerAction) ui={...ui,pendingPassRating:null,playerAction:null};
   if (team === 'them') { commit('them', code, null); return; }
   if (code === 'SA' || code === 'SE') { commit('us', code, server()); return; }
   if (ui.pendingSlot) { commit('us', code, S.onCourt[ui.pendingSlot]); return; }
@@ -827,25 +848,20 @@ function onTile(pos, slot) {
     const avail = LIBEROS.filter(l => !(S.libero && S.libero.player === l));
     liberoIn(slot, avail[0]); render(); return;
   }
-  if (ui.pendingCode) { commit('us', ui.pendingCode, S.onCourt[slot]); return; }
-  if (S.serving === 'them') {
-    if (!passRatingLoggedForCurrentPoint()) openPassRating(S.onCourt[slot]);
+  if (ui.pendingPassRating !== null) {
+    const rosterId=playerId(S.onCourt[slot]);
+    if(rosterId) void command('receive.rating',{playerId:rosterId,rating:ui.pendingPassRating});
     return;
   }
+  if (ui.playerAction === 'attack') {
+    const rosterId=playerId(S.onCourt[slot]);
+    if(rosterId) void command('attack.attempt',{playerId:rosterId});
+    return;
+  }
+  if (ui.pendingCode) { commit('us', ui.pendingCode, S.onCourt[slot]); return; }
+  if (S.serving === 'them') return;
   ui.pendingSlot = ui.pendingSlot === slot ? null : slot;
   render();
-}
-
-function openPassRating(number) {
-  const person=ROSTER[number], rosterId=playerId(number);
-  if(!person||!rosterId||S.serving!=='them') return;
-  openSheet(`<h4>Serve receive · #${number}</h4><p>${person.n} · choose a pass score.</p>
-    <div class="pass-rating-grid">${PASS_RATINGS.map(([rating,title,description])=>`<button type="button" data-rating="${rating}" aria-label="Pass score ${rating}: ${title}, ${description}"><b>${rating}</b><span><strong>${title}</strong><small>${description}</small></span></button>`).join('')}</div>
-    <button class="cancel" id="shCancel">Cancel</button>`);
-  $('sheetCard').querySelectorAll('[data-rating]').forEach(button=>button.onclick=()=>{
-    closeSheet();
-    void command('receive.rating',{playerId:rosterId,rating:Number(button.dataset.rating)});
-  });
 }
 
 /* Manual receive editor: only the selected player moves. Validate every proposed
@@ -989,7 +1005,7 @@ $('rcvToggle').onclick = () => {
 $('timeoutDone').onclick = () => {
   if (!ui.timeoutMode || tacticalDrag) return;
   ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null,
-    pendingCode: null, pendingSlot: null, mode: null, showBase: false };
+    pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, playerAction: null, showBase: false };
   $('receiveStatus').textContent = '';
   render();status('Timeout ended · ready to continue the set.');
 };
@@ -998,15 +1014,22 @@ $('teamBtn').onclick = () => { if (ui.pendingCode) { commit('us', ui.pendingCode
 
 $('undoBtn').onclick = () => command('undo', {});
 
-$('actSub').onclick = () => { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: ui.mode === 'sub' ? null : 'sub' }; render(); };
+$('attackAction').onclick = () => {
+  if($('attackAction').disabled)return;
+  ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,
+    playerAction:ui.playerAction==='attack'?null:'attack'};
+  render();
+};
+
+$('actSub').onclick = () => { ui = { ...ui, pendingCode: null, pendingSlot: null, pendingPassRating: null, playerAction: null, mode: ui.mode === 'sub' ? null : 'sub' }; render(); };
 
 $('actLib').onclick = () => {
-  if (ui.mode === 'libero') { ui = { ...ui, mode: null }; render(); return; }
+  if (ui.mode === 'libero') { ui = { ...ui, mode: null, pendingPassRating: null, playerAction: null }; render(); return; }
+  ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,playerAction:null};
   openLiberoPlan();
 };
 
 function callTimeout(team) { return command('timeout', {team}); }
-$('teamMenu').onclick = () => $('menuBtn').onclick();
 const TEAM_MENU = [
   ['rotation-report', 'Rotation report', "The paper sheet’s six columns, with +/- per rotation"],
   ['lineup', 'Lineup', "This set’s lineup, planned swaps and libero plan"],
@@ -1016,7 +1039,7 @@ const TEAM_MENU = [
   ['switch-team', 'Switch team', 'Keep this set saved and open Teams, rosters, and match setup'],
   ['settings', 'Settings', "Coach’s corner rules, button labels, rule presets"],
 ];
-$('menuBtn').onclick = () => {
+$('teamMenu').onclick = () => {
   openSheet(`<h4>${esc(TEAM_NAMES.us)} · ${esc(TEAM_NAMES.them)}</h4>
     <div class="menu-list">${TEAM_MENU.map(([id, title, description]) => {
       return `<button data-menu="${id}"><b>${title}</b><span>${description}</span></button>`;
@@ -1032,6 +1055,7 @@ $('menuBtn').onclick = () => {
 // What the menu screens need from the live page; getters so they always see committed state.
 const menuContext = {
   get record() { return session.record; }, get state() { return session.state; }, get teams() { return TEAM_NAMES; },
+  get exhibition() { return isExhibitionSet(session.record,MATCH_RECORDS); },
   matchRecords: () => MATCH_RECORDS.map(r => r.config.id === session.record.config.id ? session.record : r),
   open: (html, wide) => openSheet(html, wide), close: () => closeSheet(),
   command: (type, payload) => command(type, payload), check: cmd => checkCommand(session.record, cmd),
@@ -1128,6 +1152,7 @@ async function start() {
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
     session=new SetSession(store,record); syncState();
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
+      pendingPassRating:null,playerAction:null,
       timeoutMode:false,timeoutView:null,timeoutPasser:null,timeoutPositions:null};
     failedCommand=null; document.body.classList.remove('failed'); $('reloadSaved').hidden=true; $('retrySave').hidden=true;
     render();fit();status(session.state.status==='ended'?'Set ended · saved on this device':'Saved on this device');
