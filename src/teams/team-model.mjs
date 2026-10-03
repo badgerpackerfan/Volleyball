@@ -60,7 +60,9 @@ export function makeMatchSet(team, choices, identity) {
   const setNumber=identity.setNumber ?? 1;
   need(Number.isSafeInteger(setNumber)&&setNumber>=1,'Invalid set number.');
   const bestOf=choices.bestOf ?? 3;
-  const plan=setPlan({bestOf,setNumber,previousSet:choices.previousSet});
+  need(choices.exhibition===undefined||typeof choices.exhibition==='boolean','Exhibition must be true or false.');
+  const exhibition=choices.exhibition===true;
+  const plan=setPlan({bestOf,setNumber,previousSet:choices.previousSet,exhibition});
   const firstServe=plan.firstServe ?? choices.firstServe;
   need(['us','them'].includes(firstServe),'Choose who serves first.');
   if(choices.lineupId)need(t.lineups.some(l=>l.id===choices.lineupId),'Choose a saved lineup from this team.');
@@ -69,6 +71,7 @@ export function makeMatchSet(team, choices, identity) {
   if(mode==='carry')need(choices.previousSet.config.teamId===t.id&&choices.previousSet.config.matchId===identity.matchId,'Carry rotation only from the previous set of this team’s match.');
   return createSet({setNumber,bestOf,rules:{target:plan.target},id:identity.setId,matchId:identity.matchId,teamId:t.id,teamRevision:t.revision,
     teamName:t.name,teamColor:t.color,teamTheme:t.teamTheme,opponentName:opponent,matchDate:choices.date,
+    ...(exhibition?{exhibition:true}:{}),
     firstServe,startingRotation:rotation,
     startingRotationSource:{mode,...(mode==='carry'?{setId:choices.previousSet.config.id,revision:choices.previousSet.actions.length}:{})},
     ...(choices.lineupId?{lineupTemplate:{id:choices.lineupId,name:t.lineups.find(l=>l.id===choices.lineupId)?.name??'Custom'}}:{}),
