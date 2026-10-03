@@ -1,5 +1,6 @@
 import { openSetStore } from '../storage/indexeddb.mjs';
 import { practiceStats, practiceEventLabel, recordPracticeResult, undoPracticeResult } from './practice-model.mjs';
+import { PLAYER_PERFORMANCE_HEADERS, playerPerformanceCells } from '../app/player-performance.mjs';
 import { registerApp } from '../app/pwa.mjs';
 
 registerApp();
@@ -21,10 +22,6 @@ async function withFreshStore(work){
 }
 function player(playerId){return practice.players.find(p=>p.id===playerId);}
 function formatTime(value){return new Date(value).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});}
-function hittingPercent(attacks){
-  if(!attacks.total)return '—';
-  return ((attacks.kill-attacks.error)/attacks.total).toFixed(3).replace(/^(-?)0\./,'$1.');
-}
 function returnToTeam(){location.href=practice?`./teams.html#team=${encodeURIComponent(practice.teamId)}`:'./teams.html';}
 
 function render(){
@@ -37,12 +34,14 @@ function render(){
   const summaryRows=practice.players.map(p=>{
     const {serves,passes,attacks}=stats.get(p.id);
     const serveAttempts=serves.ace+serves.in+serves.error;
-    const passAverage=passes.total?(passes.sum/passes.total).toFixed(2):'—';
-    const serveIn=serveAttempts?`${Math.round((serves.ace+serves.in)*100/serveAttempts)}%`:'—';
-    const attackSummary=`${hittingPercent(attacks)}<small>K ${attacks.kill} · In ${attacks.in} · E ${attacks.error}</small>`;
-    return `<tr><th scope="row">#${esc(p.jersey)} ${esc(p.name)}</th><td>${passAverage}<small>n=${passes.total}</small></td><td>${serveIn}<small>n=${serveAttempts}</small></td><td>${attackSummary}</td></tr>`;
+    const cells=playerPerformanceCells({
+      passing:{count:passes.total,sum:passes.sum},
+      serving:{attempts:serveAttempts,in:serves.ace+serves.in},
+      attacking:{kills:attacks.kill,in:attacks.in,error:attacks.error,total:attacks.total},
+    });
+    return `<tr><th scope="row">#${esc(p.jersey)} ${esc(p.name)}</th>${cells}</tr>`;
   }).join('');
-  $('practiceSummaryContent').innerHTML=`<p class="practice-summary-key">Hitting % = (kills − errors) ÷ all attacks, shown in standard volleyball decimal form. In is a non-terminal attempt. Serve-in % includes aces. Pass 0 is pass quality, not an error.</p><div class="practice-summary-table-scroll"><table class="practice-summary-table"><thead><tr><th>Player</th><th>Pass avg</th><th>Serve In %</th><th>Hitting %</th></tr></thead><tbody>${summaryRows}</tbody></table></div>`;
+  $('practiceSummaryContent').innerHTML=`<p class="practice-summary-key">Hitting % = (kills − errors) ÷ all attacks, shown in standard volleyball decimal form. In is a non-terminal attempt. Serve-in % includes aces. Pass 0 is pass quality, not an error.</p><div class="practice-summary-table-scroll"><table class="practice-summary-table player-performance-table"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}</tr></thead><tbody>${summaryRows}</tbody></table></div>`;
   $('content').innerHTML=`<div class="practice-intro"><div class="practice-intro-copy"><h2>${esc(practice.teamName)} practice</h2><span class="muted">${practice.events.length} results saved</span></div><div class="practice-controls"><button type="button" id="practiceSummary">Practice summary</button><button type="button" id="undoPractice" class="undo-practice" ${practice.events.length&&!busy?'':'disabled'}>Undo last</button></div></div>
     <p class="practice-hint">Tap a result to record it. Pass 0 is pass quality only; Attack In records a non-terminal attack.</p>
     <section class="player-practice-list" aria-label="Player practice tracking">${practice.players.map(p=>{
