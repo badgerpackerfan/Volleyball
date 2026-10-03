@@ -3,6 +3,7 @@
 // the same journal as scoring, so it is saved, replayed, and undoable.
 import { ACTION_CODES, getSetStats, replaySet, setterPosition } from '../engine/set-engine.mjs';
 import { matchSetLineups } from '../teams/stats-model.mjs';
+import { isExhibitionSet } from '../teams/match-model.mjs';
 export { DEFAULT_SETTINGS, loadSettings } from './themes.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -125,7 +126,7 @@ export function rotationReport(ctx) {
         <dt>Sideout</dt><dd>${pct(t.sideoutRate)}</dd><dt>Point-scoring</dt><dd>${pct(t.scoringRate)}</dd></dl></section>`;
   }).join('');
   const fixes = state.corrections.map(f => `<li>At ${f.from.score.us}–${f.from.score.them} (R${f.from.rotation}): set to ${f.to.score.us}–${f.to.score.them}, R${f.to.rotation}, ${esc(ctx.teams[f.to.servingTeam])} serving${f.reason ? ` · ${esc(f.reason)}` : ''}</li>`).join('');
-  ctx.open(`<h4>Rotation report · Set ${c.setNumber ?? 1}</h4>
+  ctx.open(`<h4>Rotation report · Set ${c.setNumber ?? 1}${ctx.exhibition?' · Exhibition':''}</h4>
     <p>${esc(ctx.teams.us)} ${state.score.us}–${state.score.them} ${esc(ctx.teams.them)} · ${c.system} · ${esc(lineup.name)}${lineup.inheritedFromSet ? ` (continued from Set ${lineup.inheritedFromSet})` : ''}. Each rally is listed in the rotation we were in when it was played. Sideout = rallies won when receiving; point-scoring = rallies won when serving.${best !== null && best !== worst ? ' Best and worst rotations are highlighted.' : ''}</p>
     <div class="rr">${columns}</div>
     ${fixes ? `<h5>Scoresheet fixes</h5><ul class="fix-list">${fixes}</ul>` : ''}
@@ -223,9 +224,13 @@ export function fixScore(ctx) {
 
 /* Match summary: set scores, key stats, players, and rotation tables per set. */
 export function matchSummary(ctx) {
-  const sets = ctx.matchRecords().map(record => { const state = replaySet(record); return { record, state, stats: getSetStats(state) }; });
-  const lineups = matchSetLineups(ctx.matchRecords());
-  const c = ctx.record.config, won = sets.filter(x => x.state.status === 'ended' && x.state.winner === 'us').length, lost = sets.filter(x => x.state.status === 'ended' && x.state.winner === 'them').length;
+  const records=ctx.matchRecords();
+  const sets = records.map(record => { const state = replaySet(record); return { record, state, stats: getSetStats(state), exhibition:isExhibitionSet(record,records) }; });
+  const lineups = matchSetLineups(records);
+  const c = ctx.record.config, officialSets=sets.filter(x=>!x.exhibition),
+    won = officialSets.filter(x => x.state.status === 'ended' && x.state.winner === 'us').length,
+    lost = officialSets.filter(x => x.state.status === 'ended' && x.state.winner === 'them').length,
+    exhibitionCount=sets.filter(x=>x.exhibition).length;
   const sum = (st, team, kind) => Object.entries(st.stats.codes[team]).filter(([code]) => ACTION_CODES[code] === kind).reduce((n, [, v]) => n + v, 0);
   const metrics = st => { const ourE = sum(st, 'us', 'earned'), ourX = sum(st, 'us', 'error'), theirE = sum(st, 'them', 'earned'), theirX = sum(st, 'them', 'error');
     return { ourE, ourX, theirE, theirX, given: ourX + theirE ? ourX / (ourX + theirE) : null, free: ourE + theirX ? theirX / (ourE + theirX) : null }; };
@@ -234,38 +239,40 @@ export function matchSummary(ctx) {
   const players = new Map();
   const currentRoster = new Map((ctx.players ?? []).map(player => [player.id, player]));
   for (const { record, stats } of sets) for (const [id, p] of Object.entries(stats.players)) {
-    const who = currentRoster.get(id) ?? record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, HE: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0 };
+    const who = currentRoster.get(id) ?? record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, HE: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0, nonTerminalAttacks: 0 };
     for (const code of ['K', 'BK', 'SA', 'HE']) row[code] += p.codes[code] ?? 0;
     row.errors += p.errors; row.net += p.net;
     row.passCount += p.passing?.count ?? 0; row.passSum += p.passing?.sum ?? 0;
     row.serveAttempts += p.serving?.attempts ?? 0; row.servesIn += p.serving?.in ?? 0;
+    row.nonTerminalAttacks += p.attacking?.nonTerminalAttempts ?? 0;
     players.set(id, row);
   }
   const ranked = [...players.values()].sort((a, b) => b.net - a.net || Number(a.jersey) - Number(b.jersey));
   const errorCounts = {};
   for (const { stats } of sets) for (const [code, n] of Object.entries(stats.codes.us)) if (ACTION_CODES[code] === 'error') errorCounts[code] = (errorCounts[code] ?? 0) + n;
   const topError = Object.entries(errorCounts).sort((a, b) => b[1] - a[1])[0];
-  const rotLines = sets.map(({ record, stats }, i) => { const r = Object.entries(stats.rotations).filter(([, x]) => x.won + x.lost); if (r.length < 2) return null;
+  const rotLines = sets.map(({ record, stats, exhibition }, i) => { const r = Object.entries(stats.rotations).filter(([, x]) => x.won + x.lost); if (r.length < 2) return null;
     const b = r.reduce((m, x) => x[1].net > m[1].net ? x : m), w = r.reduce((m, x) => x[1].net < m[1].net ? x : m);
-    return `Set ${record.config.setNumber ?? i + 1}: best R${b[0]} (${signed(b[1].net)}), worst R${w[0]} (${signed(w[1].net)})`; }).filter(Boolean);
+    return `${exhibition?'Exhibition ':''}Set ${record.config.setNumber ?? i + 1}: best R${b[0]} (${signed(b[1].net)}), worst R${w[0]} (${signed(w[1].net)})`; }).filter(Boolean);
   const takeaways = [...rotLines,
     ...(topError ? [`Most common error: ${WORDS[topError[0]]} (${topError[1]})`] : []),
     ...(ranked[0]?.net > 0 ? [`Top player +/-: #${esc(ranked[0].jersey)} ${esc(ranked[0].name)} (${signed(ranked[0].net)})`] : []),
     ...(ranked.length && ranked.at(-1).net < 0 ? [`Struggled most: #${esc(ranked.at(-1).jersey)} ${esc(ranked.at(-1).name)} (${signed(ranked.at(-1).net)})`] : [])];
-  const head = sets.map((x, i) => `<th>Set ${x.record.config.setNumber ?? i + 1}</th>`).join('') + '<th>Match</th>';
+  const head = sets.map((x, i) => `<th>Set ${x.record.config.setNumber ?? i + 1}${x.exhibition?' · Exhibition':''}</th>`).join('') + '<th>Match</th>';
   const row = (label, f, fmt = v => v) => `<tr><td>${label}</td>${all.map(m => `<td>${fmt(f(m))}</td>`).join('')}<td>${fmt(f(total))}</td></tr>`;
   ctx.open(`<h4>Match summary · ${esc(ctx.teams.us)} vs ${esc(ctx.teams.them)}</h4>
-    <p>${esc(c.matchDate || '')}${c.bestOf ? ` · Best of ${c.bestOf}` : ''} · Sets ${won}–${lost}</p>
-    <div class="set-chips">${sets.map((x, i) => { const lineup = lineups[i]; return `<div class="${x.state.status === 'ended' ? (x.state.winner === 'us' ? 'won' : 'lost') : 'live'}"><small>Set ${x.record.config.setNumber ?? i + 1}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b><small class="set-lineup">${esc(lineup.name)}${lineup.inheritedFromSet ? ` · continued from Set ${lineup.inheritedFromSet}` : ''}</small></div>`; }).join('')}</div>
+    <p>${esc(c.matchDate || '')}${c.bestOf ? ` · Best of ${c.bestOf}` : ''} · Official sets ${won}–${lost}${exhibitionCount?` · ${exhibitionCount} exhibition set${exhibitionCount===1?'':'s'} excluded from result`:''}</p>
+    <div class="set-chips">${sets.map((x, i) => { const lineup = lineups[i]; return `<div class="${x.state.status === 'ended' ? (x.state.winner === 'us' ? 'won' : 'lost') : 'live'}"><small>Set ${x.record.config.setNumber ?? i + 1}${x.exhibition?' · Exhibition':''}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b><small class="set-lineup">${esc(lineup.name)}${lineup.inheritedFromSet ? ` · continued from Set ${lineup.inheritedFromSet}` : ''}</small></div>`; }).join('')}</div>
     ${takeaways.length ? `<h5>Takeaways</h5><ul class="fix-list">${takeaways.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
     <div class="summary-grid"><div><h5>Point source</h5><p>Won = our kills, blocks, or aces; received = opponent errors; gifted = our errors; lost = opponent kills, blocks, or aces.</p><table class="lib-table stat-table"><thead><tr><th></th>${head}</tr></thead><tbody>
       ${row('Won by us · K/BK/SA', m => m.ourE)}${row('Received · opponent errors', m => m.theirX)}${row('Gifted · our errors', m => m.ourX)}${row('Lost · opponent K/BK/SA', m => m.theirE)}
       ${row('Points given away', m => m.given, pct)}${row('Free points received', m => m.free, pct)}</tbody></table>
       <h5>Rotation +/- by set</h5><table class="lib-table stat-table"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map(r => `<th>R${r}</th>`).join('')}</tr></thead><tbody>
       ${sets.map((x, i) => `<tr><td>Set ${x.record.config.setNumber ?? i + 1}</td>${[1, 2, 3, 4, 5, 6].map(r => { const t = x.stats.rotations[r]; return `<td class="${t.net > 0 ? 'pos' : t.net < 0 ? 'neg' : ''}">${t.won + t.lost ? signed(t.net) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
-      <div><h5>Players · match</h5><table class="lib-table stat-table"><thead><tr><th>Player</th><th>Kills</th><th>Hitting errors</th><th>BK</th><th>Aces</th><th>Serve in</th><th>Err</th><th>Pass avg</th><th>+/-</th></tr></thead><tbody>
-      ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td><td>${p.K}</td><td>${p.HE}</td><td>${p.BK}</td><td>${p.SA}</td><td>${p.serveAttempts ? `${Math.round(p.servesIn * 100 / p.serveAttempts)}% (${p.servesIn}/${p.serveAttempts})` : '—'}</td><td>${p.errors}</td><td>${p.passCount ? `${(p.passSum / p.passCount).toFixed(2)} (n=${p.passCount})` : '—'}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="9">No player stats yet</td></tr>'}</tbody></table>
+      <div><h5>Players · match</h5><table class="lib-table stat-table"><thead><tr><th>Player</th><th>Kills</th><th>Hitting errors</th><th>Non-terminal attacks</th><th>BK</th><th>Aces</th><th>Serve in</th><th>Err</th><th>Pass avg</th><th>+/-</th></tr></thead><tbody>
+      ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td><td>${p.K}</td><td>${p.HE}</td><td>${p.nonTerminalAttacks}</td><td>${p.BK}</td><td>${p.SA}</td><td>${p.serveAttempts ? `${Math.round(p.servesIn * 100 / p.serveAttempts)}% (${p.servesIn}/${p.serveAttempts})` : '—'}</td><td>${p.errors}</td><td>${p.passCount ? `${(p.passSum / p.passCount).toFixed(2)} (n=${p.passCount})` : '—'}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="10">No player stats yet</td></tr>'}</tbody></table>
       <p>Serve in counts each rally-ending serve once: aces count in, serve errors count out.</p>
+      <p>Non-terminal attacks are tracked separately and do not count as kills, errors, or player +/-.</p>
       <p>Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
