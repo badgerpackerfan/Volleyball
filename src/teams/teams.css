@@ -1,5 +1,5 @@
 /* Mobile-first: iPad and phone are the primary targets; every action is a button-sized touch target. */
-:root{font:16px/1.45 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#273842;background:#eef2f4;color-scheme:light;-webkit-text-size-adjust:100%;--accent:#286747;--court:#447454;--court-2:#356448;--c-set:#a82e29;--c-oh:#254fa7;--c-mid:#17613b}
+:root{font:16px/1.45 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#273842;background:#eef2f4;color-scheme:light;-webkit-text-size-adjust:100%;--accent:#286747;--court:#447454;--court-2:#356448;--c-set:#a82e29;--c-oh:#254fa7;--c-mid:#17613b;--win:#16713c;--lose:#b3251f}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;min-height:100vh;-webkit-tap-highlight-color:transparent}
@@ -166,6 +166,10 @@ body.busy{cursor:progress}
 .stats-table tbody tr:last-child th,.stats-table tbody tr:last-child td{border-bottom:0}
 .stats-table tbody th{font-weight:650}
 .stats-table small{display:block;color:#687c86;font-size:11px;font-weight:500}
+.player-performance-table{min-width:680px}
+.player-performance-table td.player-performance-metric{vertical-align:top;text-align:left;white-space:normal}
+.player-performance-table .player-stat-value{display:block;font-variant-numeric:tabular-nums}
+.player-performance-table .player-stat-detail{display:block;margin-top:1px;color:#687c86;font-size:10px;font-weight:500;line-height:1.3;white-space:normal}
 .stats-table td.pos{color:var(--win,#16713c);font-weight:750}.stats-table td.neg{color:var(--lose,#b3251f);font-weight:750}
 .stats-breakdowns{display:grid;gap:10px}
 .stats-group,.stats-set{border:1px solid #d9e1e6;border-radius:14px;background:#fff;overflow:hidden}
@@ -192,6 +196,8 @@ body.busy{cursor:progress}
 .analysis-rotation.negative{border-left-color:var(--lose,#b3251f)}
 .analysis-rotation h4{display:flex;align-items:baseline;justify-content:space-between;gap:5px;margin:0;font-size:17px}
 .analysis-rotation h4 span{font-size:13px;font-variant-numeric:tabular-nums}
+.analysis-rotation .pos,.lineup-analysis-group .pos{color:var(--win);font-weight:800}
+.analysis-rotation .neg,.lineup-analysis-group .neg{color:var(--lose);font-weight:800}
 .analysis-volume{margin:0 0 8px;color:#60727e;font-size:12px}
 .analysis-rotation dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 8px;margin:0;font-size:12px}
 .analysis-rotation dt{color:#60727e}.analysis-rotation dd{margin:0;text-align:right;font-weight:650;font-variant-numeric:tabular-nums}
@@ -223,9 +229,11 @@ body.busy{cursor:progress}
 .report-body>p{color:#60727e;line-height:1.45}
 .report-body .cancel{width:100%;margin-top:14px}
 .report-body .lib-table{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:10px}
+.report-body .player-performance-table{min-width:760px}
 .report-body .lib-table th{text-align:right;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#60727e;padding:2px 6px}
 .report-body .lib-table td{padding:4px 6px;border-top:1px solid var(--line)}
 .report-body .lib-table td+td{text-align:right;font-variant-numeric:tabular-nums}
+.report-body .player-performance-table td.player-performance-metric{text-align:left;vertical-align:top;white-space:normal}
 .report-body .stat-table td:first-child{text-align:left}
 .report-body .stat-table td.pos{color:var(--win);font-weight:800}.report-body .stat-table td.neg{color:var(--lose);font-weight:800}
 .report-body .fix-list{margin:0 0 8px;padding-left:20px;font-size:15px;line-height:1.5}
@@ -249,6 +257,7 @@ body.busy{cursor:progress}
 .report-body .rr-log .empty{color:#60727e;font-size:12px}
 .report-body .rr-tot{display:grid;grid-template-columns:1fr auto;gap:2px 6px;margin:0;font-size:13px}
 .report-body .rr-tot dt{color:#60727e}.report-body .rr-tot dd{margin:0;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.report-body .rr-tot dd.pos{color:var(--win)}.report-body .rr-tot dd.neg{color:var(--lose)}
 .report-body .set-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
 .report-body .set-chips div{display:flex;flex-direction:column;border-radius:12px;padding:8px 14px;background:#f3f6f7}
 .report-body .set-chips .won{background:color-mix(in srgb,var(--win) 12%,#fff);color:var(--win)}
