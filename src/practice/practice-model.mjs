@@ -7,6 +7,7 @@ const localDate=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStar
 
 export const SERVE_RESULTS=Object.freeze(['ace','in','error']);
 export const PASS_RATINGS=Object.freeze([0,1,2,3]);
+export const ATTACK_RESULTS=Object.freeze(['kill','in','error']);
 
 export function validatePractice(input){
   const practice=structuredClone(input);
@@ -36,6 +37,7 @@ export function validatePractice(input){
     need(typeof event.occurredAt==='string'&&Number.isFinite(Date.parse(event.occurredAt)),'Invalid event time.');
     if(event.skill==='serve')need(SERVE_RESULTS.includes(event.result),'Invalid serve result.');
     else if(event.skill==='pass')need(PASS_RATINGS.includes(event.result),'Invalid serve-receive rating.');
+    else if(event.skill==='attack')need(ATTACK_RESULTS.includes(event.result),'Invalid attack result.');
     else throw new Error('Unsupported practice skill.');
     eventIds.add(event.id);
     return event;
@@ -72,16 +74,19 @@ export function practiceStats(input){
   const practice=validatePractice(input);
   const stats=new Map(practice.players.map(player=>[player.id,{
     player,serves:{ace:0,in:0,error:0},passes:{0:0,1:0,2:0,3:0,total:0,sum:0},
+    attacks:{kill:0,in:0,error:0,total:0},
   }]));
   for(const event of practice.events){
     const row=stats.get(event.playerId);
     if(event.skill==='serve')row.serves[event.result]++;
-    else{row.passes[event.result]++;row.passes.total++;row.passes.sum+=event.result;}
+    else if(event.skill==='pass'){row.passes[event.result]++;row.passes.total++;row.passes.sum+=event.result;}
+    else{row.attacks[event.result]++;row.attacks.total++;}
   }
   return [...stats.values()];
 }
 
 export function practiceEventLabel(event){
   if(event.skill==='serve')return event.result==='error'?'Serve error':event.result==='ace'?'Ace':'Serve in';
+  if(event.skill==='attack')return event.result==='kill'?'Attack kill':event.result==='error'?'Attack error':'Attack in';
   return `Pass ${event.result}`;
 }
