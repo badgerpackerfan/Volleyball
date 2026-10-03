@@ -15,7 +15,7 @@ const POSITIONS = [1, 2, 3, 4, 5, 6];
 const BACK = [5, 6, 1];
 const FRONT = [4, 3, 2];
 const TYPES = new Set(['rally', 'substitution', 'libero.in', 'libero.out',
-  'libero.switch', 'timeout', 'set.end', 'undo', 'receive.edit', 'receive.select', 'receive.rating', 'libero.plan',
+  'libero.switch', 'timeout', 'set.end', 'undo', 'receive.edit', 'receive.select', 'receive.rating', 'attack.attempt', 'libero.plan',
   'rally.edit', 'correction']);
 // Historical edits and scoresheet corrections are allowed after the set has ended.
 const AFTER_END = new Set(['undo', 'rally.edit', 'correction']);
@@ -178,7 +178,7 @@ function initialState(c) {
     substitutionsUsed: 0, timeoutsRemaining: { us: c.rules.timeoutsPerTeam, them: c.rules.timeoutsPerTeam },
     partners: Object.fromEntries(c.players.map(p => [p.id, []])),
     libero: null, lastLiberoExit: Object.fromEntries(c.liberos.map(p => [p, null])),
-    rallies: [], substitutions: [], liberoReplacements: [], timeouts: [], overrides: [], corrections: [],
+    rallies: [], attackAttempts: [], substitutions: [], liberoReplacements: [], timeouts: [], overrides: [], corrections: [],
     pendingSetWinner: null, winner: null, receiveEdits: {}, receivePasser: null, receiveRatings: [], liberoFor: 'mid',
   };
 }
@@ -357,6 +357,13 @@ function apply(c, state, action) {
       requireThat(Object.values(state.onCourt).includes(playerId), 'PLAYER_NOT_ON_COURT', 'Choose a player who is currently on court.');
       requireThat(Number.isInteger(rating) && rating >= 0 && rating <= 3, 'INVALID_PASS_RATING', 'A pass rating must be from 0 to 3.');
       state.receiveRatings.push({ ...context(state, action), playerId, rating });
+      break;
+    }
+    case 'attack.attempt': {
+      const { playerId } = action.payload;
+      id(playerId, 'Player'); player(c, playerId);
+      requireThat(Object.values(state.onCourt).includes(playerId), 'PLAYER_NOT_ON_COURT', 'Choose a player who is currently on court.');
+      state.attackAttempts.push({ ...context(state, action), playerId });
       break;
     }
     case 'libero.plan':
@@ -572,6 +579,12 @@ export function getSetStats(state) {
     recordPass(pass.playerId, pass.rating);
   }
   for (const rally of receiveErrors.values()) recordPass(rally.playerId, 0);
+  for (const attempt of state.attackAttempts ?? []) {
+    const p = players.get(attempt.playerId) ?? { earned: 0, errors: 0, codes: {} };
+    p.attacking ??= { nonTerminalAttempts: 0 };
+    p.attacking.nonTerminalAttempts++;
+    players.set(attempt.playerId, p);
+  }
   return {
     codes,
     players: Object.fromEntries([...players].map(([id, p]) => [id, { ...p, net: p.earned - p.errors }])),
