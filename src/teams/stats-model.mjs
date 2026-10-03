@@ -141,7 +141,7 @@ const playerAnalysisZero = player => ({
   player: profile(player),
   passing: { count: 0, sum: 0, ratings: { 0: 0, 1: 0, 2: 0, 3: 0 }, linked: 0, sideoutWins: 0 },
   serving: { attempts: 0, in: 0, aces: 0, errors: 0, pointsWon: 0, pointsLost: 0 },
-  attacking: { nonTerminalAttempts: 0 },
+  attacking: { kills: 0, hittingErrors: 0, nonTerminalAttempts: 0 },
 });
 const addPass = (target, rating) => {
   target.count++; target.sum += rating.rating; target.ratings[rating.rating]++;
@@ -320,6 +320,11 @@ export function buildLineupAnalysis(team) {
     for (const rally of state.rallies) {
       const rotation = lineup.rotations[rally.rotation];
       if (!rotation) continue;
+      if (rally.team === 'us' && rally.playerId) {
+        const player = analysisPlayer(lineup, rally.playerId);
+        if (rally.code === 'K') player.attacking.kills++;
+        else if (rally.code === 'HE') player.attacking.hittingErrors++;
+      }
       rotation.rallies++; lineup.rallies++;
       if (rally.winner === 'us') { rotation.won++; lineup.won++; }
       else { rotation.lost++; lineup.lost++; }
