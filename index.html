@@ -114,7 +114,6 @@
   .match-info .set small { font-weight: 700; color: var(--ink-dim); font-size: 15px; }
   .match-info .sub { color: var(--ink-dim); font-size: 13px; }
   .past-sets { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
-  .hdr-mid .menu-btn { position: absolute; right: 0; width: 46px; height: 44px; }
   .meter { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
   .hdr-them .meter { align-items: flex-end; }
   .meter .lbl { font-size: 13px; color: var(--ink-dim); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
@@ -126,7 +125,6 @@
   /* Remaining timeout = dark dot; used = light gray. */
   .dots span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); border: 2px solid var(--line); }
   .dots span.on { background: var(--ink); border-color: var(--ink); }
-  .menu-btn { width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--line); font-size: 24px; font-weight: 800; }
 
   /* Body grid: Us pad | center | Them pad */
   .body {
@@ -192,6 +190,21 @@
   .team-btn small { font-size: 12px; font-weight: 700; }
   .team-btn.ready { border-style: solid; border-color: var(--accent); color: #fff; background: var(--accent); }
   .team-btn:disabled { opacity: .3; }
+  .live-actions { display: grid; gap: 6px; }
+  .live-actions[hidden], .pass-score-panel[hidden] { display: none !important; }
+  .live-actions h3 { margin-top: 0; }
+  .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .pass-score-grid button { min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+  .pass-score-grid button b { font-size: 23px; line-height: 1; }
+  .pass-score-grid button span { font-size: 10px; font-weight: 700; line-height: 1.1; }
+  .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pass-score-grid button:disabled { opacity: .38; }
+  .pass-score-status { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.2; }
+  .attack-action { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); color: var(--ink); font-size: 16px; font-weight: 800; }
+  .attack-action small { color: var(--ink-dim); font-size: 11px; font-weight: 700; }
+  .attack-action.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .attack-action.on small { color: var(--bg); opacity: .8; }
+  .attack-action:disabled { opacity: .38; }
   .pad-hint {
     margin-top: auto; font-size: 12px; color: var(--ink-dim); line-height: 1.3;
     border-top: 1px solid var(--line); padding-top: 8px;
@@ -549,12 +562,6 @@
   .bench button:disabled { opacity: .45; cursor: not-allowed; }
   .bench button:disabled b { color: var(--ink-dim); }
   .bench button.blocked:not(:disabled) { border: 2px dashed #d97706; }
-  .pass-rating-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-  .pass-rating-grid button { min-height: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 5px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); }
-  .pass-rating-grid button b { font-size: 32px; line-height: 1; }
-  .pass-rating-grid button span { display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.2; }
-  .pass-rating-grid button strong { font-size: 12px; }
-  .pass-rating-grid button small { margin-top: 2px; color: var(--ink-dim); font-size: 10px; font-weight: 600; }
   .sheet-row { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
   .sheet-row .cancel { margin-top: 0; flex: 1; }
   .ovr { font-size: 14px; font-weight: 700; color: var(--ink-dim); text-decoration: underline; padding: 0 6px; }
@@ -1144,7 +1151,6 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
         <div class="past-sets" id="pastSets"></div>
         <div class="sub">Saved practice set</div>
       </div>
-      <button class="menu-btn" id="menuBtn" title="Menu">⋯</button>
     </div>
   </header>
 
@@ -1152,12 +1158,20 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
 
     <!-- ② Us pad -->
     <section class="pad" id="padUs">
-      <h2><button class="team-chip" id="teamMenu" title="Menu">8th Grade<span class="caret">▾</span></button></h2>
+      <h2><button class="team-chip" id="teamMenu" title="Open team menu">8th Grade<span class="caret">▾</span></button></h2>
       <h3>Our point</h3>
       <div class="grid3" id="usEarned"></div>
       <h3>Our error — their point</h3>
       <div class="grid3" id="usErr"></div>
       <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
+      <div class="live-actions">
+        <div class="pass-score-panel" id="passScorePanel" hidden>
+          <h3 id="passScoreTitle">Serve receive · choose score</h3>
+          <div class="pass-score-grid" id="passScoreGrid" role="group" aria-labelledby="passScoreTitle"></div>
+          <p class="pass-score-status" id="passScoreStatus" role="status" aria-live="polite" hidden></p>
+        </div>
+        <button type="button" id="attackAction" class="attack-action"><span>Attack</span><small>Non-terminal attempt</small></button>
+      </div>
       <div class="pad-hint" id="hintUs"></div>
       <!-- ⑤ Sub & Libero -->
       <div class="pad-actions">
