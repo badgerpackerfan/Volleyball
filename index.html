@@ -160,7 +160,7 @@
     --group-color: var(--action-points);
     min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 0 6px;
     border: 1px solid color-mix(in srgb, var(--group-color) 30%, var(--line));
-    border-left: 4px solid var(--group-color); border-radius: 10px;
+    border-top: 4px solid var(--group-color); border-radius: 10px;
     background: color-mix(in srgb, var(--group-color) 5%, var(--card));
   }
   .outcome-group h3 { min-height: 18px; margin: 0; color: var(--group-color); }
@@ -191,6 +191,11 @@
   .code.lose.solid { background: var(--lose); color: #fff; }
   .code.win.tint   { background: var(--win-tint);  color: var(--win-ink);  border: 1px solid color-mix(in srgb, var(--win) 35%, transparent); }
   .code.lose.tint  { background: var(--lose-tint); color: var(--lose-ink); border: 1px solid color-mix(in srgb, var(--lose) 35%, transparent); }
+  .outcome-group .code.win.solid, .outcome-group .code.lose.solid,
+  .outcome-group .code.win.tint, .outcome-group .code.lose.tint {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); box-shadow: none;
+  }
+  .outcome-group .code.pending { box-shadow: 0 0 0 4px var(--accent); }
   .code.tint .word, .code.tint .abbr, .code.tint .cap { font-weight: 600; }
   .code:disabled { opacity: .22; pointer-events: none; }
   .code.pending { box-shadow: 0 0 0 5px var(--ink); }
@@ -210,7 +215,8 @@
   .live-actions[hidden], .pass-score-panel[hidden] { display: none !important; }
   .live-actions h3 { margin-top: 0; }
   .pass-score-panel {
-    padding: 0 8px 0 7px; border-left: 4px solid var(--action-receive); border-radius: 8px;
+    padding: 0 8px; border: 1px solid color-mix(in srgb, var(--action-receive) 30%, var(--line));
+    border-top: 4px solid var(--action-receive); border-radius: 8px;
     background: color-mix(in srgb, var(--action-receive) 8%, var(--card));
   }
   .pass-score-panel h3 {
@@ -223,9 +229,9 @@
   .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .pass-score-grid button:disabled { opacity: .38; }
   .pass-score-status { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.2; }
-  .attack-action { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--action-attack) 40%, var(--line)); border-left: 4px solid var(--action-attack); border-radius: 11px; background: color-mix(in srgb, var(--action-attack) 8%, var(--card)); color: var(--action-attack); font-size: 16px; font-weight: 800; }
+  .attack-action { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--action-attack) 40%, var(--line)); border-top: 4px solid var(--action-attack); border-radius: 11px; background: color-mix(in srgb, var(--action-attack) 8%, var(--card)); color: var(--action-attack); font-size: 16px; font-weight: 800; }
   .attack-action small { color: var(--ink-dim); font-size: 11px; font-weight: 700; }
-  .attack-action.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .attack-action.on { background: var(--ink); border-color: var(--ink); border-top-color: var(--action-attack); color: var(--bg); }
   .attack-action.on small { color: var(--bg); opacity: .8; }
   .attack-action:disabled { opacity: .38; }
   .pad-hint {
