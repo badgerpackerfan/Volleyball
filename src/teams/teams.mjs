@@ -236,8 +236,32 @@ function showRotationReportPicker(team,match){
  const lineups=matchSetLineups(match.sets);
  const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1,
   exhibition:isExhibitionSet(record,match.sets),lineup:lineups[index]}));
+ const rotations=Array.from({length:6},(_,index)=>({number:index+1,won:0,lost:0,rallies:0}));
+ for(const {state} of sets)for(const rally of state.rallies){
+  const row=rotations[rally.rotation-1];if(!row)continue;
+  row.rallies++;row[rally.winner==='us'?'won':'lost']++;
+ }
+ const qualified=rotations.filter(row=>row.rallies>=8);
+ const rates=qualified.map(row=>row.won/row.rallies);
+ const bestRate=rates.length?Math.max(...rates):null,worstRate=rates.length?Math.min(...rates):null;
+ const totalRallies=rotations.reduce((total,row)=>total+row.rallies,0);
+ const exhibitionCount=sets.filter(set=>set.exhibition).length;
+ const setCountLabel=sets.length===1?'1 set':`${sets.length} sets`;
+ const rallyCountLabel=totalRallies===1?'1 rally':`${totalRallies} rallies`;
+ const rotationSnapshot=`<section class="rotation-snapshot" aria-label="Match rotation snapshot">
+  <div class="rotation-snapshot-heading"><strong>Match rotation snapshot</strong><span>${setCountLabel} · ${rallyCountLabel}${exhibitionCount?` · includes ${exhibitionCount} exhibition ${exhibitionCount===1?'set':'sets'}`:''}</span></div>
+  <div class="rotation-snapshot-grid">${rotations.map(row=>{
+   const rate=row.rallies?row.won/row.rallies:null;
+   const best=bestRate!==null&&bestRate>worstRate&&row.rallies>=8&&rate===bestRate;
+   const worst=bestRate!==null&&bestRate>worstRate&&row.rallies>=8&&rate===worstRate;
+   const highlight=best?' best':worst?' worst':'';
+   const detail=rate===null?'no rallies':`${Math.round(rate*100)}% won · n=${row.rallies}`;
+   return `<div class="rotation-snapshot-cell${highlight}" role="group" aria-label="Rotation ${row.number}: ${row.won} won, ${row.lost} lost, ${detail}${best?', best':worst?', lowest':''}"><span class="rotation-snapshot-label">R${row.number}${best?'<i>Best</i>':worst?'<i>Lowest</i>':''}</span><strong>${row.won}–${row.lost}</strong><small>${detail}</small></div>`;
+  }).join('')}</div>
+  <p>Totals combine all recorded sets and lineups. Highest and lowest are highlighted only with at least 8 rallies.</p>
+ </section>`;
  openReport(`<h4>Rotation Report · ${esc(team.name)} vs ${esc(match.opponent||'Opponent')}</h4>
-  <p>Choose a set to view its rotation by rotation rally record.</p>
+  ${rotationSnapshot}<h5>Choose a set to view its rotation report</h5>
   <div class="report-set-picker">${sets.map(({record,state,number,lineup,exhibition})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number}${exhibition?' · Exhibition':''} · ${esc(lineup.name)}${lineup.inheritedFromSet?` (continued from Set ${lineup.inheritedFromSet})`:''}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
  <button class="cancel" id="shCancel" type="button">Close</button>`);
  reportBody.querySelectorAll('[data-report-set]').forEach(button=>button.onclick=()=>{
