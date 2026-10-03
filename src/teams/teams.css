@@ -260,12 +260,31 @@ body.busy{cursor:progress}
 .report-set-picker{display:grid;gap:8px;margin:14px 0}
 .report-set-picker button{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left}
 .report-set-picker span{color:#60727e;font-size:14px}
+.rotation-snapshot{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.rotation-snapshot-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.rotation-snapshot-heading strong{font-size:15px}
+.rotation-snapshot-heading span{color:#60727e;font-size:12px;text-align:right}
+.rotation-snapshot-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:8px}
+.rotation-snapshot-cell{display:grid;gap:2px;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-variant-numeric:tabular-nums}
+.rotation-snapshot-cell.best{border-color:#b5d9c2;background:color-mix(in srgb,var(--win) 9%,#fff)}
+.rotation-snapshot-cell.worst{border-color:#e5c0c0;background:color-mix(in srgb,var(--lose) 9%,#fff)}
+.rotation-snapshot-label{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:13px;font-weight:800}
+.rotation-snapshot-label i{font-size:10px;font-style:normal;text-transform:uppercase;letter-spacing:.03em}
+.rotation-snapshot-cell.best .rotation-snapshot-label i{color:var(--win)}
+.rotation-snapshot-cell.worst .rotation-snapshot-label i{color:var(--lose)}
+.rotation-snapshot-cell strong{font-size:19px;line-height:1.15}
+.rotation-snapshot-cell small{color:#60727e;font-size:11px;white-space:nowrap}
+.rotation-snapshot>p{margin:8px 0 0;color:#60727e;font-size:12px;line-height:1.35}
 @media(max-width:900px){.report-body .rr{grid-template-columns:repeat(6,minmax(125px,1fr));width:max-content}.report-dialog.wide{width:calc(100vw - 16px)}}
 @media(max-width:700px){
  .report-dialog,.report-dialog.wide{width:calc(100vw - 16px);max-height:94dvh}
  .report-body{max-height:94dvh;padding:15px}
  .report-body .summary-grid{grid-template-columns:1fr;gap:8px}
  .report-body .lib-table{display:block;overflow-x:auto;white-space:nowrap}
+ .rotation-snapshot-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .rotation-snapshot-cell small{white-space:normal}
+ .rotation-snapshot-heading{align-items:flex-start;flex-direction:column;gap:2px}
+ .rotation-snapshot-heading span{text-align:left}
  .report-set-picker button{align-items:flex-start;flex-direction:column;gap:2px}
 }
 .season-totals{margin:28px 0}
