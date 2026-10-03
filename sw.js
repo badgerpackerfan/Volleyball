@@ -1,6 +1,6 @@
 // Bump the vN suffix whenever you publish changed app files. The previous
 // cache stays intact while this worker waits, then is removed after activation.
-const CACHE_NAME = 'volleyball-set-tracker-shell-v58';
+const CACHE_NAME = 'volleyball-set-tracker-shell-v60';
 const APP_SHELL = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const APP_SHELL = [
   './src/app/themes.mjs',
   './src/app/formations.mjs',
   './src/app/team-menu.mjs',
+  './src/app/player-performance.mjs',
   './src/practice/practice.mjs',
   './src/practice/practice-model.mjs',
   './src/practice/practice.css',
