@@ -147,9 +147,9 @@
     background: var(--card); border-radius: var(--radius); border: 1px solid var(--line);
     padding: 14px; display: flex; flex-direction: column; gap: 8px; position: relative; min-height: 0; overflow: hidden;
   }
-  #padUs { gap: 6px; }
+  #padUs, #padThem { gap: 6px; }
   .pad h2 {
-    margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: center;
+    min-height: 35px; margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: center;
   }
   #padThem h2 { justify-content: flex-end; }
   .pad h2 .team-chip { padding: 7px 14px; }
@@ -167,7 +167,7 @@
   }
   .outcome-group {
     --panel-color: var(--box-points); --panel-label: var(--action-points);
-    min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 6px;
+    min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 8px;
   }
   .outcome-group h3 { min-height: 18px; margin: 0; color: var(--panel-label); }
   .our-error-group, .their-point-group { --panel-color: var(--box-errors); --panel-label: var(--action-errors); }
@@ -222,11 +222,13 @@
   .live-actions h3 { margin-top: 0; }
   .pass-score-panel {
     --panel-color: var(--box-receive); --panel-label: var(--action-receive);
-    padding: 4px 8px 6px;
+    padding: 4px 8px 8px;
   }
   .pass-score-panel h3 {
     min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--panel-label);
   }
+  .attack-panel { --panel-color: var(--box-attack); --panel-label: var(--action-attack); display: grid; gap: 4px; padding: 4px 8px 8px; }
+  .attack-panel h3 { min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--panel-label); }
   .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .pass-score-grid button { min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
   .pass-score-grid button b { font-size: 23px; line-height: 1; }
@@ -234,10 +236,8 @@
   .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .pass-score-grid button:disabled { opacity: .38; }
   .pass-score-status { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.2; }
-  .attack-action { --panel-color: var(--box-attack); --panel-label: var(--action-attack); width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 12px 6px; color: var(--panel-label); font-size: 16px; font-weight: 800; }
-  .attack-action small { color: var(--ink-dim); font-size: 11px; font-weight: 700; }
-  .attack-action.on { background: var(--ink); border-color: var(--ink); border-top-color: var(--panel-color); color: var(--bg); }
-  .attack-action.on small { color: var(--bg); opacity: .8; }
+  .attack-action { width: 100%; min-height: 48px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font-size: 16px; font-weight: 800; }
+  .attack-action.on { background: #7540a5; border-color: #7540a5; color: #fff; }
   .attack-action:disabled { opacity: .38; }
   .pad-hint {
     margin-top: auto; font-size: 12px; color: var(--ink-dim); line-height: 1.3;
@@ -540,10 +540,13 @@
     background: var(--ink-dim); border-radius: 1px;
   }
   .rchip {
+    --panel-color: var(--win);
     flex: 0 0 auto; display: grid; grid-template-columns: 1fr; gap: 4px; align-items: center; text-align: center;
-    padding: 8px 12px; border-radius: 11px; background: var(--win-tint); color: var(--win-ink); font-size: 13px; white-space: nowrap;
+    padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--panel-color) 30%, var(--line));
+    border-top: 4px solid var(--panel-color); border-radius: 10px;
+    background: color-mix(in srgb, var(--panel-color) 8%, var(--card)); color: var(--win-ink); font-size: 13px; white-space: nowrap;
   }
-  .rchip.lost { background: var(--lose-tint); color: var(--lose-ink); }
+  .rchip.lost { --panel-color: var(--lose); color: var(--lose-ink); }
   .rchip .c { font-weight: 800; font-size: 16px; }
   .rchip .s { font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
   .rchip.latest { box-shadow: 0 0 0 2px var(--ink); }
@@ -1203,7 +1206,10 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
       </section>
       <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
       <div class="live-actions">
-        <button type="button" id="attackAction" class="attack-action action-panel"><span>Attack</span><small>Non-terminal attempt</small></button>
+        <section class="attack-panel action-panel" aria-labelledby="attackTitle">
+          <h3 id="attackTitle">Attack</h3>
+          <button type="button" id="attackAction" class="attack-action" aria-label="Select attack attempt">Attempt</button>
+        </section>
         <div class="pass-score-panel action-panel" id="passScorePanel" hidden>
           <h3 id="passScoreTitle">Serve Receive · choose score</h3>
           <div class="pass-score-grid" id="passScoreGrid" role="group" aria-labelledby="passScoreTitle"></div>
