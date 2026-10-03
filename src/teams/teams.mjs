@@ -9,6 +9,7 @@ import { COLOR_THEMES, colorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
 import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats, matchSetLineups } from './stats-model.mjs';
 import { makeStatsTablesSortable, matchSummary, rotationReport } from '../app/team-menu.mjs';
+import { PLAYER_PERFORMANCE_HEADERS, playerPerformanceCells } from '../app/player-performance.mjs';
 registerApp();
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -279,29 +280,22 @@ function showRotationReportSet(team,match,record){
 }
 function statTable(rows,matchStats=false){
  if(!rows.length)return `<div class="stats-empty">No ${matchStats?'player match':'serving, passing, or attacking'} results recorded.</div>`;
- return `<div class="stats-table-scroll"><table class="stats-table${matchStats?' match-stats':''}"><thead><tr><th>Player</th><th>Kills</th><th>Hitting errors</th><th>Non-terminal attacks</th>${matchStats?'<th>+/-</th>':''}<th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
-  const passes=stats.passing.count?`${(stats.passing.sum/stats.passing.count).toFixed(2)} <small>n=${stats.passing.count}</small>`:'—';
-  const attempts=stats.serving.attempts, aceIn=stats.serving.aces;
-  const serves=`${attempts?`${Math.round(stats.serving.in*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
-  const acePercent=`${attempts?`${Math.round(aceIn*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
-  const attacking=stats.attacking;
-  const plusMinus=attacking.plusMinus;
-  const attackCount=matchStats||attacking.actions?attacking:null;
-  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${attackCount?attacking.kills:'—'}</td><td>${attackCount?attacking.hittingErrors:'—'}</td><td>${attackCount?attacking.nonTerminalAttempts:'—'}</td>${matchStats?`<td class="${plusMinus>0?'pos':plusMinus<0?'neg':''}">${plusMinus>0?`+${plusMinus}`:plusMinus}</td>`:''}<td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
+ return `<div class="stats-table-scroll"><table class="stats-table player-performance-table${matchStats?' match-stats':''}"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}${matchStats?'<th>Ace %</th><th>+/-</th>':''}</tr></thead><tbody>${rows.map(({player,stats})=>{
+  const serving=stats.serving,attempts=serving.attempts,acePercent=attempts?`${Math.round(serving.aces*100/attempts)}% <small>n=${attempts}</small>`:'—';
+  const plusMinus=stats.attacking.plusMinus;
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th>${playerPerformanceCells(stats)}${matchStats?`<td>${acePercent}</td><td class="${plusMinus>0?'pos':plusMinus<0?'neg':''}">${plusMinus>0?`+${plusMinus}`:plusMinus}</td>`:''}</tr>`;
  }).join('')}</tbody></table></div>`;
 }
 const analysisPercent=(part,total)=>total?`${Math.round(part*100/total)}%`:'—';
 const analysisSigned=value=>value>0?`+${value}`:String(value);
 function lineupPlayerTable(players){
- const rows=players.filter(({passing,serving,attacking})=>passing.count||serving.attempts||attacking.nonTerminalAttempts);
- if(!rows.length)return '<div class="stats-empty">No serve attempts, pass scores, or non-terminal attacks recorded for this lineup.</div>';
- return `<div class="stats-table-scroll"><table class="stats-table lineup-player-table"><thead><tr><th>Player</th><th>Serve points W–L</th><th>Serve In %</th><th>Ace %</th><th>Pass avg</th><th>Pass scores · 0 / 1 / 2 / 3</th><th>Non-terminal attacks</th></tr></thead><tbody>${rows.map(({player,passing,serving,attacking})=>{
+ const rows=players.filter(({passing,serving,attacking})=>passing.count||serving.attempts||attacking.kills||attacking.hittingErrors||attacking.nonTerminalAttempts);
+ if(!rows.length)return '<div class="stats-empty">No passing, serving, or attacking results recorded for this lineup.</div>';
+ return `<div class="stats-table-scroll"><table class="stats-table player-performance-table lineup-player-table"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}<th>Serve points W–L</th><th>Ace %</th><th>Pass scores · 0 / 1 / 2 / 3</th></tr></thead><tbody>${rows.map(({player,passing,serving,attacking})=>{
   const serveRecord=serving.attempts?`${serving.pointsWon}–${serving.pointsLost} <small>n=${serving.attempts}</small>`:'—';
-  const inPercent=serving.attempts?`${analysisPercent(serving.in,serving.attempts)} <small>n=${serving.attempts}</small>`:'—';
   const acePercent=serving.attempts?`${analysisPercent(serving.aces,serving.attempts)} <small>n=${serving.attempts}</small>`:'—';
-  const passAverage=passing.count?`${(passing.sum/passing.count).toFixed(2)} <small>n=${passing.count}</small>`:'—';
   const distribution=passing.count?[0,1,2,3].map(r=>passing.ratings[r]).join(' / '):'—';
-  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${serveRecord}</td><td>${inPercent}</td><td>${acePercent}</td><td>${passAverage}</td><td>${distribution}</td><td>${attacking.nonTerminalAttempts}</td></tr>`;
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th>${playerPerformanceCells({passing,serving,attacking})}<td>${serveRecord}</td><td>${acePercent}</td><td>${distribution}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
 function lineupAnalysisMarkup(lineups){
@@ -310,8 +304,9 @@ function lineupAnalysisMarkup(lineups){
   const rotationCards=[1,2,3,4,5,6].map(number=>{
    const r=lineup.rotations[number],pass=r.passing,passAvg=pass.count?(pass.sum/pass.count).toFixed(2):'—';
    const distribution=pass.count?[0,1,2,3].map(score=>`${score}: ${pass.ratings[score]}`).join(' · '):'No pass scores';
-   return `<section class="analysis-rotation ${r.won-r.lost>0?'positive':r.won-r.lost<0?'negative':''}">
-    <h4>R${number}<span>${r.won}–${r.lost} · ${analysisSigned(r.won-r.lost)}</span></h4>
+   const delta=r.won-r.lost;
+   return `<section class="analysis-rotation ${delta>0?'positive':delta<0?'negative':''}">
+    <h4>R${number}<span>${r.won}–${r.lost} · <b class="${delta>0?'pos':delta<0?'neg':''}">${analysisSigned(delta)}</b></span></h4>
     <p class="analysis-volume">${r.rallies} rallies${r.rallies<10?' · small sample':''}</p>
     <dl><dt>Side-out</dt><dd>${analysisPercent(r.wonReceiving,r.received)} <small>${r.wonReceiving}/${r.received} received</small></dd>
      <dt>Point-scoring</dt><dd>${analysisPercent(r.wonServing,r.served)} <small>${r.wonServing}/${r.served} served</small></dd>
@@ -321,8 +316,9 @@ function lineupAnalysisMarkup(lineups){
      <dt>Best run</dt><dd>${r.bestRun}</dd><dt>Longest run allowed</dt><dd>${r.longestRunAllowed}</dd></dl>
    </section>`;
   }).join('');
+  const delta=lineup.won-lineup.lost;
   return `<details class="stats-group lineup-analysis-group" ${index===0?'open':''}>
-   <summary><strong>${esc(lineup.name)}</strong><span>${esc(lineup.system)} · ${lineup.matches} matches · ${lineup.setsWon}–${lineup.setsLost} sets · ${lineup.won}–${lineup.lost} rallies · ${analysisSigned(lineup.won-lineup.lost)}</span></summary>
+   <summary><strong>${esc(lineup.name)}</strong><span>${esc(lineup.system)} · ${lineup.matches} matches · ${lineup.setsWon}–${lineup.setsLost} sets · ${lineup.won}–${lineup.lost} rallies · <b class="${delta>0?'pos':delta<0?'neg':''}">${analysisSigned(delta)}</b></span></summary>
    <div class="lineup-analysis-body"><p class="muted"><strong>R1:</strong> ${esc(lineup.starterLabel)} · <strong>Setters:</strong> ${esc(lineup.setterLabel)} · ${lineup.rallies} rallies in ${lineup.setsPlayed} sets. Cells with fewer than 10 rallies are marked as small samples.</p>
     <div class="analysis-rotation-grid">${rotationCards}</div>
     <details class="stats-set analysis-players"><summary>Serving and passing by player</summary>${lineupPlayerTable(lineup.players)}</details>
@@ -350,7 +346,7 @@ function teamStatsPage(team){
   :`Practice stats · ${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.practiceResults,'result')}`;
  $('content').innerHTML=`<section class="season-stats-summary card" style="--team-color:${team.color}">
    <div><h2>${esc(team.name)} · ${esc(team.season||'Season stats')}</h2><p>${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.matches,'match')} · ${plural(stats.counts.sets,'set')} · ${plural(stats.counts.practiceResults,'practice result')}</p></div>
-   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Exhibition set stats count here, but those sets do not change official match results. Serve In % includes aces; Ace % shows aces as a share of attempts. Non-terminal attacks are tracked separately from kills and hitting errors. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
+   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Exhibition set stats count here, but those sets do not change official match results. Serve In % includes aces; Ace % shows aces as a share of attempts. Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
   </section>
   <h2 class="list-title">Lineup and rotation analysis</h2>
   <p class="help">Rally outcomes are grouped by the lineup used in each set and the rotation at the start of each rally. Pass-to-side-out rates include scores linked to a recorded rally.</p>
