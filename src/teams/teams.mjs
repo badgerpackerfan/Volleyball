@@ -2,7 +2,7 @@ import { openSetStore } from '../storage/indexeddb.mjs';
 import { replaySet } from '../engine/set-engine.mjs';
 import { validateLineup, lineupIssue, startingRotation, lineupFromSet } from './lineup-model.mjs';
 import { mountLineupEditor } from './lineup-editor.mjs';
-import { teamHierarchy, setPlan, correctSetFirstServe } from './match-model.mjs';
+import { teamHierarchy, setPlan, isExhibitionSet, correctSetFirstServe } from './match-model.mjs';
 import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme } from '../app/themes.mjs';
@@ -131,7 +131,9 @@ function editMatchDetails(team,match){
 }
 async function load(){
  [teams,sets,practices,active]=await withFreshStore(()=>Promise.all([store.listTeams(),store.listSets(),store.listPractices(),store.loadActive()]));
- teams.sort((a,b)=>a.name.localeCompare(b.name));$('liveLink').hidden=!active;
+ teams.sort((a,b)=>a.name.localeCompare(b.name));
+ $('liveLink').hidden=!active;
+ $('liveLink').textContent=active&&replaySet(active).status==='ended'?'Open set':'Live set';
 }
 function route(teamId,matchId,view){
  const params=new URLSearchParams();if(teamId)params.set('team',teamId);if(matchId)params.set('match',matchId);if(view)params.set('view',view);
@@ -151,9 +153,10 @@ const leave=()=>!dirty||confirm('Discard your unsaved changes?');
 $('backButton').onclick=()=>{if(!leave())return;dirty=false;notice();backAction?.();};
 $('liveLink').onclick=()=>{if(!leave())return;dirty=false;location.href='./index.html';};
 const item=(color,main,actions,extra='')=>`<article class="card item ${extra}" style="--team-color:${color}"><div class="item-main">${main}</div><div class="item-actions">${actions}</div></article>`;
-function matchReportContext(team,match,record){
+function matchReportContext(team,match,record,closeLabel='Close'){
  return {record,state:replaySet(record),teams:{us:team.name,them:match.opponent||'Opponent'},players:team.players,
-  matchRecords:()=>match.sets,open:openReport,closeLabel:'Choose another set'};
+  matchRecords:()=>match.sets,exhibition:isExhibitionSet(record,match.sets),matchWins:match.wins,
+  open:openReport,closeLabel};
 }
 function editSetFirstServe(team,match,record){
  const setNumber=record.config.setNumber??1;
@@ -192,10 +195,11 @@ function exportMatch(team,match){
 }
 function showRotationReportPicker(team,match){
  const lineups=matchSetLineups(match.sets);
- const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1,lineup:lineups[index]}));
+ const sets=match.sets.map((record,index)=>({record,state:replaySet(record),number:record.config.setNumber??index+1,
+  exhibition:isExhibitionSet(record,match.sets),lineup:lineups[index]}));
  openReport(`<h4>Rotation Report · ${esc(team.name)} vs ${esc(match.opponent||'Opponent')}</h4>
   <p>Choose a set to view its rotation by rotation rally record.</p>
-  <div class="report-set-picker">${sets.map(({record,state,number,lineup})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number} · ${esc(lineup.name)}${lineup.inheritedFromSet?` (continued from Set ${lineup.inheritedFromSet})`:''}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
+  <div class="report-set-picker">${sets.map(({record,state,number,lineup,exhibition})=>`<button type="button" data-report-set="${esc(record.config.id)}"><strong>Set ${number}${exhibition?' · Exhibition':''} · ${esc(lineup.name)}${lineup.inheritedFromSet?` (continued from Set ${lineup.inheritedFromSet})`:''}</strong><span>${state.score.us}–${state.score.them} · ${esc(record.config.system)}</span></button>`).join('')}</div>
  <button class="cancel" id="shCancel" type="button">Close</button>`);
  reportBody.querySelectorAll('[data-report-set]').forEach(button=>button.onclick=()=>{
   const record=match.sets.find(set=>set.config.id===button.dataset.reportSet);
@@ -203,7 +207,7 @@ function showRotationReportPicker(team,match){
  });
 }
 function showRotationReportSet(team,match,record){
- rotationReport(matchReportContext(team,match,record));
+ rotationReport(matchReportContext(team,match,record,'Choose another set'));
  const close=reportBody.querySelector('#shCancel');
  close?.addEventListener('click',event=>{
   event.preventDefault();event.stopPropagation();
@@ -211,29 +215,30 @@ function showRotationReportSet(team,match,record){
  },{once:true});
 }
 function statTable(rows,matchStats=false){
- if(!rows.length)return `<div class="stats-empty">No ${matchStats?'player match':'serving or passing'} results recorded.</div>`;
- return `<div class="stats-table-scroll"><table class="stats-table${matchStats?' match-stats':''}"><thead><tr><th>Player</th>${matchStats?'<th>Kills</th><th>Hitting errors</th><th>+/-</th>':''}<th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
+ if(!rows.length)return `<div class="stats-empty">No ${matchStats?'player match':'serving, passing, or attacking'} results recorded.</div>`;
+ return `<div class="stats-table-scroll"><table class="stats-table${matchStats?' match-stats':''}"><thead><tr><th>Player</th><th>Kills</th><th>Hitting errors</th><th>Non-terminal attacks</th>${matchStats?'<th>+/-</th>':''}<th>Pass avg</th><th>Serve In %</th><th>Ace %</th></tr></thead><tbody>${rows.map(({player,stats})=>{
   const passes=stats.passing.count?`${(stats.passing.sum/stats.passing.count).toFixed(2)} <small>n=${stats.passing.count}</small>`:'—';
   const attempts=stats.serving.attempts, aceIn=stats.serving.aces;
   const serves=`${attempts?`${Math.round(stats.serving.in*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
   const acePercent=`${attempts?`${Math.round(aceIn*100/attempts)}%`:'—'} <small>n=${attempts}</small>`;
   const attacking=stats.attacking;
   const plusMinus=attacking.plusMinus;
-  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th>${matchStats?`<td>${attacking.kills}</td><td>${attacking.hittingErrors}</td><td class="${plusMinus>0?'pos':plusMinus<0?'neg':''}">${plusMinus>0?`+${plusMinus}`:plusMinus}</td>`:''}<td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
+  const attackCount=matchStats||attacking.actions?attacking:null;
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${attackCount?attacking.kills:'—'}</td><td>${attackCount?attacking.hittingErrors:'—'}</td><td>${attackCount?attacking.nonTerminalAttempts:'—'}</td>${matchStats?`<td class="${plusMinus>0?'pos':plusMinus<0?'neg':''}">${plusMinus>0?`+${plusMinus}`:plusMinus}</td>`:''}<td>${passes}</td><td>${serves}</td><td>${acePercent}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
 const analysisPercent=(part,total)=>total?`${Math.round(part*100/total)}%`:'—';
 const analysisSigned=value=>value>0?`+${value}`:String(value);
 function lineupPlayerTable(players){
- const rows=players.filter(({passing,serving})=>passing.count||serving.attempts);
- if(!rows.length)return '<div class="stats-empty">No serve attempts or pass scores recorded for this lineup.</div>';
- return `<div class="stats-table-scroll"><table class="stats-table lineup-player-table"><thead><tr><th>Player</th><th>Serve points W–L</th><th>Serve In %</th><th>Ace %</th><th>Pass avg</th><th>Pass scores · 0 / 1 / 2 / 3</th></tr></thead><tbody>${rows.map(({player,passing,serving})=>{
+ const rows=players.filter(({passing,serving,attacking})=>passing.count||serving.attempts||attacking.nonTerminalAttempts);
+ if(!rows.length)return '<div class="stats-empty">No serve attempts, pass scores, or non-terminal attacks recorded for this lineup.</div>';
+ return `<div class="stats-table-scroll"><table class="stats-table lineup-player-table"><thead><tr><th>Player</th><th>Serve points W–L</th><th>Serve In %</th><th>Ace %</th><th>Pass avg</th><th>Pass scores · 0 / 1 / 2 / 3</th><th>Non-terminal attacks</th></tr></thead><tbody>${rows.map(({player,passing,serving,attacking})=>{
   const serveRecord=serving.attempts?`${serving.pointsWon}–${serving.pointsLost} <small>n=${serving.attempts}</small>`:'—';
   const inPercent=serving.attempts?`${analysisPercent(serving.in,serving.attempts)} <small>n=${serving.attempts}</small>`:'—';
   const acePercent=serving.attempts?`${analysisPercent(serving.aces,serving.attempts)} <small>n=${serving.attempts}</small>`:'—';
   const passAverage=passing.count?`${(passing.sum/passing.count).toFixed(2)} <small>n=${passing.count}</small>`:'—';
   const distribution=passing.count?[0,1,2,3].map(r=>passing.ratings[r]).join(' / '):'—';
-  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${serveRecord}</td><td>${inPercent}</td><td>${acePercent}</td><td>${passAverage}</td><td>${distribution}</td></tr>`;
+  return `<tr><th scope="row">#${esc(player.jersey)} ${esc(player.name)}</th><td>${serveRecord}</td><td>${inPercent}</td><td>${acePercent}</td><td>${passAverage}</td><td>${distribution}</td><td>${attacking.nonTerminalAttempts}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
 function lineupAnalysisMarkup(lineups){
@@ -273,15 +278,16 @@ function lineupSuggestionMarkup(suggestion,teamColor,savedLineupCount){
 function teamStatsPage(team){
  const stats=buildTeamStats(team,practices);
  const lineupAnalysis=buildLineupAnalysis(team);
+ const exhibitionCount=stats.matches.reduce((count,match)=>count+match.sets.filter(set=>set.exhibition).length,0);
  const seasonRows=source=>stats.players.map(row=>({player:row.player,stats:row[source]}))
-  .filter(row=>row.stats.passing.count||row.stats.serving.attempts||(source==='matches'
-   &&row.stats.attacking.actions));
+  .filter(row=>row.stats.passing.count||row.stats.serving.attempts||row.stats.attacking.actions
+   ||row.stats.attacking.nonTerminalAttempts);
  const seasonSourceText=source=>source==='matches'
-  ?`Match stats · ${plural(stats.counts.sets,'set')} recorded`
+  ?`Match stats · ${plural(stats.counts.sets,'set')} recorded${exhibitionCount?` · includes ${plural(exhibitionCount,'exhibition set')}`:''}`
   :`Practice stats · ${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.practiceResults,'result')}`;
  $('content').innerHTML=`<section class="season-stats-summary card" style="--team-color:${team.color}">
    <div><h2>${esc(team.name)} · ${esc(team.season||'Season stats')}</h2><p>${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.matches,'match')} · ${plural(stats.counts.sets,'set')} · ${plural(stats.counts.practiceResults,'practice result')}</p></div>
-   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Serve In % includes aces; Ace % shows aces as a share of attempts. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
+   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Exhibition set stats count here, but those sets do not change official match results. Serve In % includes aces; Ace % shows aces as a share of attempts. Non-terminal attacks are tracked separately from kills and hitting errors. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
   </section>
   <h2 class="list-title">Lineup and rotation analysis</h2>
   <p class="help">Rally outcomes are grouped by the lineup used in each set and the rotation at the start of each rally. Pass-to-side-out rates include scores linked to a recorded rally.</p>
@@ -294,10 +300,10 @@ function teamStatsPage(team){
   </section>
   <h2 class="list-title">Matches and sets</h2>
   <div class="stats-breakdowns">${stats.matches.length?stats.matches.map(match=>{
-   const result=match.winner?(match.winner==='us'?'Won':'Lost'):match.inProgress?'In progress':match.sets.length?'Complete':'Not started';
+   const result=match.winner?(match.winner==='us'?'Won':'Lost')+(match.inProgress?' · exhibition in progress':''):match.inProgress?'In progress':match.sets.length?'Complete':'Not started';
    return `<details class="stats-group"><summary><strong>vs ${esc(match.opponent||'Opponent')}</strong><span>${esc(match.date||'Date not recorded')} · ${esc(result)}${match.sets.length?` · Sets ${match.wins.us}–${match.wins.them}`:''}</span></summary>
-    ${match.sets.length?`<section class="stats-match-total"><h3>Match totals</h3>${statTable(match.rows,true)}</section>
-     <div class="stats-set-list">${match.sets.map(set=>`<details class="stats-set"><summary>Set ${set.number} · ${set.score.us}–${set.score.them} · ${set.status==='ended'?'Finished':'In progress'}</summary><p class="stats-set-lineup"><strong>Lineup:</strong> ${esc(set.lineupName)}${set.lineupInheritedFromSet?` · continued from Set ${set.lineupInheritedFromSet}`:''}</p>${statTable(set.rows,true)}</details>`).join('')}</div>`:'<p class="stats-empty">No set results recorded yet.</p>'}
+    ${match.sets.length?`<section class="stats-match-total"><h3>Match totals</h3>${match.sets.some(set=>set.exhibition)?'<p class="muted">Includes stats from the exhibition set; the official match result excludes it.</p>':''}${statTable(match.rows,true)}</section>
+     <div class="stats-set-list">${match.sets.map(set=>`<details class="stats-set"><summary>Set ${set.number}${set.exhibition?' · Exhibition':''} · ${set.score.us}–${set.score.them} · ${set.status==='ended'?'Finished':'In progress'}</summary><p class="stats-set-lineup"><strong>Lineup:</strong> ${esc(set.lineupName)}${set.lineupInheritedFromSet?` · continued from Set ${set.lineupInheritedFromSet}`:''}</p>${statTable(set.rows,true)}</details>`).join('')}</div>`:'<p class="stats-empty">No set results recorded yet.</p>'}
    </details>`;
   }).join(''):'<div class="stats-empty">No matches recorded for this team.</div>'}</div>
   <h2 class="list-title">Practices</h2>
@@ -347,7 +353,9 @@ function home(){
    <div class="list">${team.matches.length?team.matches.map(m=>{
     const reportsAvailable=Boolean(m.winner&&m.sets.length);
     const exportAvailable=Boolean(reportsAvailable&&!m.inProgress);
-    return item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}`:'Not started'}</p><p class="muted">${!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost'):m.inProgress?'Set in progress':'All recorded sets finished'}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
+    const exhibitions=m.sets.filter(record=>isExhibitionSet(record,m.sets)).length;
+    const resultLabel=!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost')+(m.inProgress?' · exhibition set in progress':''):m.inProgress?'Set in progress':'All recorded sets finished';
+    return item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}${exhibitions?` · ${plural(exhibitions,'exhibition set')}`:''}`:'Not started'}</p><p class="muted">${resultLabel}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
      `<button data-match="${esc(m.id)}" class="primary">Open match</button>${reportsAvailable?`<button data-match-summary="${esc(m.id)}">Match Summary</button><button data-rotation-report="${esc(m.id)}">Rotation Report</button>`:''}${exportAvailable?`<button data-export-match="${esc(m.id)}">Export Match</button>`:''}<button data-delete-match="${esc(m.id)}" class="danger">Delete match</button>`,'match-card');
    }).join(''):'<div class="card"><p>No matches yet. Choose New match to set up the opponent and first set.</p></div>'}</div>
    <h2 class="list-title">Practices</h2>
@@ -383,9 +391,9 @@ function home(){
  bar(match.opponent,[team.name,match.date].filter(Boolean).join(' · '),{label:team.name,action:()=>go(team.id)});
  $('content').innerHTML=`<div class="card match-summary" style="--team-color:${team.color}"><p class="set-score">Sets ${match.wins.us}–${match.wins.them}</p><p>${match.winner?`<strong class="match-result">${match.winner==='us'?'Match won':'Match lost'}</strong> · `:''}${match.bestOf?`Best of ${match.bestOf}`:'Match format not set'}</p></div>
   <div class="toolbar">${canStartNext?`<button id="nextSet" class="primary" ${team.players.length<6?'disabled':''}>${optionalThird?'Record optional set 3':match.sets.length?`Set up set ${next}`:'Set up set 1'}</button>`:''}${team.editable?'<button id="editMatchDetails">Edit match details</button>':''}<button id="deleteMatch" class="danger">Delete match</button></div>
-  ${match.inProgress?'<p class="muted">Finish the set in progress before starting another set in this match.</p>':''}
+  ${match.inProgress?`<p class="muted">${match.winner?'Official result decided; finish the exhibition set in progress to complete its stats.':'Finish the set in progress before starting another set in this match.'}</p>`:''}
   ${match.sets.length?'<h2 class="list-title">Sets</h2>':''}
-  <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1,canCorrectServe=n===1||n===match.bestOf;return item(team.color,`<h3>Set ${n}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target} · ${r.config.firstServe==='us'?esc(team.name):esc(match.opponent||'Opponent')} served first</p>`,
+  <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1,exhibition=isExhibitionSet(r,match.sets),canCorrectServe=n===1||n===match.bestOf;return item(team.color,`<h3>Set ${n}${exhibition?' · Exhibition':''}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target} · ${r.config.firstServe==='us'?esc(team.name):esc(match.opponent||'Opponent')} served first${exhibition?' · statistics count; excluded from match result':''}</p>`,
    `<button data-resume="${esc(r.config.id)}" class="primary">${state.status==='ended'?'Open set':'Resume set'}</button>${canCorrectServe?`<button data-correct-first-serve="${esc(r.config.id)}">Correct first serve</button>`:''}${i===match.sets.length-1?`<button data-delete-set="${esc(r.config.id)}" class="danger">Delete set</button>`:''}`,'set-card');}).join('')}</div>
   ${match.sets.length?'':`<div class="card"><p>Not started · ${esc(match.date)} · Best of ${match.bestOf}. Choose Set up set 1 to change the details or pick the lineup and first serve.</p></div>`}
   ${match.sets.length>1?'<p class="muted">Only the latest set can be deleted, so set numbers and first serve stay in order.</p>':''}`;
@@ -471,6 +479,7 @@ function editLineup(team,lineup=null){
 function matchSetup(team,match=null){
  team=teams.find(t=>t.id===team.id);notice();
  const setNumber=match?match.sets.length+1:1,planned=match&&!match.sets.length;
+ const exhibition=Boolean(match&&match.bestOf===3&&setNumber===3&&match.sets.length===2&&match.winner);
  const historyTeam=teamHierarchy(teams,sets).find(t=>t.id===team.id)??{...team,matches:[]};
  const lineupSuggestion=buildLineupSuggestion(team,historyTeam);
  bar(match&&!planned?`Set ${setNumber}`:planned?match.opponent:'New match',match?`${team.name} · ${planned?'Saved match':match.opponent}`:team.name,{label:match?match.opponent:team.name,action:home});
@@ -479,6 +488,7 @@ function matchSetup(team,match=null){
  const previousRotation=previousSet?replaySet(previousSet).rotation:null;
  const lineupOptions=()=>`<option value="">Custom lineup${previous?' / previous set':''}</option>`+team.lineups.map(l=>`<option value="${esc(l.id)}">${esc(l.name)} · ${l.system}${lineupIssue(team,l)?' (needs review)':''}</option>`).join('');
  $('content').innerHTML=`<form id="matchForm"><div class="grid"><label>Opponent<input id="opponent" required maxlength="100" autocomplete="off"></label><label>Match date<input id="date" type="date" required value="${date}"></label><label>Match format<select id="bestOf" ${match?.bestOf&&!planned?'disabled':''}><option value="3">Best of 3</option><option value="5">Best of 5</option></select></label><label id="firstServeLabel">First serve<select id="firstServe"><option value="them">${esc(team.name)} receives</option><option value="us">${esc(team.name)} serves</option></select></label></div><p id="setRules" class="help"></p>
+ ${exhibition?`<p class="help" id="exhibitionNote">Optional exhibition set. Its stats count for players and the team; the official result stays ${match.wins.us}–${match.wins.them}.</p>`:''}
  ${lineupSuggestionMarkup(lineupSuggestion,team.color,team.lineups.length)}
  <fieldset><legend>Choose lineup</legend><label>Saved lineup<select id="lineupSelect">${lineupOptions()}</select></label><p id="lineupNote" class="muted">${previous?'Previous set’s base R1 lineup copied below. You can choose another saved lineup.':'Choose a saved lineup or build one below.'}</p><fieldset id="lineupFields"></fieldset>
  <details id="saveLineupDetails" class="save-lineup"><summary>Save this lineup for later</summary><label>New lineup name<input id="saveLineupName" maxlength="100" placeholder="Standard 6-2"></label><button type="button" id="saveLineup">Save as new lineup</button></details></fieldset>
@@ -529,10 +539,10 @@ function matchSetup(team,match=null){
   if(match.bestOf)$('bestOf').value=String(match.bestOf);
  }
  function rules(){
-  const plan=setPlan({bestOf:Number($('bestOf').value),setNumber,previousSet});
+  const plan=setPlan({bestOf:Number($('bestOf').value),setNumber,previousSet,exhibition});
   $('firstServeLabel').hidden=Boolean(plan.firstServe);if(plan.firstServe)$('firstServe').value=plan.firstServe;
   const server=$('firstServe').value==='us'?team.name:match?.opponent??'Opponent';
-  $('setRules').textContent=`Set ${setNumber} is played to ${plan.target}${plan.deciding?' (deciding set)':''}.`+(plan.firstServe?` ${server} serves first; first serve alternates each set.`:'');
+  $('setRules').textContent=`Set ${setNumber} is played to ${plan.target}${exhibition?' (exhibition)':plan.deciding?' (deciding set)':''}.`+(plan.firstServe?` ${server} serves first; first serve alternates each set.`:'');
   preview();
  }
  $('bestOf').onchange=rules;
@@ -550,7 +560,7 @@ function matchSetup(team,match=null){
   });
  });
  $('matchForm').onsubmit=e=>{e.preventDefault();
-  const choices={...editor.read(),bestOf:Number($('bestOf').value),opponent:$('opponent').value,date:$('date').value,firstServe:$('firstServe').value,
+  const choices={...editor.read(),bestOf:Number($('bestOf').value),opponent:$('opponent').value,date:$('date').value,firstServe:$('firstServe').value,exhibition,
     rotationMode:$('rotationMode').value,rotation:Number($('startingRotation').value),previousSet,lineupId:selectedLineupId};
   save(async()=>{const record=makeMatchSet(team,choices,{setId:identity(),matchId:match?.id??identity(),setNumber});await withFreshStore(()=>store.startSet(record,expected()));busy=false;location.href='./index.html';});
  };
