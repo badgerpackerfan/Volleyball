@@ -222,6 +222,13 @@ function liberoSwitch(lib) { return command('libero.switch', {outPlayerId:player
 function syncState() {
   const s = session.state;
   SYSTEM = session.record.config.system;
+  const actionsById=new Map(session.record.actions.map(action=>[action.id,action]));
+  const activeActions=s.activeActionIds.map(id=>actionsById.get(id)).filter(Boolean);
+  let lastRallyIndex=-1;
+  activeActions.forEach((action,index)=>{if(action.type==='rally')lastRallyIndex=index;});
+  const currentRallyActions=activeActions.slice(lastRallyIndex+1);
+  const passRatedThisRally=currentRallyActions.some(action=>action.type==='receive.rating');
+  const attackTrackedThisRally=currentRallyActions.some(action=>action.type==='attack.attempt');
   const rallies=s.rallies.map(r=>({rot:`R${r.rotation} · S${r.setterPosition ?? '–'}`,rotN:r.rotation,srv:r.servingTeam,
     sv:r.serverId===null ? null : numberFor(r.serverId),bk:r.backRowPlayerIds.map(numberFor),team:r.team,code:r.code,
     player:r.playerId===null ? null : numberFor(r.playerId),us:r.score.us,them:r.score.them,winner:r.winner,actionId:r.actionId}));
@@ -236,14 +243,14 @@ function syncState() {
     partner:Object.fromEntries(Object.entries(s.partners).map(([k,v])=>[numberFor(k),v.length===1 ? numberFor(v[0]) : null])),
     rotations:s.rotations, rotation:s.rotation, serving:s.servingTeam, us:s.score.us, them:s.score.them,
     subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
-    rallies,timeouts,timeline,
+    rallies,timeouts,timeline,passRatedThisRally,attackTrackedThisRally,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
   if (LIBEROS.length && !s.libero && s.liberoFor !== 'none' && SLOTS[S.order[0]].role === s.liberoFor && s.status === 'live')
     S.banners.push({kind:'libero',slot:S.order[0],text:`Libero in for #${S.onCourt[S.order[0]]}?`});
   receiveEdits = clone(s.receiveEdits);
   if(ui) ui.passer=s.receivePasser;
-  history = s.activeActionIds.map(id => { const a=session.record.actions.find(a=>a.id===id); return {desc:actionLabel(a)}; });
+  history = activeActions.map(action=>({desc:actionLabel(action)}));
 }
 function actionLabel(a) {
   if(a.type==='rally') return `${TEAM_NAMES[a.payload.team]} ${a.payload.code}${a.payload.playerId ? ' #'+numberFor(a.payload.playerId) : ''}`;
@@ -287,6 +294,8 @@ async function perform(cmd, clear=true) {
         pendingPassRating: null, playerAction: null,
         timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
         timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} } };
+    } else if (cmd.type === 'receive.rating' || cmd.type === 'attack.attempt') {
+      ui = { ...ui, showBase: false };
     } else if (cmd.type === 'rally' || cmd.type === 'correction') {
       ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null, showBase: false };
       tacticalDrag = null;
@@ -387,15 +396,16 @@ function render() {
   }
   const timeoutMode = Boolean(ui.timeoutMode), timeoutView = ui.timeoutView || (S.serving === 'them' ? 'receive' : 'defense');
   const form = formation(timeoutMode && timeoutView === 'receive');
-  const rcv = form && !form.none && !ui.showBase ? form : null;
-  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : rcv?.spots;
-  if (!form.receiving || form.none || ui.showBase) { editingReceive = false; $('receiveStatus').textContent = ''; }
+  const autoBaseDefense=!timeoutMode&&!ui.showBase&&(S.passRatedThisRally||S.attackTrackedThisRally)&&Boolean(form?.base?.spots);
+  const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
+  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : autoBaseDefense ? form.base.spots : rcv?.spots;
+  if (!form.receiving || form.none || ui.showBase || autoBaseDefense) { editingReceive = false; $('receiveStatus').textContent = ''; }
   if (timeoutMode) $('receiveStatus').textContent = timeoutView === 'receive'
     ? 'Timeout · drag players to adjust serve receive. Legal order and spacing are enforced. Tap Done with timeout to return to the set.'
     : 'Timeout · drag players to adjust base defense. Tap Done with timeout to return to the set.';
   court.classList.toggle('editing', editingReceive);
-  $('editReceive').disabled = timeoutMode || !form.receiving || form.none;
-  $('editReceive').hidden = timeoutMode || !form.receiving || form.none;
+  $('editReceive').disabled = timeoutMode || !form.receiving || form.none || autoBaseDefense;
+  $('editReceive').hidden = timeoutMode || !form.receiving || form.none || autoBaseDefense;
   $('editReceive').textContent = editingReceive ? 'Done' : 'Adjust receive';
   $('editReceive').setAttribute('aria-pressed', String(editingReceive));
   $('resetReceive').hidden = timeoutMode || !editingReceive;
@@ -421,7 +431,7 @@ function render() {
     const disc = `disc ${isLib ? 'lib' : SLOTS[slot].role}${!isFront(pos) && !isLib ? ' back' : ''}`;
     const plan = SLOTS[slot].plan;
     const swapTag = plan && !isLib && !rcv ? `<span class="swap-tag">⇄ #${S.onCourt[slot] === plan.back ? plan.front : plan.back}</span>` : '';
-    const serving = !timeoutMode && pos === 1 && S.serving === 'us';
+    const serving = !timeoutMode && !autoBaseDefense && pos === 1 && S.serving === 'us';
     z.innerHTML = `<span class="pos">P${pos}</span>
       <span class="dwrap"><span class="${disc}">${p}</span>${formMark(p,pos)}${serving ? '<span class="ball"><svg viewBox="0 0 512 512"><use href="#vb"/></svg></span>' : ''}${swapTag}</span>
       <span class="name">${info.n}<small>${info.r}</small></span>`;
@@ -429,7 +439,7 @@ function render() {
 
   // Court view (label on the court; controls in the Us pad)
   const mode = S.serving === 'them' ? 'SERVE RECEIVE' : 'SERVING';
-  const viewTitle = timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : !rcv ? 'ROTATION SPOTS' : mode;
+  const viewTitle = timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : autoBaseDefense ? 'BASE DEFENSE' : !rcv ? 'ROTATION SPOTS' : mode;
   court.querySelector('.court-mark').textContent = `${viewTitle} · ${rotLabel().replace(' · ', ' · ')}`;
   const tools = document.querySelector('.court-tools'), inCourt = document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
@@ -443,12 +453,12 @@ function render() {
       if (ui.timeoutPasser !== b.dataset.pass) { ui.timeoutPasser = b.dataset.pass; ui.timeoutPositions.receive = {}; render(); }
     } else selectReceive(b.dataset.pass);
   });
-  $('rcvPassers').hidden = timeoutMode && timeoutView !== 'receive';
+  $('rcvPassers').hidden = autoBaseDefense || (timeoutMode && timeoutView !== 'receive');
   $('rcvToggle').hidden = timeoutMode;
   $('rcvToggle').textContent = 'Rotation spots';
   $('rcvToggle').setAttribute('aria-pressed', ui.showBase ? 'true' : 'false');
-  $('rcvToggle').disabled = !!(form && form.none) && !timeoutMode;
-  $('rcvToggle').title = form && form.none ? 'No formation yet for a front-row setter' : 'Show the rotation spots';
+  $('rcvToggle').disabled = !!(form && form.none) && !timeoutMode && !autoBaseDefense;
+  $('rcvToggle').title = autoBaseDefense ? 'Show the rotation spots' : form && form.none ? 'No formation yet for a front-row setter' : 'Show the rotation spots';
   $('timeoutTools').hidden = !timeoutMode;
   $('timeoutTools').querySelectorAll('[data-timeout-view]').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.timeoutView === timeoutView));
