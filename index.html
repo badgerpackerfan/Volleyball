@@ -550,6 +550,15 @@
   .rchip .c { font-weight: 800; font-size: 16px; }
   .rchip .s { font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
   .rchip.latest { box-shadow: 0 0 0 2px var(--ink); }
+  .timeout-marker {
+    flex: 0 0 auto; display: grid; gap: 4px; align-content: center; padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-top: 4px solid var(--accent);
+    border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--card));
+    color: var(--ink); text-align: center; white-space: nowrap;
+  }
+  .timeout-marker .label { font-size: 12px; font-weight: 900; letter-spacing: .04em; }
+  .timeout-marker .score { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .timeout-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
   .undo {
     border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 24px; font-weight: 800;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
