@@ -4,12 +4,12 @@ import { colorTheme, inferColorTheme } from '../app/themes.mjs';
 // Standard match rules: every set goes to 25 except the deciding set (3 of a
 // best-of-3, 5 of a best-of-5), which goes to 15. First serve is chosen for set 1
 // and the deciding set; other sets alternate from the set before.
-export function setPlan({bestOf,setNumber,previousSet}) {
+export function setPlan({bestOf,setNumber,previousSet,exhibition=false}) {
   if(![3,5].includes(bestOf))throw new Error('Choose best of 3 or best of 5.');
   if(!Number.isSafeInteger(setNumber)||setNumber<1||setNumber>bestOf)throw new Error(`A best-of-${bestOf} match has at most ${bestOf} sets.`);
-  const deciding=setNumber===bestOf,chooseServe=setNumber===1||deciding;
+  const formatDeciding=setNumber===bestOf,deciding=formatDeciding&&!exhibition,chooseServe=setNumber===1||formatDeciding;
   if(!chooseServe&&!previousSet)throw new Error('The previous set is needed to alternate first serve.');
-  return {deciding,target:deciding?15:25,
+  return {deciding,target:formatDeciding?15:25,
     firstServe:chooseServe?null:previousSet.config.firstServe==='us'?'them':'us'};
 }
 
@@ -65,6 +65,22 @@ export function correctSetFirstServe(record, servingTeam) {
 
 export const matchWinner=(wins,bestOf)=>bestOf?(['us','them'].find(side=>wins[side]>bestOf/2)??null):null;
 
+/** Identify an exhibition set, including optional sweep sets saved before the flag existed. */
+export function isExhibitionSet(record, records=[]) {
+  if(record.config.exhibition===true)return true;
+  const c=record.config;
+  if(c.bestOf!==3||(c.setNumber??1)!==3)return false;
+  const firstTwo=orderMatchSets(records).filter(set=>(set.config.setNumber??1)<3).slice(0,2);
+  if(firstTwo.length!==2)return false;
+  const wins={us:0,them:0};
+  for(const set of firstTwo){
+    const state=replaySet(set);
+    if(state.status!=='ended')return false;
+    wins[state.winner]++;
+  }
+  return Boolean(matchWinner(wins,3));
+}
+
 export function orderMatchSets(records) {
   return [...records].sort((a,b)=>(a.config.setNumber??1)-(b.config.setNumber??1)
     || (a.actions[0]?.occurredAt??'').localeCompare(b.actions[0]?.occurredAt??'')
@@ -97,7 +113,11 @@ export function teamHierarchy(teams, records) {
       match.date=first?(first.matchDate||''):match.planned.date;
       match.bestOf=match.sets.find(r=>r.config.bestOf)?.config.bestOf??(first?null:match.planned.bestOf);
       match.wins={us:0,them:0};match.inProgress=false;
-      for(const record of match.sets){const state=replaySet(record);if(state.status==='ended')match.wins[state.winner]++;else match.inProgress=true;}
+      for(const record of match.sets){
+        const state=replaySet(record);
+        if(state.status!=='ended')match.inProgress=true;
+        else if(!isExhibitionSet(record,match.sets))match.wins[state.winner]++;
+      }
       match.winner=matchWinner(match.wins,match.bestOf);
     }
     team.matches.sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
@@ -107,6 +127,8 @@ export function teamHierarchy(teams, records) {
 
 export function validateSetAddition(record, existing) {
   const c=record.config;
+  if(c.exhibition!==undefined&&typeof c.exhibition!=='boolean')throw new Error('Exhibition must be true or false.');
+  if(c.exhibition===true&&!c.bestOf)throw new Error('An exhibition set must belong to a best-of match.');
   const sameMatch=existing.filter(r=>r.config.matchId===c.matchId);
   if(sameMatch.some(r=>r.config.teamId!==c.teamId))throw new Error('This match belongs to another team.');
   const siblings=orderMatchSets(sameMatch);
@@ -114,14 +136,17 @@ export function validateSetAddition(record, existing) {
   if(siblings.some(r=>replaySet(r).status!=='ended'))throw new Error('Finish the current set before starting the next set in this match.');
   if(c.bestOf){
     if(siblings.some(r=>r.config.bestOf&&r.config.bestOf!==c.bestOf))throw new Error('A new set must keep the match format.');
-    const wins={us:0,them:0};for(const r of siblings)wins[replaySet(r).winner]++;
+    const wins={us:0,them:0};for(const r of siblings){const state=replaySet(r);if(!isExhibitionSet(r,siblings))wins[state.winner]++;}
     const optionalThirdSet=c.bestOf===3&&(c.setNumber??1)===3&&siblings.length===2;
-    if(matchWinner(wins,c.bestOf)&&!optionalThirdSet)throw new Error('This match is already decided.');
-    const plan=setPlan({bestOf:c.bestOf,setNumber:c.setNumber??1,previousSet:siblings.at(-1)});
+    const decided=Boolean(matchWinner(wins,c.bestOf));
+    if(decided&&!optionalThirdSet)throw new Error('This match is already decided.');
+    if(c.exhibition===true&&(!optionalThirdSet||!decided))throw new Error('An exhibition set is only allowed as Set 3 after the match is decided.');
+    if(decided&&optionalThirdSet&&c.exhibition!==true)throw new Error('Set 3 after the match is decided must be marked as an exhibition.');
+    const plan=setPlan({bestOf:c.bestOf,setNumber:c.setNumber??1,previousSet:siblings.at(-1),exhibition:c.exhibition===true});
     if(c.rules.target!==plan.target||(plan.firstServe&&c.firstServe!==plan.firstServe))
       throw new Error('The set target or first serve does not follow the match format.');
   }
-  if(c.startingRotationSource?.mode==='carry'){
+    if(c.startingRotationSource?.mode==='carry'){
     const previous=siblings.at(-1),source=c.startingRotationSource;
     if(!previous||previous.config.id!==source.setId||previous.actions.length!==source.revision
       ||replaySet(previous).rotation!==c.startingRotation)
