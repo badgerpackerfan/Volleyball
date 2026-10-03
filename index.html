@@ -25,6 +25,10 @@
     --action-errors: #a52e29;
     --action-receive: #2866a7;
     --action-attack: #7540a5;
+    --box-points: #16713c;
+    --box-errors: #b3251f;
+    --box-receive: #397bd1;
+    --box-attack: #9254c8;
 
     /* Role colors - all >= 4.5:1 against white text. With a 5-1 the
        opposite pairs share a role, so these double as the sheet's pair colors. */
@@ -156,15 +160,17 @@
     margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .1em;
     text-transform: uppercase; color: var(--ink-dim);
   }
-  .outcome-group {
-    --group-color: var(--action-points);
-    min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 0 6px;
-    border: 1px solid color-mix(in srgb, var(--group-color) 30%, var(--line));
-    border-top: 4px solid var(--group-color); border-radius: 10px;
-    background: color-mix(in srgb, var(--group-color) 5%, var(--card));
+  .action-panel {
+    border: 1px solid color-mix(in srgb, var(--panel-color) 30%, var(--line));
+    border-top: 4px solid var(--panel-color); border-radius: 10px;
+    background: color-mix(in srgb, var(--panel-color) 8%, var(--card));
   }
-  .outcome-group h3 { min-height: 18px; margin: 0; color: var(--group-color); }
-  .our-error-group, .their-point-group { --group-color: var(--action-errors); }
+  .outcome-group {
+    --panel-color: var(--box-points); --panel-label: var(--action-points);
+    min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 6px;
+  }
+  .outcome-group h3 { min-height: 18px; margin: 0; color: var(--panel-label); }
+  .our-error-group, .their-point-group { --panel-color: var(--box-errors); --panel-label: var(--action-errors); }
   .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .code {
@@ -215,12 +221,11 @@
   .live-actions[hidden], .pass-score-panel[hidden] { display: none !important; }
   .live-actions h3 { margin-top: 0; }
   .pass-score-panel {
-    padding: 0 8px; border: 1px solid color-mix(in srgb, var(--action-receive) 30%, var(--line));
-    border-top: 4px solid var(--action-receive); border-radius: 8px;
-    background: color-mix(in srgb, var(--action-receive) 8%, var(--card));
+    --panel-color: var(--box-receive); --panel-label: var(--action-receive);
+    padding: 4px 8px 6px;
   }
   .pass-score-panel h3 {
-    min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--action-receive);
+    min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--panel-label);
   }
   .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .pass-score-grid button { min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
@@ -229,9 +234,9 @@
   .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .pass-score-grid button:disabled { opacity: .38; }
   .pass-score-status { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.2; }
-  .attack-action { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--action-attack) 40%, var(--line)); border-top: 4px solid var(--action-attack); border-radius: 11px; background: color-mix(in srgb, var(--action-attack) 8%, var(--card)); color: var(--action-attack); font-size: 16px; font-weight: 800; }
+  .attack-action { --panel-color: var(--box-attack); --panel-label: var(--action-attack); width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 12px 6px; color: var(--panel-label); font-size: 16px; font-weight: 800; }
   .attack-action small { color: var(--ink-dim); font-size: 11px; font-weight: 700; }
-  .attack-action.on { background: var(--ink); border-color: var(--ink); border-top-color: var(--action-attack); color: var(--bg); }
+  .attack-action.on { background: var(--ink); border-color: var(--ink); border-top-color: var(--panel-color); color: var(--bg); }
   .attack-action.on small { color: var(--bg); opacity: .8; }
   .attack-action:disabled { opacity: .38; }
   .pad-hint {
@@ -1188,18 +1193,18 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <!-- ② Us pad -->
     <section class="pad" id="padUs">
       <h2><button class="team-chip" id="teamMenu" title="Open team menu">8th Grade<span class="caret">▾</span></button></h2>
-      <section class="outcome-group our-point-group" aria-labelledby="ourPointHeading">
+      <section class="outcome-group action-panel our-point-group" aria-labelledby="ourPointHeading">
         <h3 id="ourPointHeading">Our Point</h3>
         <div class="grid3" id="usEarned"></div>
       </section>
-      <section class="outcome-group our-error-group" aria-labelledby="ourErrorHeading">
+      <section class="outcome-group action-panel our-error-group" aria-labelledby="ourErrorHeading">
         <h3 id="ourErrorHeading">Our Error</h3>
         <div class="grid3" id="usErr"></div>
       </section>
       <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
       <div class="live-actions">
-        <button type="button" id="attackAction" class="attack-action"><span>Attack</span><small>Non-terminal attempt</small></button>
-        <div class="pass-score-panel" id="passScorePanel" hidden>
+        <button type="button" id="attackAction" class="attack-action action-panel"><span>Attack</span><small>Non-terminal attempt</small></button>
+        <div class="pass-score-panel action-panel" id="passScorePanel" hidden>
           <h3 id="passScoreTitle">Serve Receive · choose score</h3>
           <div class="pass-score-grid" id="passScoreGrid" role="group" aria-labelledby="passScoreTitle"></div>
           <p class="pass-score-status" id="passScoreStatus" role="status" aria-live="polite" hidden></p>
@@ -1256,11 +1261,11 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <!-- ⑥ Them pad -->
     <section class="pad" id="padThem">
       <h2><span class="team-chip opp">West Fargo</span></h2>
-      <section class="outcome-group their-point-group" aria-labelledby="theirPointHeading">
+      <section class="outcome-group action-panel their-point-group" aria-labelledby="theirPointHeading">
         <h3 id="theirPointHeading">Their Point</h3>
         <div class="grid3" id="thEarned"></div>
       </section>
-      <section class="outcome-group their-error-group" aria-labelledby="theirErrorHeading">
+      <section class="outcome-group action-panel their-error-group" aria-labelledby="theirErrorHeading">
         <h3 id="theirErrorHeading">Their Error</h3>
         <div class="grid3" id="thErr"></div>
       </section>
