@@ -119,6 +119,8 @@ export function teamHierarchy(teams, records) {
         else if(!isExhibitionSet(record,match.sets))match.wins[state.winner]++;
       }
       match.winner=matchWinner(match.wins,match.bestOf);
+      match.opponentScout=match.sets.map(record=>record.config.opponentScout).filter(Boolean).at(-1)
+        ??match.planned?.opponentScout??null;
     }
     team.matches.sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
   }
