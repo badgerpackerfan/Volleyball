@@ -313,8 +313,10 @@ export function buildLineupAnalysis(team) {
       }
     }
 
-    for (const attempt of state.attackAttempts ?? [])
-      analysisPlayer(lineup, attempt.playerId).attacking.nonTerminalAttempts++;
+    for (const attempt of state.attackAttempts ?? []) {
+      if ((attempt.team ?? 'us') === 'us' && attempt.playerId)
+        analysisPlayer(lineup, attempt.playerId).attacking.nonTerminalAttempts++;
+    }
 
     let runRotation = null, teamRun = 0, opponentRun = 0;
     for (const rally of state.rallies) {
