@@ -214,6 +214,9 @@
   .attack-target-grid button { min-width: 0; min-height: 32px; padding: 2px; border: 1px solid color-mix(in srgb, var(--box-attack) 28%, var(--line)); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 12px; font-weight: 800; line-height: 1; }
   .attack-target-grid button small { display: block; margin-top: 2px; color: var(--ink-dim); font-size: 8px; font-weight: 700; line-height: 1.05; }
   .attack-target-grid button[aria-pressed="true"] { border: 2px solid var(--box-attack); background: color-mix(in srgb, var(--box-attack) 12%, var(--card)); color: var(--action-attack); }
+  .attack-court-trigger { min-height: 34px; padding: 4px 8px; border: 1px dashed color-mix(in srgb, var(--box-attack) 45%, var(--line)); border-radius: 7px; color: var(--action-attack); font-size: 11px; font-weight: 800; }
+  .attack-court-trigger[aria-pressed="true"] { border-style: solid; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); }
+  .attack-court-trigger:disabled { opacity: .55; }
   .attack-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
   .attack-results button { min-width: 0; min-height: 46px; padding: 4px 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 12px; font-weight: 850; line-height: 1.1; }
   .attack-results button small { display: block; margin-top: 3px; font-size: 8px; font-weight: 700; line-height: 1.1; }
@@ -478,7 +481,10 @@
   }
   .court .net { position: absolute; inset: 0 0 auto 0; height: 1.7%; background: var(--chalk); z-index: 2; transition: top .24s ease-in-out; }
   .court .attack-line { position: absolute; top: 33.333%; left: 0; width: 100%; border-top: 2px dashed rgba(255,255,255,.75); pointer-events: none; transition: top .24s ease-in-out; }
+  .court .opponent-court-half { display: none; position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 50%; pointer-events: none;
+    background: linear-gradient(color-mix(in srgb, var(--action-attack) 28%, var(--court)), color-mix(in srgb, var(--action-attack) 28%, var(--court-2))); }
   .court .opponent-attack-line { display: none; }
+  .court.attack-target-mode .opponent-court-half { display: block; }
   .court.attack-target-mode .net { top: 50%; }
   .court.attack-target-mode .attack-line { top: 66.667%; }
   .court.attack-target-mode .opponent-attack-line { display: block; top: 33.333%; }
@@ -486,18 +492,21 @@
   .court.attack-target-mode .our-court-half { top: 50%; height: 50%; }
   .attack-zone-overlay { position: absolute; z-index: 5; inset: 0 0 50%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 2fr 1fr; }
   .attack-zone-overlay[hidden] { display: none !important; }
+  .attack-zone-overlay.our-target-zone-overlay { inset: 50% 0 0; grid-template-rows: 1fr 2fr; }
   .attack-zone-overlay button {
     min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
     padding: 2px; border: 1px solid rgba(255,255,255,.68); border-radius: 0;
-    background: color-mix(in srgb, var(--box-attack) 25%, transparent); color: #fff;
+    background: rgba(255,255,255,.06); color: #fff;
     font-size: clamp(20px, 5cqw, 30px); line-height: 1; font-weight: 900; text-shadow: 0 1px 3px #000b;
     touch-action: manipulation;
   }
-  .attack-zone-overlay button[aria-pressed="true"] { border: 3px solid #fff; background: color-mix(in srgb, var(--box-attack) 78%, #111); }
+  .attack-zone-overlay button[aria-pressed="true"] { border: 3px solid #fff; background: color-mix(in srgb, var(--action-attack) 76%, #111); }
+  .attack-zone-overlay button:disabled { opacity: .4; cursor: default; }
   .court.attack-target-mode .court-mark, .court.attack-target-mode .court-tools { display: none !important; }
   .court.attack-target-mode .zone, .court.attack-target-mode .disc { transition-duration: .24s; }
   .court.attack-returning .zone, .court.attack-returning .disc { transition-duration: .24s; }
   .court.attack-target-mode .disc, .court.attack-returning .disc { transition-property: box-shadow, transform; }
+  .court.opponent-attack-mode .attack-zone-overlay button { align-items: flex-start; justify-content: flex-start; padding: 5px 7px; font-size: clamp(14px, 3.8cqw, 22px); }
   /* Tap areas are bigger than the drawn zones: the split sits between the two
      rows of players (42%), not on the attack line, so front-row targets stay large. */
   .zone {
@@ -1461,18 +1470,7 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
       <section class="category-panel action-panel attack-panel" aria-labelledby="themAttackTitle">
         <h3 id="themAttackTitle">Attack</h3>
         <div class="attack-selected"><span>Source <b id="themAttackSource">—</b></span><span>Target <b id="themAttackTarget">—</b></span></div>
-        <div class="attack-target-label">Source zone</div>
-        <div class="attack-target-grid" id="themAttackSourceGrid" aria-label="Opponent attack source zones">
-          <button type="button" data-them-source="1" aria-pressed="false">1<small>back right</small></button><button type="button" data-them-source="6" aria-pressed="false">6<small>back middle</small></button><button type="button" data-them-source="5" aria-pressed="false">5<small>back left</small></button>
-          <button type="button" data-them-source="2" aria-pressed="false">2<small>front right</small></button><button type="button" data-them-source="3" aria-pressed="false">3<small>front middle</small></button><button type="button" data-them-source="4" aria-pressed="false">4<small>front left</small></button>
-        </div>
-        <div class="attack-target-tools" id="themAttackTargetTools" hidden>
-          <div class="attack-target-label">Target zone · optional</div>
-          <div class="attack-target-grid" id="themAttackTargetGrid" aria-label="Optional opponent attack target zones on our court">
-            <button type="button" data-them-target="4" aria-pressed="false">4<small>front left</small></button><button type="button" data-them-target="3" aria-pressed="false">3<small>front middle</small></button><button type="button" data-them-target="2" aria-pressed="false">2<small>front right</small></button>
-            <button type="button" data-them-target="5" aria-pressed="false">5<small>back left</small></button><button type="button" data-them-target="6" aria-pressed="false">6<small>back middle</small></button><button type="button" data-them-target="1" aria-pressed="false">1<small>back right</small></button>
-          </div>
-        </div>
+        <button type="button" class="attack-court-trigger" id="themAttackCourtToggle" aria-pressed="false">Choose zones on court</button>
         <div class="attack-result-label">Attack result</div>
         <div class="attack-results" role="group" aria-label="Opponent attack result">
           <button type="button" class="their-kill" data-them-result="kill" disabled>Kill<small>Their point</small></button>
