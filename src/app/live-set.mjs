@@ -180,7 +180,7 @@ function timeoutReceiveError(spots, slot, target) {
 /* ---------------- State ---------------- */
 let S, history, ui;
 let receiveEdits = {};
-let editingReceive = false, receiveDrag = null, tacticalDrag = null;
+let editingReceive = false, receiveDrag = null, tacticalDrag = null, attackReturnTimer = null;
 async function saveReceiveEdits() {
   const key = formation().editKey;
   return perform({ type: 'receive.edit', payload: { key, positions: receiveEdits[key] || null } }, false);
@@ -437,12 +437,20 @@ function render() {
   // Court
   const court = $('court');
   if (!court.dataset.built) {
-    court.innerHTML = '<div class="net"></div><div class="attack-line"></div><span class="court-mark"></span>';
+    court.innerHTML = '<div class="net"></div><div class="attack-line"></div><div class="attack-line opponent-attack-line"></div><div class="attack-zone-overlay" id="attackZoneOverlay" role="group" aria-label="Optional target zones on the opponent court"></div><span class="court-mark"></span><div class="our-court-half"></div>';
+    const targetOverlay=court.querySelector('.attack-zone-overlay');
+    for(const [zone,label] of [[1,'back right'],[6,'back middle'],[5,'back left'],[2,'front right'],[3,'front middle'],[4,'front left']]){
+      const button=document.createElement('button');
+      button.type='button';button.dataset.usTarget=zone;
+      button.setAttribute('aria-label',`Target zone ${zone}, opponent ${label}`);
+      button.textContent=String(zone);
+      targetOverlay.appendChild(button);
+    }
     for (const slot in SLOTS) {
       const z = document.createElement('button');
       z.dataset.slot = slot;
       z.onclick = () => onTile(posOf(slot), +slot);
-      court.appendChild(z);
+      court.querySelector('.our-court-half').appendChild(z);
     }
     court.dataset.built = '1';
   }
@@ -451,6 +459,18 @@ function render() {
   const autoBaseDefense=!timeoutMode&&!ui.showBase&&(S.passRatedThisRally||S.attackTrackedThisRally)&&Boolean(form?.base?.spots);
   const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
   const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : autoBaseDefense ? form.base.spots : rcv?.spots;
+  const attackTargetMode=!timeoutMode&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
+  const wasAttackTargetMode=court.classList.contains('attack-target-mode');
+  if(attackTargetMode){
+    clearTimeout(attackReturnTimer);attackReturnTimer=null;
+    court.classList.remove('attack-returning');
+  }else if(wasAttackTargetMode){
+    court.classList.add('attack-returning');
+    clearTimeout(attackReturnTimer);
+    attackReturnTimer=setTimeout(()=>{court.classList.remove('attack-returning');attackReturnTimer=null;},280);
+  }
+  court.classList.toggle('attack-target-mode',attackTargetMode);
+  $('courtWrap').classList.toggle('attack-target-mode',attackTargetMode);
   if (!form.receiving || form.none || ui.showBase || autoBaseDefense) { editingReceive = false; $('receiveStatus').textContent = ''; }
   if (timeoutMode) $('receiveStatus').textContent = timeoutView === 'receive'
     ? 'Timeout · drag players to adjust serve receive. Legal order and spacing are enforced. Tap Done with timeout to return to the set.'
@@ -496,6 +516,7 @@ function render() {
   const tools = document.querySelector('.court-tools'), inCourt = document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
   if (!inCourt && tools.parentElement === court) $('courtWrap').appendChild(tools);
+  tools.hidden=attackTargetMode;
   $('courtWrap').classList.toggle('serving', S.serving === 'us');
   $('rcvPassers').innerHTML = form && !form.none && form.options.length > 1
     ? form.options.map(o => `<button class="pill" data-pass="${o}" aria-pressed="${o === form.passer && !ui.showBase}">${PASS_LABEL[o]}</button>`).join('')
@@ -518,6 +539,11 @@ function render() {
   });
 
   // Pads
+  for (const [padId, team] of [['padUs','us'],['padThem','them']]) {
+    const serving = S.serving === team;
+    $(padId).querySelector('.serve-panel').classList.toggle('inactive', !serving);
+    $(padId).querySelector('.receive-panel').classList.toggle('inactive', serving);
+  }
   document.querySelectorAll('.code').forEach(b => {
     const team = b.dataset.team, code = b.dataset.code;
     b.disabled = timeoutMode || editingReceive || session.state.status==='ended' || !possible(team, code);
@@ -549,16 +575,25 @@ function render() {
   const ourHitter=ourAttackSlot==null?null:S.onCourt[ourAttackSlot];
   $('usAttackStatus').textContent=ourHitter==null
     ?ui.pendingAttackResult==null
-      ?ui.attackTargetZone==null?'Choose a result and optional target, then tap the attacking player on court.':'Target selected · choose a result, then tap the attacking player on court.'
-      :`${ui.pendingAttackResult==='kill'?'Kill':ui.pendingAttackResult==='in'?'In Play':'Hitting Error'} selected · tap the attacking player on court.`
+      ?ui.attackTargetZone==null?'Choose a result, then tap an opponent zone (optional) and our hitter.':'Target selected · choose a result, then tap our hitter.'
+      :`${ui.pendingAttackResult==='kill'?'Kill':ui.pendingAttackResult==='in'?'In Play':'Hitting Error'} selected · tap an opponent zone (optional), then our hitter.`
     :`#${ourHitter} selected · target optional.`;
   $('usAttackSelected').hidden=ourHitter==null;
   $('usAttackPlayer').textContent=ourHitter==null?'—':`#${ourHitter}`;
   $('usAttackTarget').textContent=ui.attackTargetZone==null?'—':`Z${ui.attackTargetZone}`;
-  $('usAttackTargetGrid').querySelectorAll('[data-us-target]').forEach(button=>{
+  const attackTargetOverlay=$('attackZoneOverlay');
+  attackTargetOverlay.hidden=!attackTargetMode;
+  attackTargetOverlay.querySelectorAll('[data-us-target]').forEach(button=>{
     const selected=Number(button.dataset.usTarget)===ui.attackTargetZone;
     button.setAttribute('aria-pressed',String(selected));
     button.disabled=attackDisabled;
+    button.onclick=()=>{
+      if(button.disabled)return;
+      const zone=Number(button.dataset.usTarget);
+      ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,
+        attackTargetZone:ui.attackTargetZone===zone?null:zone};
+      render();
+    };
   });
   document.querySelectorAll('[data-us-result]').forEach(button=>{
     const selected=button.dataset.usResult===ui.pendingAttackResult;
@@ -1139,13 +1174,6 @@ $('teamBtn').onclick = () => { if (ui.pendingCode) { commit('us', ui.pendingCode
 
 $('undoBtn').onclick = () => command('undo', {});
 
-document.querySelectorAll('[data-us-target]').forEach(button=>button.onclick=()=>{
-  if(button.disabled)return;
-  const zone=Number(button.dataset.usTarget);
-  ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,
-    attackTargetZone:ui.attackTargetZone===zone?null:zone};
-  render();
-});
 document.querySelectorAll('[data-us-result]').forEach(button=>button.onclick=()=>{
   if(button.disabled)return;
   const result=button.dataset.usResult;
