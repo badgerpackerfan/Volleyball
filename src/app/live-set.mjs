@@ -264,24 +264,17 @@ function syncState() {
     sv:r.serverId===null ? null : numberFor(r.serverId),bk:r.backRowPlayerIds.map(numberFor),team:r.team,code:r.code,
     player:r.playerId===null ? null : numberFor(r.playerId),attackSourceZone:r.attackSourceZone??null,
     attackTargetZone:r.attackTargetZone??null,us:r.score.us,them:r.score.them,winner:r.winner,actionId:r.actionId}));
-  const attacks=(s.attackAttempts??[]).map(attempt=>({kind:'attack',team:attempt.team??'us',
-    player:attempt.playerId?numberFor(attempt.playerId):null,sourceZone:attempt.sourceZone??null,
-    targetZone:attempt.targetZone??null,us:attempt.score.us,them:attempt.score.them,actionId:attempt.actionId}));
   const timeouts=s.timeouts.map(t=>({team:t.team,us:t.score.us,them:t.score.them,actionId:t.actionId}));
-  const opponentSubs=s.opponentSubstitutions.map(sub=>({inJersey:sub.inJersey,outJersey:sub.outJersey,
-    us:sub.score.us,them:sub.score.them,actionId:sub.actionId}));
   const visibleEvents=new Map([
     ...rallies.map(r=>[r.actionId,{kind:'rally',...r}]),
-    ...attacks.map(a=>[a.actionId,a]),
     ...timeouts.map(t=>[t.actionId,{kind:'timeout',...t}]),
-    ...opponentSubs.map(sub=>[sub.actionId,{kind:'opponent-substitution',...sub}]),
   ]);
   const timeline=s.activeActionIds.flatMap(id=>visibleEvents.has(id)?[visibleEvents.get(id)]:[]);
   S = { order:s.order.map(Number), onCourt:Object.fromEntries(Object.entries(s.onCourt).map(([k,v])=>[k,numberFor(v)])),
     libero:s.libero ? {slot:Number(s.libero.slotId), player:numberFor(s.libero.playerId),replaced:numberFor(s.libero.replacedPlayerId)} : null,
     partner:Object.fromEntries(Object.entries(s.partners).map(([k,v])=>[numberFor(k),v.length===1 ? numberFor(v[0]) : null])),
     rotations:s.rotations, rotation:s.rotation, serving:s.servingTeam, us:s.score.us, them:s.score.them,
-    subs:s.substitutionsUsed, opponentSubs, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
+    subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
     rallies,timeouts,timeline,passRatedThisRally,attackTrackedThisRally,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
@@ -621,32 +614,10 @@ function render() {
   track.className = 'run-track';
   track.tabIndex=0;
   track.setAttribute('role','region');
-  track.setAttribute('aria-label', 'Recent rallies, timeouts and opponent substitutions, oldest to newest. Event markers show the score when recorded. Scroll horizontally to review the entire set.');
+  track.setAttribute('aria-label', 'Recent point outcomes and timeouts, oldest to newest. Green marks our points; red marks opponent points. Dividers mark our side-outs. Scroll horizontally to review the entire set.');
   const last = S.timeline;
   track.dataset.itemCount=String(last.length);
   last.forEach((event, i) => {
-    if(event.kind==='attack'){
-      const marker=document.createElement('div');
-      const isUs=event.team==='us';
-      const source=isUs?`#${event.player}`:`Z${event.sourceZone}`;
-      const target=event.targetZone==null?'':` → Z${event.targetZone}`;
-      marker.className=`attack-marker${i===last.length-1?' latest':''}`;
-      marker.setAttribute('role','img');
-      marker.setAttribute('aria-label',`${isUs?'Our':'Their'} attack in play, ${source}${target}, at ${event.us}–${event.them}`);
-      marker.innerHTML=`<span class="label">${isUs?'OUR':'THEIR'} ATTACK · IN PLAY</span><span>${esc(source+target)}</span><span class="score">${event.us}–${event.them}</span>`;
-      track.appendChild(marker);
-      return;
-    }
-    if(event.kind==='opponent-substitution'){
-      const marker=document.createElement('div');
-      marker.className=`substitution-marker${i===last.length-1?' latest':''}`;
-      marker.setAttribute('role','img');
-      marker.setAttribute('aria-label',`Opponent substitution: #${event.inJersey} in for #${event.outJersey} at ${event.us}–${event.them}`);
-      marker.title=`Opponent substitution · #${event.inJersey} in for #${event.outJersey} · ${event.us}–${event.them}`;
-      marker.innerHTML=`<span class="label">THEIR SUB</span><span class="players">#${esc(event.inJersey)} for #${esc(event.outJersey)}</span><span class="score">${event.us}–${event.them}</span>`;
-      track.appendChild(marker);
-      return;
-    }
     if(event.kind==='timeout'){
       const marker=document.createElement('div');
       marker.className=`timeout-marker${i===last.length-1?' latest':''}`;
@@ -668,7 +639,7 @@ function render() {
     const zoneDetail=zoneLabel?`<small>${zoneLabel}</small>`:'';
     c.innerHTML = `<span class="c">${r.code}${whoLabel}${zoneDetail}</span><span class="s">${r.us}–${r.them}</span>`;
     track.appendChild(c);
-    if (r.srv === 'them' && r.winner === 'us' && i < last.length - 1) {
+    if (r.srv === 'them' && r.winner === 'us' && (i < last.length - 1 || session.state.status !== 'ended')) {
       const divider = document.createElement('div');
       divider.className = 'sideout-divider';
       divider.setAttribute('role', 'separator');
