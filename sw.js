@@ -1,6 +1,6 @@
 // Bump the vN suffix whenever you publish changed app files. The previous
 // cache stays intact while this worker waits, then is removed after activation.
-const CACHE_NAME = 'volleyball-set-tracker-shell-v60';
+const CACHE_NAME = 'volleyball-set-tracker-shell-v69';
 const APP_SHELL = [
   './',
   './index.html',
@@ -27,6 +27,7 @@ const APP_SHELL = [
   './src/teams/teams.mjs',
   './src/teams/teams.css',
   './src/teams/team-model.mjs',
+  './src/teams/opponent-scout.mjs',
   './src/teams/match-model.mjs',
   './src/teams/lineup-model.mjs',
   './src/teams/stats-model.mjs',
@@ -63,7 +64,8 @@ self.addEventListener('fetch', event => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const saved = await cache.match(request);
+    const saved = await cache.match(request)
+      ?? (request.mode === 'navigate' ? await cache.match(new URL(url.pathname, self.registration.scope).href) : null);
     if (saved) return saved;
 
     try {
