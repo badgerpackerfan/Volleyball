@@ -197,8 +197,8 @@
   .category-panel .code:disabled { opacity: .68; filter: grayscale(.8); }
   .category-panel .code.pending { box-shadow: 0 0 0 3px var(--ink); }
   .receive-panel .pass-score-panel { display: grid; gap: 3px; padding: 0; border: 0; background: transparent; }
-  .receive-panel .pass-score-panel h4, .attack-target-label, .attack-result-label { margin: 0; color: var(--ink-dim); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-  .pass-score-panel[hidden], .attack-target-grid[hidden], .attack-selected[hidden] { display: none !important; }
+  .receive-panel .pass-score-panel h4 { margin: 0; color: var(--ink-dim); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .pass-score-panel[hidden] { display: none !important; }
   .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   .pass-score-grid button { min-width: 0; min-height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
   .pass-score-grid button b { font-size: 18px; line-height: 1; }
@@ -206,17 +206,6 @@
   .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .pass-score-grid button:disabled { opacity: .38; }
   .pass-score-status, .category-note { margin: 0; color: var(--ink-dim); font-size: 10px; line-height: 1.25; }
-  .attack-status { min-height: 22px; color: var(--ink-dim); font-size: 10px; line-height: 1.25; }
-  .attack-selected { display: flex; justify-content: space-between; padding: 5px 7px; border-radius: 7px; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); font-size: 11px; font-weight: 800; }
-  .attack-selected b { color: var(--action-attack); }
-  .attack-target-tools { display: grid; gap: 4px; }
-  .attack-target-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
-  .attack-target-grid button { min-width: 0; min-height: 32px; padding: 2px; border: 1px solid color-mix(in srgb, var(--box-attack) 28%, var(--line)); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 12px; font-weight: 800; line-height: 1; }
-  .attack-target-grid button small { display: block; margin-top: 2px; color: var(--ink-dim); font-size: 8px; font-weight: 700; line-height: 1.05; }
-  .attack-target-grid button[aria-pressed="true"] { border: 2px solid var(--box-attack); background: color-mix(in srgb, var(--box-attack) 12%, var(--card)); color: var(--action-attack); }
-  .attack-court-trigger { min-height: 34px; padding: 4px 8px; border: 1px dashed color-mix(in srgb, var(--box-attack) 45%, var(--line)); border-radius: 7px; color: var(--action-attack); font-size: 11px; font-weight: 800; }
-  .attack-court-trigger[aria-pressed="true"] { border-style: solid; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); }
-  .attack-court-trigger:disabled { opacity: .55; }
   .attack-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
   .attack-results button { min-width: 0; min-height: 46px; padding: 4px 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 12px; font-weight: 850; line-height: 1.1; }
   .attack-results button small { display: block; margin-top: 3px; font-size: 8px; font-weight: 700; line-height: 1.1; }
@@ -227,7 +216,6 @@
   .attack-results .in-play { border-color: var(--box-attack); background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); }
   .attack-results button:disabled { cursor: default; opacity: .68; }
   .attack-results button.pending { outline: 3px solid var(--action-attack); outline-offset: 1px; }
-  .attack-target-grid button:disabled { cursor: default; opacity: .36; }
   .zone-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .team-btn { min-height: 48px; height: 48px; padding: 3px; border-radius: 8px; border: 1px dashed var(--ink-dim); font-size: 13px; line-height: 1.1; }
   .category-grid .team-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -286,7 +274,6 @@
   .category-panel .code b.word { font-size: 13px; line-height: 1.1; }
   .category-grid .team-btn { min-height: 48px; height: 48px; padding: 3px; border-radius: 8px; font-size: 12px; line-height: 1.1; }
   .category-grid .team-btn small { font-size: 9px; line-height: 1.1; }
-  .attack-target-tools[hidden], .attack-target-grid[hidden], .attack-selected[hidden] { display: none !important; }
   .pass-score-panel[hidden] { display: none !important; }
   .pass-score-panel {
     --panel-color: var(--box-receive); --panel-label: var(--action-receive);
@@ -1394,9 +1381,6 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
       </section>
       <section class="category-panel action-panel attack-panel" aria-labelledby="usAttackTitle">
         <h3 id="usAttackTitle">Attack</h3>
-        <div class="attack-status" id="usAttackStatus" role="status" aria-live="polite">Choose a result and optional target, then tap the attacking player on court.</div>
-        <div class="attack-selected" id="usAttackSelected" hidden><span>Hitter <b id="usAttackPlayer">—</b></span><span>Target <b id="usAttackTarget">—</b></span></div>
-        <div class="attack-result-label">Attack result</div>
         <div class="attack-results" role="group" aria-label="Our attack result">
           <button type="button" class="our-kill" data-us-result="kill" aria-pressed="false">Kill<small>Our point</small></button>
           <button type="button" class="in-play" data-us-result="in" aria-pressed="false">In Play<small>Rally continues</small></button>
@@ -1469,9 +1453,6 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
       </section>
       <section class="category-panel action-panel attack-panel" aria-labelledby="themAttackTitle">
         <h3 id="themAttackTitle">Attack</h3>
-        <div class="attack-selected"><span>Source <b id="themAttackSource">—</b></span><span>Target <b id="themAttackTarget">—</b></span></div>
-        <button type="button" class="attack-court-trigger" id="themAttackCourtToggle" aria-pressed="false">Choose zones on court</button>
-        <div class="attack-result-label">Attack result</div>
         <div class="attack-results" role="group" aria-label="Opponent attack result">
           <button type="button" class="their-kill" data-them-result="kill" disabled>Kill<small>Their point</small></button>
           <button type="button" class="in-play" data-them-result="in" disabled>In Play<small>Rally continues</small></button>
