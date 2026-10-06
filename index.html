@@ -29,7 +29,7 @@
     --box-errors: #b3251f;
     --box-receive: #397bd1;
     --box-attack: #9254c8;
-    --box-serve: #208c87;
+    --box-serve: #586f8c;
     --box-other: #a66b28;
 
     /* Role colors - all >= 4.5:1 against white text. With a 5-1 the
@@ -60,7 +60,7 @@
       --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
       --line: #2a343d; --accent: #35a3b3; --page: var(--bg);
       --action-points: #74d99e; --action-errors: #ff928a; --action-receive: #92c5ff; --action-attack: #d0a4fb;
-      --box-serve: #55c0b5; --box-other: #d69b55;
+      --box-serve: #8faac6; --box-other: #d69b55;
       --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
       --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
     }
@@ -69,7 +69,7 @@
     --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
     --line: #2a343d; --accent: #35a3b3; --page: var(--bg);
     --action-points: #74d99e; --action-errors: #ff928a; --action-receive: #92c5ff; --action-attack: #d0a4fb;
-    --box-serve: #55c0b5; --box-other: #d69b55;
+    --box-serve: #8faac6; --box-other: #d69b55;
     --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
     --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
   }
@@ -224,10 +224,6 @@
   .category-grid .team-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .category-grid .team-btn small { font-size: 9px; line-height: 1.1; }
   .category-grid .team-btn.ready { border-style: solid; }
-  .attack-marker { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 84px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--box-attack) 36%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); color: var(--action-attack); font-size: 9px; font-weight: 800; }
-  .attack-marker .label { font-size: 7px; letter-spacing: .06em; }
-  .attack-marker .score { color: var(--ink-dim); font-size: 8px; }
-  .attack-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
   .rchip .c small { display: inline-block; color: var(--ink-dim); font-size: 8px !important; font-weight: 700 !important; }
   .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -610,16 +606,6 @@
   .timeout-marker .label { font-size: 12px; font-weight: 900; letter-spacing: .04em; }
   .timeout-marker .score { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .timeout-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
-  .substitution-marker {
-    flex: 0 0 auto; display: grid; gap: 4px; align-content: center; padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--action-receive) 35%, var(--line)); border-top: 4px solid var(--action-receive);
-    border-radius: 10px; background: color-mix(in srgb, var(--action-receive) 8%, var(--card));
-    color: var(--ink); text-align: center; white-space: nowrap;
-  }
-  .substitution-marker .label { font-size: 12px; font-weight: 900; letter-spacing: .04em; }
-  .substitution-marker .players { font-size: 13px; font-weight: 800; }
-  .substitution-marker .score { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .substitution-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
   .undo {
     border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 24px; font-weight: 800;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
