@@ -217,13 +217,13 @@
   .attack-results .our-error { border-color: var(--lose); background: var(--lose-tint); color: var(--lose-ink); }
   .attack-results .in-play { border-color: var(--box-attack); background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); }
   .attack-results button:disabled { cursor: default; opacity: .68; }
+  .attack-results button.pending { outline: 3px solid var(--action-attack); outline-offset: 1px; }
   .attack-target-grid button:disabled { cursor: default; opacity: .36; }
   .zone-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .team-btn { min-height: 48px; height: 48px; padding: 3px; border-radius: 8px; border: 1px dashed var(--ink-dim); font-size: 13px; line-height: 1.1; }
   .category-grid .team-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .category-grid .team-btn small { font-size: 9px; line-height: 1.1; }
   .category-grid .team-btn.ready { border-style: solid; }
-  .category-state { font-size: 10px; font-weight: 750; }
   .attack-marker { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 84px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--box-attack) 36%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); color: var(--action-attack); font-size: 9px; font-weight: 800; }
   .attack-marker .label { font-size: 7px; letter-spacing: .06em; }
   .attack-marker .score { color: var(--ink-dim); font-size: 8px; }
@@ -1351,11 +1351,11 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <section class="pad" id="padUs">
       <h2><button class="team-chip" id="teamMenu" title="Open team menu">8th Grade<span class="caret">▾</span></button></h2>
       <section class="category-panel action-panel serve-panel" aria-labelledby="usServeTitle">
-        <h3 id="usServeTitle">Serve <small id="usServeState" class="category-state"></small></h3>
+        <h3 id="usServeTitle">Serve</h3>
         <div class="category-grid two" id="usServeActions"></div>
       </section>
       <section class="category-panel action-panel receive-panel" aria-labelledby="usReceiveTitle">
-        <h3 id="usReceiveTitle">Receive <small id="usReceiveState" class="category-state"></small></h3>
+        <h3 id="usReceiveTitle">Receive</h3>
         <div class="category-grid two" id="usReceiveActions"></div>
         <div class="pass-score-panel" id="passScorePanel">
           <h4 id="passScoreTitle">Serve receive · pass score</h4>
@@ -1366,9 +1366,9 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
       </section>
       <section class="category-panel action-panel attack-panel" aria-labelledby="usAttackTitle">
         <h3 id="usAttackTitle">Attack</h3>
-        <div class="attack-status" id="usAttackStatus" role="status" aria-live="polite">Tap the attacking player on court to enable results.</div>
+        <div class="attack-status" id="usAttackStatus" role="status" aria-live="polite">Choose a result and optional target, then tap the attacking player on court.</div>
         <div class="attack-selected" id="usAttackSelected" hidden><span>Hitter <b id="usAttackPlayer">—</b></span><span>Target <b id="usAttackTarget">—</b></span></div>
-        <div class="attack-target-tools" id="usAttackTargetTools" hidden>
+        <div class="attack-target-tools" id="usAttackTargetTools">
           <div class="attack-target-label">Target zone · optional</div>
           <div class="attack-target-grid" id="usAttackTargetGrid" aria-label="Optional attack target zones on opponent court">
             <button type="button" data-us-target="4" aria-pressed="false">4<small>front left</small></button><button type="button" data-us-target="3" aria-pressed="false">3<small>front middle</small></button><button type="button" data-us-target="2" aria-pressed="false">2<small>front right</small></button>
@@ -1377,9 +1377,9 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
         </div>
         <div class="attack-result-label">Attack result</div>
         <div class="attack-results" role="group" aria-label="Our attack result">
-          <button type="button" class="our-kill" data-us-result="kill" disabled>Kill<small>Our point</small></button>
-          <button type="button" class="in-play" data-us-result="in" disabled>In Play<small>Rally continues</small></button>
-          <button type="button" class="our-error" data-us-result="error" disabled>Hitting Error<small>Their point</small></button>
+          <button type="button" class="our-kill" data-us-result="kill" aria-pressed="false">Kill<small>Our point</small></button>
+          <button type="button" class="in-play" data-us-result="in" aria-pressed="false">In Play<small>Rally continues</small></button>
+          <button type="button" class="our-error" data-us-result="error" aria-pressed="false">Hitting Error<small>Their point</small></button>
         </div>
       </section>
       <section class="category-panel action-panel other-panel" aria-labelledby="usOtherTitle">
@@ -1438,11 +1438,11 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <section class="pad" id="padThem">
       <h2><button type="button" class="team-chip opp" id="opponentMenu" title="Open opponent scouting" aria-label="Open opponent scouting">West Fargo<span class="caret">▾</span></button></h2>
       <section class="category-panel action-panel serve-panel" aria-labelledby="themServeTitle">
-        <h3 id="themServeTitle">Serve <small id="themServeState" class="category-state"></small></h3>
+        <h3 id="themServeTitle">Serve</h3>
         <div class="category-grid two" id="themServeActions"></div>
       </section>
       <section class="category-panel action-panel receive-panel" aria-labelledby="themReceiveTitle">
-        <h3 id="themReceiveTitle">Receive <small id="themReceiveState" class="category-state"></small></h3>
+        <h3 id="themReceiveTitle">Receive</h3>
         <div class="category-grid two" id="themReceiveActions"></div>
         <p class="category-note">Opponent pass grades are not tracked.</p>
       </section>
