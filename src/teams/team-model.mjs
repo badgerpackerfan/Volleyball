@@ -2,6 +2,7 @@ import { lineupConfig, startingRotation } from './lineup-model.mjs';
 import { createSet } from '../engine/set-engine.mjs';
 import { setPlan } from './match-model.mjs';
 import { COLOR_THEMES, colorTheme, inferColorTheme } from '../app/themes.mjs';
+import { normalizeOpponentScout } from './opponent-scout.mjs';
 export const POSITIONS = ['S','OH','MB','RS','L','DS'];
 const need=(ok,message)=>{if(!ok)throw new Error(message);};
 const text=(value,label,max=100)=>{need(typeof value==='string' && value.trim().length>0 && value.trim().length<=max,`${label} is required (up to ${max} characters).`);return value.trim();};
@@ -44,7 +45,8 @@ export function validateTeam(input) {
   need(Array.isArray(t.plannedMatches),'Saved matches must be a list.');
   const matchIds=new Set();
   t.plannedMatches=t.plannedMatches.map(m=>{
-    const match={id:text(m.id,'Match ID'),opponent:text(m.opponent,'Opponent name'),date:m.date,bestOf:m.bestOf};
+    const match={id:text(m.id,'Match ID'),opponent:text(m.opponent,'Opponent name'),date:m.date,bestOf:m.bestOf,
+      ...(m.opponentScout?{opponentScout:normalizeOpponentScout(m.opponentScout)}:{})};
     need(/^\d{4}-\d{2}-\d{2}$/.test(match.date)&&Number.isFinite(Date.parse(match.date)),'Choose the match date.');
     need([3,5].includes(match.bestOf),'Choose best of 3 or best of 5.');
     need(!matchIds.has(match.id),'A saved match appears twice.');matchIds.add(match.id);
@@ -72,6 +74,8 @@ export function makeMatchSet(team, choices, identity) {
   return createSet({setNumber,bestOf,rules:{target:plan.target},id:identity.setId,matchId:identity.matchId,teamId:t.id,teamRevision:t.revision,
     teamName:t.name,teamColor:t.color,teamTheme:t.teamTheme,opponentName:opponent,matchDate:choices.date,
     ...(exhibition?{exhibition:true}:{}),
+    ...(normalizeOpponentScout(choices.opponentScout??choices.previousSet?.config.opponentScout)
+      ?{opponentScout:normalizeOpponentScout(choices.opponentScout??choices.previousSet?.config.opponentScout)}:{}),
     firstServe,startingRotation:rotation,
     startingRotationSource:{mode,...(mode==='carry'?{setId:choices.previousSet.config.id,revision:choices.previousSet.actions.length}:{})},
     ...(choices.lineupId?{lineupTemplate:{id:choices.lineupId,name:t.lineups.find(l=>l.id===choices.lineupId)?.name??'Custom'}}:{}),
