@@ -17,6 +17,7 @@ const COURT = [4, 3, 2, 5, 6, 1];
 const rotated = (order, r) => [...order.slice(r - 1), ...order.slice(0, r - 1)];
 // Scoring pads share data-team/data-code attributes, so every lookup stays inside the sheet.
 const sheet = () => document.getElementById('sheetCard');
+const summaryRoot = () => sheet() ?? document.getElementById('reportBody');
 
 /* Turn season-total headings into accessible touch targets and sort that
    aggregated table in place. Match and set reports stay in their recorded order. */
@@ -263,9 +264,48 @@ export function matchSummary(ctx) {
     ...(ranked.length && ranked.at(-1).net < 0 ? [`Struggled most: #${esc(ranked.at(-1).jersey)} ${esc(ranked.at(-1).name)} (${signed(ranked.at(-1).net)})`] : [])];
   const head = sets.map((x, i) => `<th>Set ${x.record.config.setNumber ?? i + 1}${x.exhibition?' · Exhibition':''}</th>`).join('') + '<th>Match</th>';
   const row = (label, f, fmt = v => v) => `<tr><td>${label}</td>${all.map(m => `<td>${fmt(f(m))}</td>`).join('')}<td>${fmt(f(total))}</td></tr>`;
-  ctx.open(`<h4>Match summary · ${esc(ctx.teams.us)} vs ${esc(ctx.teams.them)}</h4>
+  const renderSetSummary = index => {
+    const {record,state,stats,exhibition}=sets[index], config=record.config, lineup=lineups[index], setMetrics=metrics(stats), number=config.setNumber??index+1;
+    const setRoster=new Map((config.players??[]).map(player=>[player.id,player]));
+    currentRoster.forEach((player,id)=>setRoster.set(id,player));
+    const setPlayers=Object.entries(stats.players).map(([id,player])=>({
+      ...player,who:setRoster.get(id),
+      jersey:setRoster.get(id)?.jersey??'?',
+      K:player.codes.K??0,BK:player.codes.BK??0,SA:player.codes.SA??0,HE:player.codes.HE??0,
+    })).sort((a,b)=>b.net-a.net||Number(a.jersey)-Number(b.jersey));
+    const status=state.status==='ended'
+      ? `${state.winner==='us'?ctx.teams.us:ctx.teams.them} won the set`
+      : 'In progress';
+    const pointRows=[
+      [`Won by ${esc(ctx.teams.us)} · kills, blocks, aces`,setMetrics.ourE],
+      [`Received · ${esc(ctx.teams.them)} errors`,setMetrics.theirX],
+      [`Gifted · ${esc(ctx.teams.us)} errors`,setMetrics.ourX],
+      [`Lost · ${esc(ctx.teams.them)} kills, blocks, aces`,setMetrics.theirE],
+      ['Points given away',pct(setMetrics.given)],
+      ['Free points received',pct(setMetrics.free)],
+    ].map(([label,value])=>`<tr><td>${label}</td><td>${value}</td></tr>`).join('');
+    const rotationRows=[1,2,3,4,5,6].map(rotation=>{
+      const value=stats.rotations[rotation];
+      return `<tr><td>R${rotation}</td><td>${value.won}</td><td>${value.lost}</td><td class="${value.net>0?'pos':value.net<0?'neg':''}">${value.won+value.lost?signed(value.net):'—'}</td></tr>`;
+    }).join('');
+    ctx.open(`<div class="set-summary-heading"><button type="button" class="cancel" id="backToMatchSummary">Back to match summary</button><h4>Set ${number} summary${exhibition?' · Exhibition':''}</h4></div>
+      <p>${esc(ctx.teams.us)} ${state.score.us}–${state.score.them} ${esc(ctx.teams.them)} · ${status} · ${config.system} · ${esc(lineup.name)}${lineup.inheritedFromSet?` (continued from Set ${lineup.inheritedFromSet})`:''} · ${esc(ctx.teams[config.firstServe])} served first</p>
+      <div class="summary-grid"><div><h5>Point source</h5><table class="lib-table stat-table"><thead><tr><th>Category</th><th>Points</th></tr></thead><tbody>${pointRows}</tbody></table>
+        <h5>Rotation results</h5><table class="lib-table stat-table"><thead><tr><th>Rotation</th><th>Won</th><th>Lost</th><th>+/-</th></tr></thead><tbody>${rotationRows}</tbody></table></div>
+        <div><h5>Players · Set ${number}</h5><div class="stats-table-scroll"><table class="lib-table stat-table player-performance-table"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}<th>BK</th><th>Aces</th><th>Err</th><th>+/-</th></tr></thead><tbody>
+          ${setPlayers.map(player=>`<tr><td>#${esc(player.jersey)} ${esc(player.who?.name??'')}</td>${playerPerformanceCells({
+            passing:player.passing??{},serving:{...player.serving,aces:player.SA},
+            attacking:{...player.attacking,kills:player.K,hittingErrors:player.HE},
+          })}<td>${player.BK}</td><td>${player.SA}</td><td>${player.errors}</td><td class="${player.net>0?'pos':player.net<0?'neg':''}">${signed(player.net)}</td></tr>`).join('')||'<tr><td colspan="8">No player stats yet</td></tr>'}</tbody></table></div>
+          <p>Serve in counts each rally-ending serve once; aces count in and serve errors count out.</p>
+          <p>Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts.</p></div></div>
+      <button class="cancel" id="shCancel">Close</button>`,true);
+    summaryRoot()?.querySelector('#backToMatchSummary')?.addEventListener('click',renderMatchSummary);
+  };
+  const renderMatchSummary = () => {
+    ctx.open(`<h4>Match summary · ${esc(ctx.teams.us)} vs ${esc(ctx.teams.them)}</h4>
     <p>${esc(c.matchDate || '')}${c.bestOf ? ` · Best of ${c.bestOf}` : ''} · Official sets ${won}–${lost}${exhibitionCount?` · ${exhibitionCount} exhibition set${exhibitionCount===1?'':'s'} excluded from result`:''}</p>
-    <div class="set-chips">${sets.map((x, i) => { const lineup = lineups[i]; return `<div class="${x.state.status === 'ended' ? (x.state.winner === 'us' ? 'won' : 'lost') : 'live'}"><small>Set ${x.record.config.setNumber ?? i + 1}${x.exhibition?' · Exhibition':''}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b><small class="set-lineup">${esc(lineup.name)}${lineup.inheritedFromSet ? ` · continued from Set ${lineup.inheritedFromSet}` : ''}</small></div>`; }).join('')}</div>
+    <div class="set-chips">${sets.map((x, i) => { const lineup = lineups[i], number=x.record.config.setNumber??i+1, result=x.state.status==='ended'?(x.state.winner==='us'?'won':'lost'):'live'; return `<button type="button" data-summary-set="${i}" class="${result}" aria-label="View Set ${number}${x.exhibition?' exhibition':''} summary, ${x.state.score.us} to ${x.state.score.them}"><small>Set ${number}${x.exhibition?' · Exhibition':''}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b><small class="set-lineup">${esc(lineup.name)}${lineup.inheritedFromSet ? ` · continued from Set ${lineup.inheritedFromSet}` : ''}</small></button>`; }).join('')}</div>
     ${takeaways.length ? `<h5>Takeaways</h5><ul class="fix-list">${takeaways.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
     <div class="summary-grid"><div><h5>Point source</h5><p>Won = our kills, blocks, or aces; received = opponent errors; gifted = our errors; lost = opponent kills, blocks, or aces.</p><table class="lib-table stat-table"><thead><tr><th></th>${head}</tr></thead><tbody>
       ${row('Won by us · K/BK/SA', m => m.ourE)}${row('Received · opponent errors', m => m.theirX)}${row('Gifted · our errors', m => m.ourX)}${row('Lost · opponent K/BK/SA', m => m.theirE)}
@@ -282,6 +322,9 @@ export function matchSummary(ctx) {
       <p>Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
+    summaryRoot()?.querySelectorAll('[data-summary-set]').forEach(button=>button.addEventListener('click',()=>renderSetSummary(Number(button.dataset.summarySet))));
+  };
+  renderMatchSummary();
 }
 
 /* Settings: saved on this device and applied immediately. */
