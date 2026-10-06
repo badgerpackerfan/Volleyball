@@ -29,6 +29,8 @@
     --box-errors: #b3251f;
     --box-receive: #397bd1;
     --box-attack: #9254c8;
+    --box-serve: #208c87;
+    --box-other: #a66b28;
 
     /* Role colors - all >= 4.5:1 against white text. With a 5-1 the
        opposite pairs share a role, so these double as the sheet's pair colors. */
@@ -58,6 +60,7 @@
       --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
       --line: #2a343d; --accent: #35a3b3; --page: var(--bg);
       --action-points: #74d99e; --action-errors: #ff928a; --action-receive: #92c5ff; --action-attack: #d0a4fb;
+      --box-serve: #55c0b5; --box-other: #d69b55;
       --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
       --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
     }
@@ -66,6 +69,7 @@
     --bg: #0e1317; --card: #171e24; --ink: #eaf0f4; --ink-dim: #9aa8b2;
     --line: #2a343d; --accent: #35a3b3; --page: var(--bg);
     --action-points: #74d99e; --action-errors: #ff928a; --action-receive: #92c5ff; --action-attack: #d0a4fb;
+    --box-serve: #55c0b5; --box-other: #d69b55;
     --win-tint: color-mix(in srgb, var(--win) 27%, var(--card)); --win-ink: color-mix(in srgb, var(--win) 35%, #ffffff);
     --lose-tint: color-mix(in srgb, var(--lose) 27%, var(--card)); --lose-ink: color-mix(in srgb, var(--lose) 35%, #ffffff);
   }
@@ -109,7 +113,7 @@
   .team-chip {
     display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px;
     border-radius: 12px; background: var(--accent); color: #fff; font-weight: 800; font-size: 18px;
-    white-space: nowrap;
+    white-space: nowrap; border: 0; font-family: inherit; cursor: pointer;
   }
   .team-chip .badge {
     width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.2);
@@ -171,6 +175,60 @@
   }
   .outcome-group h3 { min-height: 18px; margin: 0; color: var(--panel-label); }
   .our-error-group, .their-point-group { --panel-color: var(--box-errors); --panel-label: var(--action-errors); }
+  .category-panel { --panel-label: var(--panel-color); min-width: 0; display: grid; gap: 4px; padding: 4px 7px 7px; }
+  .category-panel h3 { min-height: 17px; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--panel-label); font-size: 11px; }
+  .category-panel h3 small { color: var(--ink-dim); font-size: 8px; letter-spacing: .035em; }
+  .serve-panel { --panel-color: var(--box-serve); }
+  .receive-panel { --panel-color: var(--box-receive); }
+  .attack-panel { --panel-color: var(--box-attack); }
+  .other-panel { --panel-color: var(--box-other); }
+  .category-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .category-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .category-panel .code { height: 44px; min-width: 0; padding: 2px; gap: 0; border-radius: 8px; }
+  .category-panel .code b.abbr { font-size: 18px; line-height: 1; }
+  .category-panel .code span.cap { font-size: 8px; line-height: 1.05; text-align: center; }
+  .category-panel .code b.word { font-size: 11px; line-height: 1.05; }
+  .category-panel .code.win.solid, .category-panel .code.lose.solid,
+  .category-panel .code.win.tint, .category-panel .code.lose.tint {
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); box-shadow: none;
+  }
+  .category-panel .code.pending { box-shadow: 0 0 0 3px var(--ink); }
+  .receive-panel .pass-score-panel { display: grid; gap: 3px; padding: 0; border: 0; background: transparent; }
+  .receive-panel .pass-score-panel h4, .attack-target-label, .attack-result-label { margin: 0; color: var(--ink-dim); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .pass-score-panel[hidden], .attack-target-grid[hidden], .attack-selected[hidden] { display: none !important; }
+  .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .pass-score-grid button { min-width: 0; min-height: 38px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .pass-score-grid button b { font-size: 17px; line-height: 1; }
+  .pass-score-grid button span { font-size: 7px; font-weight: 700; line-height: 1; }
+  .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pass-score-grid button:disabled { opacity: .38; }
+  .pass-score-status, .category-note { margin: 0; color: var(--ink-dim); font-size: 8px; line-height: 1.15; }
+  .attack-status { min-height: 10px; color: var(--ink-dim); font-size: 8px; line-height: 1.15; }
+  .attack-selected { display: flex; justify-content: space-between; padding: 4px 6px; border-radius: 7px; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); font-size: 9px; font-weight: 800; }
+  .attack-selected b { color: var(--action-attack); }
+  .attack-target-tools { display: grid; gap: 3px; }
+  .attack-target-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+  .attack-target-grid button { min-width: 0; min-height: 27px; padding: 1px; border: 1px solid color-mix(in srgb, var(--box-attack) 28%, var(--line)); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 10px; font-weight: 800; line-height: 1; }
+  .attack-target-grid button small { display: block; margin-top: 1px; color: var(--ink-dim); font-size: 6px; font-weight: 700; }
+  .attack-target-grid button[aria-pressed="true"] { border: 2px solid var(--box-attack); background: color-mix(in srgb, var(--box-attack) 12%, var(--card)); color: var(--action-attack); }
+  .attack-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .attack-results button { min-width: 0; min-height: 40px; padding: 3px 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 10px; font-weight: 850; line-height: 1.05; }
+  .attack-results button small { display: block; margin-top: 2px; font-size: 6px; font-weight: 700; }
+  .attack-results .our-kill, .attack-results .their-error { border-color: var(--box-points); background: color-mix(in srgb, var(--box-points) 12%, var(--card)); }
+  .attack-results .their-kill, .attack-results .our-error { border-color: var(--box-errors); background: color-mix(in srgb, var(--box-errors) 11%, var(--card)); }
+  .attack-results .in-play { border-color: var(--box-attack); background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); }
+  .attack-results button:disabled, .attack-target-grid button:disabled { cursor: default; opacity: .36; }
+  .zone-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .team-btn { min-height: 44px; height: 44px; padding: 2px; border-radius: 8px; border: 1px dashed var(--ink-dim); font-size: 12px; line-height: 1; }
+  .category-grid .team-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .category-grid .team-btn small { font-size: 7px; }
+  .category-grid .team-btn.ready { border-style: solid; }
+  .category-state { font-size: 8px; font-weight: 750; }
+  .attack-marker { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 84px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--box-attack) 36%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--box-attack) 10%, var(--card)); color: var(--action-attack); font-size: 9px; font-weight: 800; }
+  .attack-marker .label { font-size: 7px; letter-spacing: .06em; }
+  .attack-marker .score { color: var(--ink-dim); font-size: 8px; }
+  .attack-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
+  .rchip .c small { display: inline-block; color: var(--ink-dim); font-size: 8px !important; font-weight: 700 !important; }
   .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .code {
@@ -217,9 +275,14 @@
   .team-btn small { font-size: 12px; font-weight: 700; }
   .team-btn.ready { border-style: solid; border-color: var(--accent); color: #fff; background: var(--accent); }
   .team-btn:disabled { opacity: .3; }
-  .live-actions { display: grid; gap: 6px; }
-  .live-actions[hidden], .pass-score-panel[hidden] { display: none !important; }
-  .live-actions h3 { margin-top: 0; }
+  .category-panel .code, .category-panel .code.earned { height: 44px; }
+  .category-panel .code b.abbr { font-size: 18px; line-height: 1; }
+  .category-panel .code span.cap { font-size: 8px; line-height: 1.05; text-align: center; }
+  .category-panel .code b.word { font-size: 11px; line-height: 1.05; }
+  .category-grid .team-btn { min-height: 44px; height: 44px; padding: 2px; border-radius: 8px; font-size: 10px; }
+  .category-grid .team-btn small { font-size: 7px; }
+  .attack-target-tools[hidden], .attack-target-grid[hidden], .attack-selected[hidden] { display: none !important; }
+  .pass-score-panel[hidden] { display: none !important; }
   .pass-score-panel {
     --panel-color: var(--box-receive); --panel-label: var(--action-receive);
     padding: 4px 8px 8px;
@@ -227,18 +290,6 @@
   .pass-score-panel h3 {
     min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--panel-label);
   }
-  .attack-panel { --panel-color: var(--box-attack); --panel-label: var(--action-attack); display: grid; gap: 4px; padding: 4px 8px 8px; }
-  .attack-panel h3 { min-height: 18px; margin: 0; display: flex; align-items: center; color: var(--panel-label); }
-  .pass-score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .pass-score-grid button { min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
-  .pass-score-grid button b { font-size: 23px; line-height: 1; }
-  .pass-score-grid button span { font-size: 10px; font-weight: 700; line-height: 1.1; }
-  .pass-score-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .pass-score-grid button:disabled { opacity: .38; }
-  .pass-score-status { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.2; }
-  .attack-action { width: 100%; min-height: 48px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font-size: 16px; font-weight: 800; }
-  .attack-action.on { background: #7540a5; border-color: #7540a5; color: #fff; }
-  .attack-action:disabled { opacity: .38; }
   .pad-hint {
     margin-top: auto; font-size: 12px; color: var(--ink-dim); line-height: 1.3;
     border-top: 1px solid var(--line); padding-top: 8px;
@@ -316,6 +367,7 @@
   /* Rare codes live behind More. */
   .pad-hint:empty { display: none; }
   .pad-actions { margin-top: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .pad-actions.them { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pad-actions .act { height: 72px; }
   .act-sub .bar { width: 70%; margin-top: 5px; }
   .act-to .dots { margin-top: 6px; }
@@ -430,7 +482,6 @@
   .zone.backrow { justify-content: center; padding-bottom: 4%; }
   .zone.rcv { justify-content: center; padding: 0; }
   .zone.rcv .pos, .zone.rcv .name { display: none; }
-  .zone.rcv .disc { width: calc(var(--cw) * 0.13333); height: calc(var(--cw) * 0.13333); font-size: calc(var(--cw) * 0.062); }
   .zone .pos { position: absolute; left: 10px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); }
   .zone.front .pos { top: 12px; }
   .zone.backrow .pos { top: 10px; }
@@ -559,6 +610,16 @@
   .timeout-marker .label { font-size: 12px; font-weight: 900; letter-spacing: .04em; }
   .timeout-marker .score { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .timeout-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
+  .substitution-marker {
+    flex: 0 0 auto; display: grid; gap: 4px; align-content: center; padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--action-receive) 35%, var(--line)); border-top: 4px solid var(--action-receive);
+    border-radius: 10px; background: color-mix(in srgb, var(--action-receive) 8%, var(--card));
+    color: var(--ink); text-align: center; white-space: nowrap;
+  }
+  .substitution-marker .label { font-size: 12px; font-weight: 900; letter-spacing: .04em; }
+  .substitution-marker .players { font-size: 13px; font-weight: 800; }
+  .substitution-marker .score { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .substitution-marker.latest { box-shadow: 0 0 0 2px var(--ink); }
   .undo {
     border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 24px; font-weight: 800;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -593,6 +654,18 @@
     width: 560px; background: var(--card); border-radius: 18px; padding: 20px;
     box-shadow: 0 20px 60px rgba(0,0,0,.35);
   }
+  .opponent-sub-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .opponent-sub-fields label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 800; }
+  .opponent-sub-fields input { min-width: 0; height: 52px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-size: 18px; }
+  .opponent-scout-editor { display: grid; gap: 12px; }
+  .opponent-scout-editor > label { display: flex; flex-direction: column; gap: 5px; font-size: 14px; font-weight: 800; }
+  .opponent-scout-editor input, .opponent-scout-editor select { min-width: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; }
+  .opponent-scout-editor .scout-court { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px; border: 2px solid #d6a875; border-radius: 12px; background: color-mix(in srgb, #e7bb8c 20%, var(--card)); }
+  .opponent-scout-editor .scout-position { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); text-align: center; }
+  .opponent-scout-editor .scout-position span { font-size: 12px; font-weight: 900; color: var(--ink-dim); }
+  .opponent-scout-editor .scout-position input { min-height: 40px; padding: 5px; text-align: center; }
+  .opponent-scout-editor .scout-help { margin: 0; color: var(--ink-dim); font-size: 13px; line-height: 1.4; }
+  .opponent-scout-editor .scout-error { color: var(--lose); font-weight: 800; }
   .sheet h4 { margin: 0 0 4px; font-size: 22px; }
   .sheet p { margin: 0 0 14px; color: var(--ink-dim); font-size: 15px; }
   .bench { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
@@ -637,6 +710,7 @@
 
   /* Team-menu screens: rotation report, lineup, edit rallies, fixes, match summary, settings */
   .sheet .card.wide { width: 1300px; }
+  .sheet .card.wide.scouting { width: 820px; max-height: 92vh; }
   .sheet h5 { margin: 14px 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
   .sheet button:disabled { opacity: .35; cursor: default; }
   .sheet .sheet-row .cancel { margin-top: 0; }
@@ -669,6 +743,47 @@
   .two-courts .mini-court b { font-size: 26px; }
   .lineup-facts ul { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.5; }
   .lineup-facts p { margin: 0 0 6px; }
+  .sheet .card.set-setup { width: 1300px; max-width: 96%; max-height: 94%; overflow-y: auto; }
+  .set-setup-form { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; background: transparent; }
+  .set-setup-form h4 { margin: 0; }
+  .set-setup-form > p { margin: 0; }
+  .set-setup-grid { display: grid; grid-template-columns: minmax(280px, .72fr) minmax(520px, 1.28fr); gap: 18px; align-items: start; }
+  .set-setup-controls { display: grid; gap: 10px; align-content: start; }
+  .set-setup-controls label { display: grid; gap: 4px; font-size: 13px; font-weight: 800; }
+  .set-setup-controls input, .set-setup-controls select { min-width: 0; min-height: 44px; margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); font: inherit; }
+  .set-setup-form .muted, .setup-serve-fixed { margin: 0; color: var(--ink-dim); font-size: 12px; line-height: 1.35; }
+  .set-setup-form .setup-serve-fixed { padding: 9px 11px; border-radius: 9px; background: color-mix(in srgb, var(--box-serve) 9%, var(--card)); }
+  .setup-advanced, .setup-save-lineup details { padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); }
+  .setup-advanced summary, .setup-save-lineup summary { min-height: 32px; cursor: pointer; font-size: 12px; font-weight: 800; }
+  .setup-advanced label + label, .setup-advanced p { margin-top: 7px !important; }
+  .setup-save-lineup button { margin-top: 8px; }
+  .set-setup-court { min-width: 0; }
+  .set-setup-court .lineup-court { width: 100%; max-width: 590px; margin: 0 auto; }
+  #setupLineupFields { min-width: 0; }
+  #setupLineupFields > label { margin: 0 0 8px; max-width: 360px; }
+  #setupLineupFields .lineup-court { width: 100%; max-width: 590px; margin: 0 auto; }
+  #setupLineupFields fieldset { margin-top: 10px; }
+  #setupLineupFields legend { margin: 8px 0; font-size: 14px; }
+  #setupLineupFields .help, #setupLineupFields .muted { margin: 4px 0; font-size: 11px; }
+  #setupLineupFields .grid { gap: 8px; }
+  #setupLineupFields select { margin: 0; }
+  .setup-message { min-height: 0; color: var(--lose) !important; font-weight: 700; }
+  .set-setup-form .sheet-row { position: sticky; bottom: -20px; z-index: 3; margin: 0; padding: 8px 0 0; background: var(--card); }
+  .set-setup-court .lineup-court { position: relative; aspect-ratio: 1; container-type: inline-size; background: linear-gradient(var(--court),var(--court-2)); border: 3px solid #fff; border-radius: 4px; }
+  .set-setup-court .lineup-net { position: absolute; inset: 0 0 auto; height: 2%; background: #fff; }
+  .set-setup-court .lineup-attack-line { position: absolute; top: 33.333%; width: 100%; border-top: 2px dashed #ffffffbf; }
+  .set-setup-court .lineup-player { position: absolute; left: calc((var(--column) + .5)*100%/3); top: calc(10% + var(--row)*49%); width: 30%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; color: #fff; text-align: center; cursor: pointer; }
+  .set-setup-court .lineup-position { margin-bottom: 3px; color: #e0ebee; font-size: clamp(10px,2.6cqw,15px); font-weight: 800; }
+  .set-setup-court .lineup-disc { position: relative; display: grid; place-items: center; width: clamp(44px,19cqw,106px); aspect-ratio: 1; border-radius: 50%; background: var(--player-color); box-shadow: 0 2px 7px #0006; }
+  .set-setup-court .lineup-player.back .lineup-disc { box-shadow: 0 2px 7px #0006,inset 0 0 0 4px #fffffff0; }
+  .set-setup-court .lineup-player.empty .lineup-disc { background: var(--court-2); }
+  .set-setup-court .lineup-number { font-size: clamp(22px,8cqw,46px); line-height: 1; font-weight: 850; }
+  .set-setup-court .lineup-chevron { position: absolute; bottom: 5%; right: 21%; font-size: 15px; }
+  .set-setup-court .lineup-disc select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; opacity: 0; border: 0; border-radius: 50%; cursor: pointer; }
+  .set-setup-court .lineup-name { max-width: 100%; margin-top: 5px; color: #fff; font-size: clamp(9px,2.6cqw,14px); line-height: 1.15; text-shadow: 0 1px 2px #0006; overflow: hidden; }
+  #setupLineupFields > label { display: grid; gap: 4px; margin: 0 0 8px; max-width: 360px; }
+  #setupLineupFields fieldset label:not(.lineup-player) { display: grid; gap: 4px; }
+  @media (max-width: 760px) { .set-setup-grid { grid-template-columns: 1fr; } .set-setup-court .lineup-court, #setupLineupFields .lineup-court { max-width: 460px; } }
   .rally-list { display: grid; gap: 6px; max-height: 660px; overflow-y: auto; }
   .rally-row { display: grid; grid-template-columns: 36px 78px 1fr auto; align-items: center; gap: 8px; min-height: 54px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: left; font-size: 16px; }
   .rally-row.won { border-left: 6px solid var(--win); } .rally-row.lost { border-left: 6px solid var(--lose); }
@@ -1135,6 +1250,7 @@
 .toolbar,.notes { display:none !important; }
 .save-bar { position:fixed; z-index:1000; top:max(8px,env(safe-area-inset-top)); left:50%; transform:translate(-50%,-150%); display:flex; gap:8px; align-items:center; max-width:calc(100vw - 24px); padding:8px 12px; border:1px solid #cbd6dd; border-radius:14px; background:#fff; box-shadow:0 5px 18px #0002; font:14px system-ui; transition:transform .16s ease-out; }
 .save-bar button { min-height:40px; padding:7px 12px; }
+.save-bar button[hidden] { display:none; }
 #saveStatus { flex:1; min-width:180px; } #saveStatus.error { color:#b52f40; font-weight:600; }
 body.saving .save-bar,body.failed .save-bar { transform:translate(-50%,0); }
 body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
@@ -1164,7 +1280,7 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
   </symbol>
 </svg>
 
-<div class="save-bar"><span id="saveStatus" role="status">Opening saved set…</span><button id="retrySave" hidden>Retry action</button><button id="reloadSaved" hidden>Reload saved set</button></div><div class="toolbar" hidden>
+<div class="save-bar"><span id="saveStatus" role="status">Opening saved set…</span><button id="retrySave" hidden>Retry action</button><button id="reloadSaved" hidden>Reload latest</button></div><div class="toolbar" hidden>
   <b>Live Set — mockup v2</b>
   <label><input type="checkbox" id="optCallouts" checked> Callouts</label>
   <label><input type="checkbox" id="optDark"> Dark</label>
@@ -1205,26 +1321,42 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     <!-- ② Us pad -->
     <section class="pad" id="padUs">
       <h2><button class="team-chip" id="teamMenu" title="Open team menu">8th Grade<span class="caret">▾</span></button></h2>
-      <section class="outcome-group action-panel our-point-group" aria-labelledby="ourPointHeading">
-        <h3 id="ourPointHeading">Our Point</h3>
-        <div class="grid3" id="usEarned"></div>
+      <section class="category-panel action-panel serve-panel" aria-labelledby="usServeTitle">
+        <h3 id="usServeTitle">Serve <small id="usServeState" class="category-state"></small></h3>
+        <div class="category-grid two" id="usServeActions"></div>
       </section>
-      <section class="outcome-group action-panel our-error-group" aria-labelledby="ourErrorHeading">
-        <h3 id="ourErrorHeading">Our Error</h3>
-        <div class="grid3" id="usErr"></div>
-      </section>
-      <button class="team-btn" id="teamBtn" disabled>Team<small>no player</small></button>
-      <div class="live-actions">
-        <section class="attack-panel action-panel" aria-labelledby="attackTitle">
-          <h3 id="attackTitle">Attack</h3>
-          <button type="button" id="attackAction" class="attack-action" aria-label="Select attack attempt">Attempt</button>
-        </section>
-        <div class="pass-score-panel action-panel" id="passScorePanel" hidden>
-          <h3 id="passScoreTitle">Serve Receive · choose score</h3>
+      <section class="category-panel action-panel receive-panel" aria-labelledby="usReceiveTitle">
+        <h3 id="usReceiveTitle">Receive <small id="usReceiveState" class="category-state"></small></h3>
+        <div class="category-grid two" id="usReceiveActions"></div>
+        <div class="pass-score-panel" id="passScorePanel">
+          <h4 id="passScoreTitle">Serve receive · pass score</h4>
           <div class="pass-score-grid" id="passScoreGrid" role="group" aria-labelledby="passScoreTitle"></div>
+          <p class="category-note">A 0 pass score is not a receive error.</p>
           <p class="pass-score-status" id="passScoreStatus" role="status" aria-live="polite" hidden></p>
         </div>
-      </div>
+      </section>
+      <section class="category-panel action-panel attack-panel" aria-labelledby="usAttackTitle">
+        <h3 id="usAttackTitle">Attack</h3>
+        <div class="attack-status" id="usAttackStatus" role="status" aria-live="polite">Tap the attacking player on court to enable results.</div>
+        <div class="attack-selected" id="usAttackSelected" hidden><span>Hitter <b id="usAttackPlayer">—</b></span><span>Target <b id="usAttackTarget">—</b></span></div>
+        <div class="attack-target-tools" id="usAttackTargetTools" hidden>
+          <div class="attack-target-label">Target zone · optional</div>
+          <div class="attack-target-grid" id="usAttackTargetGrid" aria-label="Optional attack target zones on opponent court">
+            <button type="button" data-us-target="4" aria-pressed="false">4<small>front left</small></button><button type="button" data-us-target="3" aria-pressed="false">3<small>front middle</small></button><button type="button" data-us-target="2" aria-pressed="false">2<small>front right</small></button>
+            <button type="button" data-us-target="5" aria-pressed="false">5<small>back left</small></button><button type="button" data-us-target="6" aria-pressed="false">6<small>back middle</small></button><button type="button" data-us-target="1" aria-pressed="false">1<small>back right</small></button>
+          </div>
+        </div>
+        <div class="attack-result-label">Attack result</div>
+        <div class="attack-results" role="group" aria-label="Our attack result">
+          <button type="button" class="our-kill" data-us-result="kill" disabled>Kill<small>Our point</small></button>
+          <button type="button" class="in-play" data-us-result="in" disabled>In Play<small>Rally continues</small></button>
+          <button type="button" class="our-error" data-us-result="error" disabled>Hitting Error<small>Their point</small></button>
+        </div>
+      </section>
+      <section class="category-panel action-panel other-panel" aria-labelledby="usOtherTitle">
+        <h3 id="usOtherTitle">Other</h3>
+        <div class="category-grid" id="usOtherActions"><button class="team-btn" id="teamBtn" disabled>Team / no player<small>choose an error first</small></button></div>
+      </section>
       <div class="pad-hint" id="hintUs"></div>
       <!-- ⑤ Sub & Libero -->
       <div class="pad-actions">
@@ -1275,16 +1407,44 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
 
     <!-- ⑥ Them pad -->
     <section class="pad" id="padThem">
-      <h2><span class="team-chip opp">West Fargo</span></h2>
-      <section class="outcome-group action-panel their-point-group" aria-labelledby="theirPointHeading">
-        <h3 id="theirPointHeading">Their Point</h3>
-        <div class="grid3" id="thEarned"></div>
+      <h2><button type="button" class="team-chip opp" id="opponentMenu" title="Open opponent scouting" aria-label="Open opponent scouting">West Fargo<span class="caret">▾</span></button></h2>
+      <section class="category-panel action-panel serve-panel" aria-labelledby="themServeTitle">
+        <h3 id="themServeTitle">Serve <small id="themServeState" class="category-state"></small></h3>
+        <div class="category-grid two" id="themServeActions"></div>
       </section>
-      <section class="outcome-group action-panel their-error-group" aria-labelledby="theirErrorHeading">
-        <h3 id="theirErrorHeading">Their Error</h3>
-        <div class="grid3" id="thErr"></div>
+      <section class="category-panel action-panel receive-panel" aria-labelledby="themReceiveTitle">
+        <h3 id="themReceiveTitle">Receive <small id="themReceiveState" class="category-state"></small></h3>
+        <div class="category-grid two" id="themReceiveActions"></div>
+        <p class="category-note">Opponent pass grades are not tracked.</p>
+      </section>
+      <section class="category-panel action-panel attack-panel" aria-labelledby="themAttackTitle">
+        <h3 id="themAttackTitle">Attack</h3>
+        <div class="attack-selected"><span>Source <b id="themAttackSource">—</b></span><span>Target <b id="themAttackTarget">—</b></span></div>
+        <div class="attack-target-label">Source zone</div>
+        <div class="attack-target-grid" id="themAttackSourceGrid" aria-label="Opponent attack source zones">
+          <button type="button" data-them-source="1" aria-pressed="false">1<small>back right</small></button><button type="button" data-them-source="6" aria-pressed="false">6<small>back middle</small></button><button type="button" data-them-source="5" aria-pressed="false">5<small>back left</small></button>
+          <button type="button" data-them-source="2" aria-pressed="false">2<small>front right</small></button><button type="button" data-them-source="3" aria-pressed="false">3<small>front middle</small></button><button type="button" data-them-source="4" aria-pressed="false">4<small>front left</small></button>
+        </div>
+        <div class="attack-target-tools" id="themAttackTargetTools" hidden>
+          <div class="attack-target-label">Target zone · optional</div>
+          <div class="attack-target-grid" id="themAttackTargetGrid" aria-label="Optional opponent attack target zones on our court">
+            <button type="button" data-them-target="4" aria-pressed="false">4<small>front left</small></button><button type="button" data-them-target="3" aria-pressed="false">3<small>front middle</small></button><button type="button" data-them-target="2" aria-pressed="false">2<small>front right</small></button>
+            <button type="button" data-them-target="5" aria-pressed="false">5<small>back left</small></button><button type="button" data-them-target="6" aria-pressed="false">6<small>back middle</small></button><button type="button" data-them-target="1" aria-pressed="false">1<small>back right</small></button>
+          </div>
+        </div>
+        <div class="attack-result-label">Attack result</div>
+        <div class="attack-results" role="group" aria-label="Opponent attack result">
+          <button type="button" class="their-kill" data-them-result="kill" disabled>Kill<small>Their point</small></button>
+          <button type="button" class="in-play" data-them-result="in" disabled>In Play<small>Rally continues</small></button>
+          <button type="button" class="their-error" data-them-result="error" disabled>Hitting Error<small>Our point</small></button>
+        </div>
+      </section>
+      <section class="category-panel action-panel other-panel" aria-labelledby="themOtherTitle">
+        <h3 id="themOtherTitle">Other</h3>
+        <div class="category-grid" id="themOtherActions"></div>
       </section>
       <div class="pad-actions them">
+        <button class="act act-sub" id="actTheirSub" title="Record an opponent substitution">Sub<small>Opponent</small></button>
         <button class="act act-to" id="toThemBtn">Timeout<span class="dots"><span id="toT1"></span><span id="toT2"></span></span></button>
       </div>
     </section>
@@ -1300,7 +1460,7 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
   <div class="banners" id="banners"></div>
 
   <!-- Sheets -->
-  <div class="sheet" id="sheet"><div class="card" id="sheetCard"></div></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="false" aria-label="Live-set options"><div class="card" id="sheetCard"></div></div>
 
   <!-- Callouts -->
   <div class="callout" id="callout1" style="left:540px; top:21px">1</div>
@@ -1332,7 +1492,7 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     </ul></div>
     <div class="note"><h3>Court and match actions</h3><ul>
       <li>Jersey numbers show serving or receive formations from Where do I go? Court-view controls sit inside the court.</li>
-      <li>Our Sub, Libero, and Timeout controls sit below our pad; their Timeout sits below theirs.</li>
+      <li>Our Sub, Libero, and Timeout controls sit below our pad; their Sub and Timeout sit below theirs.</li>
       <li>Recent rallies and Undo stay at the bottom. Coach's corner shows up to three suggestions under the court, with additional suggestions one level deeper.</li>
       <li>Planned swaps require confirmation. Production actions must all use the same eligibility checks and record explicit overrides.</li>
     </ul></div>
