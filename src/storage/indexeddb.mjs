@@ -1,6 +1,6 @@
 import { validateSetAddition, orderMatchSets } from '../teams/match-model.mjs';
 import { validateTeam } from '../teams/team-model.mjs';
-import { replaySet } from '../engine/set-engine.mjs';
+import { lineupSetupLocked, replaySet } from '../engine/set-engine.mjs';
 import { validatePractice } from '../practice/practice-model.mjs';
 
 export class StorageConflict extends Error {
@@ -146,6 +146,15 @@ export function openSetStore({ indexedDB = globalThis.indexedDB, name = 'volleyb
             });
           });
         }),
+        loadLastLineupId:teamId=>transaction(['meta'],'readonly',(tx,done,guard)=>{
+          const r=tx.objectStore('meta').get(`lastLineup:${teamId}`);
+          r.onsuccess=()=>guard(()=>done(typeof r.result==='string'?r.result:null));
+        }),
+        saveLastLineupId:(teamId,lineupId)=>transaction(['meta'],'readwrite',(tx,done,guard)=>{
+          if(typeof teamId!=='string'||!teamId||typeof lineupId!=='string'||!lineupId)
+            throw new Error('A team and saved lineup are required.');
+          tx.objectStore('meta').put(lineupId,`lastLineup:${teamId}`);done(lineupId);
+        }),
         updateSetRecord:(original,input)=>{
           const next=structuredClone(input);replaySet(next);
           return transaction(['sets'],'readwrite',(tx,done,guard)=>{
@@ -158,6 +167,34 @@ export function openSetStore({ indexedDB = globalThis.indexedDB, name = 'volleyb
                 throw new Error('A correction cannot move a set to another match.');
               table.put(next);done(next);
             });
+          });
+        },
+        updateSetSetup:(original,input,expectedRevision)=>{
+          const next=structuredClone(input);replaySet(next);
+          return transaction(['sets','meta','teams'],'readwrite',(tx,done,guard)=>{
+            const currentRequest=tx.objectStore('sets').get(original.config.id);
+            const activeRequest=tx.objectStore('meta').get('activeSet');
+            const teamRequest=tx.objectStore('teams').get(original.config.teamId);
+            let currentReady=false,activeReady=false,teamReady=false,current,activeId,savedTeam;
+            const apply=()=>guard(()=>{
+              if(!currentReady||!activeReady||!teamReady)return;
+              if(!current||JSON.stringify(current)!==JSON.stringify(original)
+                ||current.actions.length!==expectedRevision||activeId!==original.config.id)
+                throw new StorageConflict();
+              const currentState=replaySet(current);
+              if(lineupSetupLocked(current,currentState))
+                throw new Error('The lineup is locked after the first point is played.');
+              if(!savedTeam||savedTeam.revision!==next.config.teamRevision)
+                throw new Error('The team roster changed. Reload the team and choose the lineup again.');
+              if(next.config.id!==original.config.id||next.config.teamId!==original.config.teamId
+                ||next.config.matchId!==original.config.matchId||next.config.setNumber!==original.config.setNumber
+                ||JSON.stringify(next.actions)!==JSON.stringify(original.actions))
+                throw new Error('Lineup setup can only update this set before its first point.');
+              tx.objectStore('sets').put(next);done(next);
+            });
+            currentRequest.onsuccess=()=>{current=currentRequest.result;currentReady=true;apply();};
+            activeRequest.onsuccess=()=>{activeId=activeRequest.result??null;activeReady=true;apply();};
+            teamRequest.onsuccess=()=>{savedTeam=teamRequest.result;teamReady=true;apply();};
           });
         },
         updateMatchDetails:({teamId,matchId,teamRevision,expectedSetIds,opponent,date})=>
