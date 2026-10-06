@@ -9,7 +9,7 @@ export { DEFAULT_SETTINGS, loadSettings } from './themes.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CODES = Object.keys(ACTION_CODES);
-const WORDS = { K: 'Kill', BK: 'Block', SA: 'Ace', HE: 'Hitting error', SE: 'Serve error', SrE: 'Receive error',
+const WORDS = { K: 'Kill', BK: 'Block', SA: 'Ace', HE: 'Hitting error', SE: 'Serve error', OE: 'Other error', SrE: 'Receive error',
   BKE: 'Block error', BHE: 'Ball handling', DigE: 'Dig error', NET: 'Net / line', VIO: 'Other violation' };
 const pct = x => x === null ? '—' : `${Math.round(x * 100)}%`;
 const signed = n => n > 0 ? `+${n}` : String(n);
@@ -149,8 +149,10 @@ export function lineupSheet(ctx) {
     <div class="lineup-facts"><div><h5>Planned swaps</h5>${plans ? `<ul>${plans}</ul>` : '<p>None</p>'}</div>
       <div><h5>Libero plan</h5><p>${c.liberos.length ? libero : 'No libero designated'}</p>${c.liberos.length ? '<button class="pill" id="lineupLibero">Change libero plan</button>' : ''}</div>
       <div><h5>Substitutions · ${state.substitutionsUsed} of ${c.rules.substitutionLimit} used</h5>${subs ? `<ul>${subs}</ul>` : '<p>None yet</p>'}</div></div>
+    ${ctx.canEditLineup?'<p>You can change the lineup or first serve until the first point is played.</p><button class="pill" id="editSetLineup">Change lineup / first serve</button>':''}
     <button class="cancel" id="shCancel">Close</button>`);
   document.getElementById('lineupLibero')?.addEventListener('click', ctx.openLiberoPlan);
+  document.getElementById('editSetLineup')?.addEventListener('click', ctx.openLineupSetup);
 }
 
 /* Edit rallies: change the team, code, or player of any rally, or delete it. */
