@@ -1,13 +1,13 @@
 import { openSetStore } from '../storage/indexeddb.mjs';
 import { replaySet } from '../engine/set-engine.mjs';
-import { validateLineup, lineupIssue, startingRotation, lineupFromSet } from './lineup-model.mjs';
+import { validateLineup, lineupIssue } from './lineup-model.mjs';
 import { mountLineupEditor } from './lineup-editor.mjs';
-import { teamHierarchy, setPlan, isExhibitionSet, correctSetFirstServe } from './match-model.mjs';
-import { POSITIONS, validateTeam, makeMatchSet } from './team-model.mjs';
+import { teamHierarchy, isExhibitionSet, correctSetFirstServe } from './match-model.mjs';
+import { POSITIONS, validateTeam } from './team-model.mjs';
 import { registerApp } from '../app/pwa.mjs';
 import { COLOR_THEMES, colorTheme } from '../app/themes.mjs';
 import { createPractice } from '../practice/practice-model.mjs';
-import { buildLineupAnalysis, buildLineupSuggestion, buildTeamStats, matchSetLineups } from './stats-model.mjs';
+import { buildLineupAnalysis, buildTeamStats, matchSetLineups } from './stats-model.mjs';
 import { makeStatsTablesSortable, matchSummary, rotationReport } from '../app/team-menu.mjs';
 import { PLAYER_PERFORMANCE_HEADERS, playerPerformanceCells } from '../app/player-performance.mjs';
 registerApp();
@@ -326,14 +326,6 @@ function lineupAnalysisMarkup(lineups){
   </details>`;
  }).join('')}</div>`;
 }
-function lineupSuggestionMarkup(suggestion,teamColor,savedLineupCount){
- if(!suggestion)return `<section class="card lineup-suggestion" style="--team-color:${esc(teamColor)}"><div><h3>Set lineup suggestion</h3><p>${savedLineupCount?'No saved lineup has 12 completed match rallies yet. Keep recording sets and a recommendation will appear here.':'Save a lineup and record at least 12 completed match rallies with it to get a recommendation.'}</p></div></section>`;
- const {lineup,stats,rotation,rotationStats}=suggestion;
- const pointRate=analysisPercent(stats.completedWon,stats.completedRallies);
- const rotationText=rotationStats?`The strongest sampled starting rotation for this lineup is R${rotation} (${analysisPercent(rotationStats.won,rotationStats.rallies)} across ${rotationStats.rallies} rallies; side-out ${analysisPercent(rotationStats.wonReceiving,rotationStats.received)}, point-scoring ${analysisPercent(rotationStats.wonServing,rotationStats.served)}).`:'No rotation has 10 completed rallies yet, so use the automatic start or choose a rotation yourself.';
- const limited=stats.completedRallies<40?' This is an early signal; review the sample count.':'';
- return `<section class="card lineup-suggestion" style="--team-color:${esc(teamColor)}"><div><h3>Set lineup suggestion</h3><p><strong>${esc(lineup.name)}</strong> · ${esc(lineup.system)} · ${stats.setsWon}–${stats.setsLost} sets · ${stats.completedWon}–${stats.completedLost} rallies (${pointRate}, n=${stats.completedRallies}).</p><p><strong>R1:</strong> ${esc(stats.starterLabel)} · <strong>Setters:</strong> ${esc(stats.setterLabel)}</p><p>${rotationText}${limited}</p><p class="muted">Ranked by completed-rally win rate; set win rate and sample size break ties. Opponent and matchup are not considered.</p></div><button type="button" id="applyLineupSuggestion" class="primary">Use suggestion${rotation?` · R${rotation}`:''}</button></section>`;
-}
 function teamStatsPage(team){
  const stats=buildTeamStats(team,practices);
  const lineupAnalysis=buildLineupAnalysis(team);
@@ -387,10 +379,7 @@ function home(){
   const nextSet=match.sets.length+1;
   const optionalThird=match.bestOf===3&&nextSet===3&&match.sets.length===2&&Boolean(match.winner);
   const canSetup=!match.inProgress&&match.bestOf&&nextSet<=match.bestOf&&(!match.winner||optionalThird);
-  // The setup route is a one-shot handoff from the live set. Strip it before
-  // opening the form so Cancel returns to the match page instead of reopening it.
-  history.replaceState(null,'',`${location.pathname}${location.search}#${route(team.id,match.id)}`);
-  if(canSetup){matchSetup(team,match);return;}
+  if(canSetup){launchSetSetup(team.id,match.id);return;}
  }
  if(team&&!match&&params.get('view')==='stats'){bar('Season stats',team.name,{label:team.name,action:()=>go(team.id)});teamStatsPage(team);return;}
  if(team?.editable&&params.get('view')==='lineups'){bar('Lineups',team.name,{label:team.name,action:()=>go(team.id)});lineupLibrary(teams.find(t=>t.id===team.id));return;}
@@ -536,95 +525,33 @@ function editLineup(team,lineup=null){
  });};
  $('lineupName').focus();
 }
+function launchSetSetup(teamId,matchId){
+ location.href=`./index.html?setup=1&team=${encodeURIComponent(teamId)}&match=${encodeURIComponent(matchId)}`;
+}
 function matchSetup(team,match=null){
- team=teams.find(t=>t.id===team.id);notice();
- const setNumber=match?match.sets.length+1:1,planned=match&&!match.sets.length;
- const exhibition=Boolean(match&&match.bestOf===3&&setNumber===3&&match.sets.length===2&&match.winner);
- const historyTeam=teamHierarchy(teams,sets).find(t=>t.id===team.id)??{...team,matches:[]};
- const lineupSuggestion=buildLineupSuggestion(team,historyTeam);
- bar(match&&!planned?`Set ${setNumber}`:planned?match.opponent:'New match',match?`${team.name} · ${planned?'Saved match':match.opponent}`:team.name,{label:match?match.opponent:team.name,action:home});
- const previousSet=match?.sets.at(-1),previous=previousSet?.config;
- const today=new Date();const date=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
- const previousRotation=previousSet?replaySet(previousSet).rotation:null;
- const lineupOptions=()=>`<option value="">Custom lineup${previous?' / previous set':''}</option>`+team.lineups.map(l=>`<option value="${esc(l.id)}">${esc(l.name)} · ${l.system}${lineupIssue(team,l)?' (needs review)':''}</option>`).join('');
- $('content').innerHTML=`<form id="matchForm"><div class="grid"><label>Opponent<input id="opponent" required maxlength="100" autocomplete="off"></label><label>Match date<input id="date" type="date" required value="${date}"></label><label>Match format<select id="bestOf" ${match?.bestOf&&!planned?'disabled':''}><option value="3">Best of 3</option><option value="5">Best of 5</option></select></label><label id="firstServeLabel">First serve<select id="firstServe"><option value="them">${esc(team.name)} receives</option><option value="us">${esc(team.name)} serves</option></select></label></div><p id="setRules" class="help"></p>
- ${exhibition?`<p class="help" id="exhibitionNote">Optional exhibition set. Its stats count for players and the team; the official result stays ${match.wins.us}–${match.wins.them}.</p>`:''}
- ${lineupSuggestionMarkup(lineupSuggestion,team.color,team.lineups.length)}
- <fieldset><legend>Choose lineup</legend><label>Saved lineup<select id="lineupSelect">${lineupOptions()}</select></label><p id="lineupNote" class="muted">${previous?'Previous set’s base R1 lineup copied below. You can choose another saved lineup.':'Choose a saved lineup or build one below.'}</p><fieldset id="lineupFields"></fieldset>
- <details id="saveLineupDetails" class="save-lineup"><summary>Save this lineup for later</summary><label>New lineup name<input id="saveLineupName" maxlength="100" placeholder="Standard 6-2"></label><button type="button" id="saveLineup">Save as new lineup</button></details></fieldset>
- <fieldset><legend>Starting rotation</legend><div class="grid"><label>Start choice<select id="rotationMode"><option value="auto">Serve R1 / receive R6</option><option value="manual">Choose a rotation</option><option value="carry" ${previousSet?'':'disabled'}>${previousSet?`Carry previous set’s ending rotation (R${previousRotation})`:'Carry previous set’s ending rotation (no previous set)'}</option></select></label><label id="manualRotationLabel" hidden>Rotation<select id="startingRotation">${[1,2,3,4,5,6].map(n=>`<option value="${n}">R${n}</option>`).join('')}</select></label></div>
- <p id="rotationExplanation" class="help"></p><h3 id="startPreviewTitle">Starting court</h3><div id="startPreview" class="lineup-court lineup-preview" aria-label="Starting court preview"></div></fieldset>
- ${active?'<p class="help">Your current set stays saved in its team’s match page.</p>':''}<div class="actions form-actions"><button type="submit" class="primary">Start</button>${!match||planned?'<button type="button" id="saveMatch">Save</button>':''}<button type="button" id="cancel">Cancel</button></div></form>`;
- let selectedLineupId='';
- const initial=previousSet?lineupFromSet(previousSet):{};
- const editor=mountLineupEditor($('lineupFields'),team,initial,()=>{
-  selectedLineupId='';$('lineupSelect').value='';$('lineupNote').textContent='Custom changes apply to this set. Save as a new lineup to reuse them.';preview();
- });
- function preview(){
-  const saved=Boolean(selectedLineupId);
-  $('lineupFields').hidden=saved;$('lineupFields').disabled=saved;
-  $('saveLineupDetails').hidden=saved;
-  const mode=$('rotationMode').value;
-  $('manualRotationLabel').hidden=mode!=='manual';
-  const rotation=startingRotation({mode,firstServe:$('firstServe').value,rotation:Number($('startingRotation').value),previousSet});
-  $('startPreviewTitle').textContent=`Starting court · R${rotation} · ${$('firstServe').value==='us'?'Serving':'Receiving'}`;
-  $('rotationExplanation').textContent=mode==='carry'?`R${rotation} from the end of the previous set, using the lineup selected above. Substitutions and libero entries are not carried over.`:mode==='auto'?'The starting court follows first serve: R1 when serving, R6 when receiving.':`The selected lineup starts in R${rotation}.`;
-  const lineup=editor.read(),base=lineup.starters,order=[...base.slice(rotation-1),...base.slice(0,rotation-1)];
-  $('startPreview').innerHTML='<span class="lineup-net" aria-hidden="true">NET</span><span class="lineup-attack-line" aria-hidden="true"></span>'+[4,3,2,5,6,1].map((pos,i)=>{
-   const p=team.players.find(p=>p.id===order[pos-1]);
-   const color=p&&lineup.setters.includes(p.id)?'var(--c-set)':p?.position==='MB'?'var(--c-mid)':'var(--c-oh)';
-   return `<div data-preview-position="${pos}" class="lineup-player ${[1,5,6].includes(pos)?'back':''} ${p?'':'empty'}" style="--column:${i%3};--row:${Math.floor(i/3)};--player-color:${color}"><small class="lineup-position">P${pos}${pos===1&&$('firstServe').value==='us'?' · server':''}</small><span class="lineup-disc"><strong class="lineup-number">${p?esc(p.jersey):'—'}</strong></span><span class="lineup-name">${p?esc(p.name):'Choose a player'}</span></div>`;
-  }).join('');
- }
- $('applyLineupSuggestion')?.addEventListener('click',()=>{
-  $('lineupSelect').value=lineupSuggestion.lineup.id;
-  $('lineupSelect').onchange();
-  if(lineupSuggestion.rotation){$('rotationMode').value='manual';$('startingRotation').value=String(lineupSuggestion.rotation);}
-  preview();
- });
- $('lineupSelect').onchange=()=>{
-  const value=team.lineups.find(l=>l.id===$('lineupSelect').value);
-  editor.write(value??initial);selectedLineupId=value?.id??'';
-  $('lineupNote').textContent=value?(lineupIssue(team,value)||`${value.name} loaded. Choose how this lineup starts below.`):'Custom lineup / previous set’s R1 order.';preview();
- };
- $('saveLineup').onclick=()=>save(async()=>{
-  const value=validateLineup(team,{...editor.read(),id:identity(),name:$('saveLineupName').value});
-  await withFreshStore(()=>store.saveTeam({...team,revision:team.revision+1,lineups:[...team.lineups,value]},team.revision));
-  await load();team=teams.find(t=>t.id===team.id);$('lineupSelect').innerHTML=lineupOptions();$('lineupSelect').value=value.id;selectedLineupId=value.id;
-  $('saveLineupName').value='';preview();notice(`${value.name} saved for ${team.name}.`);
- });
- if(planned){$('opponent').value=match.opponent;$('date').value=match.date;$('bestOf').value=String(match.bestOf);}
- if(previous){
-  $('opponent').value=match.opponent;$('opponent').readOnly=true;$('date').value=match.date;$('date').readOnly=true;
-  if(match.bestOf)$('bestOf').value=String(match.bestOf);
- }
- function rules(){
-  const plan=setPlan({bestOf:Number($('bestOf').value),setNumber,previousSet,exhibition});
-  $('firstServeLabel').hidden=Boolean(plan.firstServe);if(plan.firstServe)$('firstServe').value=plan.firstServe;
-  const server=$('firstServe').value==='us'?team.name:match?.opponent??'Opponent';
-  $('setRules').textContent=`Set ${setNumber} is played to ${plan.target}${exhibition?' (exhibition)':plan.deciding?' (deciding set)':''}.`+(plan.firstServe?` ${server} serves first; first serve alternates each set.`:'');
-  preview();
- }
- $('bestOf').onchange=rules;
- for(const id of ['rotationMode','startingRotation'])$(id).onchange=preview;
- $('firstServe').onchange=rules;
- rules();
- $('cancel').onclick=()=>{notice();home();};
- // Save the match details only; lineup and first serve are chosen when it starts.
- $('saveMatch')?.addEventListener('click',()=>{
-  if(!$('opponent').reportValidity()||!$('date').reportValidity())return;
+ team=teams.find(t=>t.id===team.id);
+ if(match){launchSetSetup(team.id,match.id);return;}
+ notice();
+ const today=new Date(),date=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+ bar('New match',team.name,{label:team.name,action:()=>go(team.id)});
+ $('content').innerHTML=`<form id="newMatchForm"><p class="help">Enter the match details first. Choose your lineup and first server when the live set opens.</p>
+  <div class="grid"><label>Opponent<input id="newMatchOpponent" required maxlength="100" autocomplete="off"></label>
+   <label>Match date<input id="newMatchDate" type="date" required value="${date}"></label>
+   <label>Match format<select id="newMatchBestOf"><option value="3">Best of 3</option><option value="5">Best of 5</option></select></label></div>
+  <div class="actions form-actions"><button type="submit" class="primary">Create match · choose lineup</button><button type="button" id="cancelNewMatch">Cancel</button></div></form>`;
+ $('cancelNewMatch').onclick=()=>go(team.id);
+ $('newMatchForm').onsubmit=e=>{e.preventDefault();
+  const opponent=$('newMatchOpponent').value.trim();
+  if(!opponent){$('newMatchOpponent').setCustomValidity('Enter the opponent name.');$('newMatchOpponent').reportValidity();$('newMatchOpponent').setCustomValidity('');return;}
+  if(!$('newMatchDate').reportValidity())return;
   save(async()=>{
-   const entry={id:match?.id??identity(),opponent:$('opponent').value,date:$('date').value,bestOf:Number($('bestOf').value)};
-   const updated=validateTeam({...team,revision:team.revision+1,plannedMatches:[...team.plannedMatches.filter(m=>m.id!==entry.id),entry]});
-   await withFreshStore(()=>store.saveTeam(updated,team.revision));await load();go(team.id);notice(`Match vs ${updated.plannedMatches.find(m=>m.id===entry.id).opponent} saved.`);
+   const entry={id:identity(),opponent,date:$('newMatchDate').value,bestOf:Number($('newMatchBestOf').value)};
+   const updated=validateTeam({...team,revision:team.revision+1,plannedMatches:[...team.plannedMatches,entry]});
+   await withFreshStore(()=>store.saveTeam(updated,team.revision));
+   dirty=false;location.href=`./index.html?setup=1&team=${encodeURIComponent(team.id)}&match=${encodeURIComponent(entry.id)}`;
   });
- });
- $('matchForm').onsubmit=e=>{e.preventDefault();
-  const choices={...editor.read(),bestOf:Number($('bestOf').value),opponent:$('opponent').value,date:$('date').value,firstServe:$('firstServe').value,exhibition,
-    rotationMode:$('rotationMode').value,rotation:Number($('startingRotation').value),previousSet,lineupId:selectedLineupId};
-  save(async()=>{const record=makeMatchSet(team,choices,{setId:identity(),matchId:match?.id??identity(),setNumber});await withFreshStore(()=>store.startSet(record,expected()));busy=false;location.href='./index.html';});
  };
- if(match)$('lineupSelect').focus();else $('opponent').focus();
+ $('newMatchOpponent').focus();
 }
 window.addEventListener('beforeunload',e=>{if(dirty||busy){e.preventDefault();e.returnValue='';}});
 // Let committed navigation leave normally.
