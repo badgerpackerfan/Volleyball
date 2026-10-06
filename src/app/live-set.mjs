@@ -209,7 +209,7 @@ function command(type, payload) { return perform({type, payload}); }
 async function selectReceive(passer) {
   if(receiveDrag) return;
   ui={...ui,pendingCode:null,pendingSlot:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
-    themAttackSourceZone:null,themAttackTargetZone:null};
+    themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
   if(await command('receive.select',{passer})) {ui.showBase=false;render();}
 }
 function commit(team, code, player, details = {}) {
@@ -332,7 +332,7 @@ async function perform(cmd, clear=true) {
     if (cmd.type === 'timeout') {
       ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, showBase: false,
         pendingPassRating: null, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
-        themAttackSourceZone: null, themAttackTargetZone: null,
+        themAttackCourtOpen: false, themAttackSourceZone: null, themAttackTargetZone: null,
         timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
         timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} } };
     } else if (cmd.type === 'receive.rating' || cmd.type === 'attack.attempt') {
@@ -342,7 +342,8 @@ async function perform(cmd, clear=true) {
       tacticalDrag = null;
     }
     if (['attack.attempt','rally','correction','substitution','libero.in','libero.out','libero.switch'].includes(cmd.type))
-      ui = { ...ui, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null, themAttackSourceZone: null, themAttackTargetZone: null };
+      ui = { ...ui, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
+        themAttackCourtOpen: false, themAttackSourceZone: null, themAttackTargetZone: null };
     syncState();
     if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
     if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null}; $('sheet').classList.remove('open'); }
@@ -437,15 +438,18 @@ function render() {
   // Court
   const court = $('court');
   if (!court.dataset.built) {
-    court.innerHTML = '<div class="net"></div><div class="attack-line"></div><div class="attack-line opponent-attack-line"></div><div class="attack-zone-overlay" id="attackZoneOverlay" role="group" aria-label="Optional target zones on the opponent court"></div><span class="court-mark"></span><div class="our-court-half"></div>';
-    const targetOverlay=court.querySelector('.attack-zone-overlay');
-    for(const [zone,label] of [[1,'back right'],[6,'back middle'],[5,'back left'],[2,'front right'],[3,'front middle'],[4,'front left']]){
+    court.innerHTML = '<div class="opponent-court-half"></div><div class="net"></div><div class="attack-line"></div><div class="attack-line opponent-attack-line"></div><div class="attack-zone-overlay" id="attackZoneOverlay" role="group" aria-label="Optional target zones on the opponent court" hidden></div><div class="attack-zone-overlay" id="themSourceZoneOverlay" role="group" aria-label="Opponent attack source zones" hidden></div><div class="attack-zone-overlay our-target-zone-overlay" id="themTargetZoneOverlay" role="group" aria-label="Optional opponent attack target zones on our court" hidden></div><span class="court-mark"></span><div class="our-court-half"></div>';
+    const zoneLabels={1:'back right',6:'back middle',5:'back left',2:'front right',3:'front middle',4:'front left'};
+    const addZoneButtons=(overlay,attribute,zones,label)=>zones.forEach(zone=>{
       const button=document.createElement('button');
-      button.type='button';button.dataset.usTarget=zone;
-      button.setAttribute('aria-label',`Target zone ${zone}, opponent ${label}`);
+      button.type='button';button.dataset[attribute]=zone;
+      button.setAttribute('aria-label',`${label} ${zone}${zoneLabels[zone]?`, ${zoneLabels[zone]}`:''}`);
       button.textContent=String(zone);
-      targetOverlay.appendChild(button);
-    }
+      overlay.appendChild(button);
+    });
+    addZoneButtons(court.querySelector('#attackZoneOverlay'),'usTarget',[1,6,5,2,3,4],'Target zone');
+    addZoneButtons(court.querySelector('#themSourceZoneOverlay'),'themSource',[1,6,5,2,3,4],'Opponent attack source zone');
+    addZoneButtons(court.querySelector('#themTargetZoneOverlay'),'themTarget',[4,3,2,5,6,1],'Opponent attack target zone');
     for (const slot in SLOTS) {
       const z = document.createElement('button');
       z.dataset.slot = slot;
@@ -459,7 +463,9 @@ function render() {
   const autoBaseDefense=!timeoutMode&&!ui.showBase&&(S.passRatedThisRally||S.attackTrackedThisRally)&&Boolean(form?.base?.spots);
   const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
   const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : autoBaseDefense ? form.base.spots : rcv?.spots;
-  const attackTargetMode=!timeoutMode&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
+  const usAttackTargetMode=!timeoutMode&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
+  const opponentAttackMode=!timeoutMode&&Boolean(ui.themAttackCourtOpen);
+  const attackTargetMode=usAttackTargetMode||opponentAttackMode;
   const wasAttackTargetMode=court.classList.contains('attack-target-mode');
   if(attackTargetMode){
     clearTimeout(attackReturnTimer);attackReturnTimer=null;
@@ -470,6 +476,7 @@ function render() {
     attackReturnTimer=setTimeout(()=>{court.classList.remove('attack-returning');attackReturnTimer=null;},280);
   }
   court.classList.toggle('attack-target-mode',attackTargetMode);
+  court.classList.toggle('opponent-attack-mode',opponentAttackMode);
   $('courtWrap').classList.toggle('attack-target-mode',attackTargetMode);
   if (!form.receiving || form.none || ui.showBase || autoBaseDefense) { editingReceive = false; $('receiveStatus').textContent = ''; }
   if (timeoutMode) $('receiveStatus').textContent = timeoutView === 'receive'
@@ -564,7 +571,7 @@ function render() {
     if(!passEnabled)return;
     const rating=Number(button.dataset.rating);
     ui={...ui,pendingCode:null,pendingSlot:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
-      themAttackSourceZone:null,themAttackTargetZone:null,
+      themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null,
       pendingPassRating:ui.pendingPassRating===rating?null:rating};
     render();
   });
@@ -582,7 +589,7 @@ function render() {
   $('usAttackPlayer').textContent=ourHitter==null?'—':`#${ourHitter}`;
   $('usAttackTarget').textContent=ui.attackTargetZone==null?'—':`Z${ui.attackTargetZone}`;
   const attackTargetOverlay=$('attackZoneOverlay');
-  attackTargetOverlay.hidden=!attackTargetMode;
+  attackTargetOverlay.hidden=!usAttackTargetMode;
   attackTargetOverlay.querySelectorAll('[data-us-target]').forEach(button=>{
     const selected=Number(button.dataset.usTarget)===ui.attackTargetZone;
     button.setAttribute('aria-pressed',String(selected));
@@ -604,14 +611,32 @@ function render() {
   const theirSource=ui.themAttackSourceZone, theirTarget=ui.themAttackTargetZone;
   $('themAttackSource').textContent=theirSource==null?'—':`Z${theirSource}`;
   $('themAttackTarget').textContent=theirTarget==null?'—':`Z${theirTarget}`;
-  $('themAttackTargetTools').hidden=theirSource==null;
-  $('themAttackSourceGrid').querySelectorAll('[data-them-source]').forEach(button=>{
+  const themAttackCourtToggle=$('themAttackCourtToggle');
+  themAttackCourtToggle.disabled=attackDisabled;
+  themAttackCourtToggle.setAttribute('aria-pressed',String(opponentAttackMode));
+  themAttackCourtToggle.textContent=opponentAttackMode?'Close court view':'Choose zones on court';
+  const themSourceOverlay=$('themSourceZoneOverlay'), themTargetOverlay=$('themTargetZoneOverlay');
+  themSourceOverlay.hidden=!opponentAttackMode;
+  themTargetOverlay.hidden=!opponentAttackMode;
+  themSourceOverlay.querySelectorAll('[data-them-source]').forEach(button=>{
     button.setAttribute('aria-pressed',String(Number(button.dataset.themSource)===theirSource));
-    button.disabled=attackDisabled;
+    button.disabled=!opponentAttackMode||attackDisabled;
+    button.onclick=()=>{
+      if(button.disabled)return;
+      const zone=Number(button.dataset.themSource);
+      ui={...ui,themAttackSourceZone:ui.themAttackSourceZone===zone?null:zone,themAttackTargetZone:null};
+      render();
+    };
   });
-  $('themAttackTargetGrid').querySelectorAll('[data-them-target]').forEach(button=>{
+  themTargetOverlay.querySelectorAll('[data-them-target]').forEach(button=>{
     button.setAttribute('aria-pressed',String(Number(button.dataset.themTarget)===theirTarget));
-    button.disabled=theirSource==null||attackDisabled;
+    button.disabled=!opponentAttackMode||theirSource==null||attackDisabled;
+    button.onclick=()=>{
+      if(button.disabled)return;
+      const zone=Number(button.dataset.themTarget);
+      ui={...ui,themAttackTargetZone:ui.themAttackTargetZone===zone?null:zone};
+      render();
+    };
   });
   document.querySelectorAll('[data-them-result]').forEach(button=>button.disabled=theirSource==null||attackDisabled);
   let hint;
@@ -983,13 +1008,14 @@ function passRatingForCurrentPoint() {
 }
 
 function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, pendingAttackResult:null,
-  attackPlayerSlot:null,attackTargetZone:null,themAttackSourceZone:null,themAttackTargetZone:null }; render(); }
+  attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null }; render(); }
 
 /* ---------------- Interaction ---------------- */
 function onCode(team, code) {
   if (ui.mode) return;
-  if (ui.pendingPassRating !== null || ui.pendingAttackResult !== null || ui.attackTargetZone !== null)
-    ui={...ui,pendingPassRating:null,pendingAttackResult:null,attackTargetZone:null};
+  if (ui.pendingPassRating !== null || ui.pendingAttackResult !== null || ui.attackTargetZone !== null || ui.themAttackCourtOpen)
+    ui={...ui,pendingPassRating:null,pendingAttackResult:null,attackTargetZone:null,
+      themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
   if (team === 'them') { commit('them', code, null); return; }
   if (code === 'SA' || code === 'SE') { commit('us', code, server()); return; }
   if (ui.pendingSlot) { commit('us', code, S.onCourt[ui.pendingSlot]); return; }
@@ -1029,7 +1055,7 @@ $('editReceive').onclick = () => {
   editingReceive = !editingReceive;
   if (editingReceive) {
     ui.showBase=false; ui.pendingCode=null; ui.pendingSlot=null; ui.mode=null;
-    ui.pendingAttackResult=null;ui.attackPlayerSlot=null;ui.attackTargetZone=null;ui.themAttackSourceZone=null;ui.themAttackTargetZone=null;
+    ui.pendingAttackResult=null;ui.attackPlayerSlot=null;ui.attackTargetZone=null;ui.themAttackCourtOpen=false;ui.themAttackSourceZone=null;ui.themAttackTargetZone=null;
   }
   $('receiveStatus').textContent=editingReceive ? 'Drag one player at a time. Other players stay put; illegal moves are blocked.' : '';
   render();
@@ -1165,7 +1191,7 @@ $('timeoutDone').onclick = () => {
   if (!ui.timeoutMode || tacticalDrag) return;
   ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null,
     pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, showBase: false,
-    pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackSourceZone:null,themAttackTargetZone:null };
+    pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null };
   $('receiveStatus').textContent = '';
   render();status('Timeout ended · ready to continue the set.');
 };
@@ -1179,35 +1205,31 @@ document.querySelectorAll('[data-us-result]').forEach(button=>button.onclick=()=
   const result=button.dataset.usResult;
   if(ui.attackPlayerSlot!=null) { void recordOurAttack(result); return; }
   ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,
-    pendingAttackResult:ui.pendingAttackResult===result?null:result};
+    pendingAttackResult:ui.pendingAttackResult===result?null:result,
+    themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
   render();
 });
-document.querySelectorAll('[data-them-source]').forEach(button=>button.onclick=()=>{
-  if(button.disabled)return;
-  const zone=Number(button.dataset.themSource);
-  if(ui.themAttackSourceZone===zone){ui.themAttackSourceZone=null;ui.themAttackTargetZone=null;}
-  else{ui.themAttackSourceZone=zone;ui.themAttackTargetZone=null;}
+$('themAttackCourtToggle').onclick=()=>{
+  if($('themAttackCourtToggle').disabled)return;
+  const open=!ui.themAttackCourtOpen;
+  ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,pendingAttackResult:null,
+    attackPlayerSlot:null,attackTargetZone:null,mode:null,themAttackCourtOpen:open,
+    themAttackSourceZone:null,themAttackTargetZone:null};
   render();
-});
-document.querySelectorAll('[data-them-target]').forEach(button=>button.onclick=()=>{
-  if(button.disabled||ui.themAttackSourceZone==null)return;
-  const zone=Number(button.dataset.themTarget);
-  ui.themAttackTargetZone=ui.themAttackTargetZone===zone?null:zone;
-  render();
-});
+};
 document.querySelectorAll('[data-them-result]').forEach(button=>button.onclick=()=>{
   if(button.disabled)return;
   void recordOpponentAttack(button.dataset.themResult);
 });
 
 $('actSub').onclick = () => { ui = { ...ui, pendingCode: null, pendingSlot: null, pendingPassRating: null,
-  pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackSourceZone:null,themAttackTargetZone:null,mode: ui.mode === 'sub' ? null : 'sub' }; render(); };
+  pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null,mode: ui.mode === 'sub' ? null : 'sub' }; render(); };
 $('actTheirSub').onclick = () => { clearUi(); openOpponentSub(); };
 
 $('actLib').onclick = () => {
   if (ui.mode === 'libero') { ui = { ...ui, mode: null, pendingPassRating: null }; render(); return; }
   ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,
-    attackPlayerSlot:null,attackTargetZone:null,themAttackSourceZone:null,themAttackTargetZone:null};
+    attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
   openLiberoPlan();
 };
 
@@ -1520,7 +1542,7 @@ async function openSetSetup(context){
       PAST_SETS=siblings.slice(0,currentIndex).flatMap(record=>{const state=replaySet(record);return state.status==='ended'?[{...state.score,number:record.config.setNumber??1}]:[];});
       setupContext=null;lockLiveSetForSetup(false);$('sheet').classList.remove('open');
       ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
-        themAttackSourceZone:null,themAttackTargetZone:null};syncState();render();status('Lineup saved · ready to play');
+        themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};syncState();render();status('Lineup saved · ready to play');
     }catch(error){
       message.textContent=error.message;status(error.message,error instanceof StorageConflict);
       if(error instanceof StorageConflict){document.body.classList.add('failed');$('retrySave').hidden=true;$('reloadSaved').hidden=false;}
@@ -1570,7 +1592,7 @@ async function start() {
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
     session=new SetSession(store,record); syncState();
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
-      pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackSourceZone:null,themAttackTargetZone:null,
+      pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null,
       timeoutMode:false,timeoutView:null,timeoutPasser:null,timeoutPositions:null};
     failedCommand=null; document.body.classList.remove('failed'); $('reloadSaved').hidden=true; $('retrySave').hidden=true;
     render();fit();status(session.state.status==='ended'?'Set ended · saved on this device':'Saved on this device');
