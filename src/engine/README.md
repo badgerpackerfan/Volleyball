@@ -44,6 +44,8 @@ const stats = getSetStats(state);
 
 Players are **team roster-entry IDs**, not jersey numbers or athlete IDs. Athletes remain separate identities so another team can use a different roster entry. Set/team/match IDs are references here; the Teams screen manages rosters and snapshots their display data into each new set. The journal uses stable roster IDs, not editable jersey numbers.
 
+Opponent substitutions are observational events recorded with `opponent.substitution` and `{ outJersey, inJersey }`. They save the current score and our rotation for context, but do not alter our lineup or apply our team's substitution rules. Together with the rally history, these events preserve the opponent's player changes for later rotation reconstruction.
+
 The optional `order` field specifies the lineup’s base R1 slot order at P1–P6. `startingRotation` (1–6, default 1 for legacy records) rotates that base order to initialize the actual court and rotation label. `state.rotations` counts side-outs during this set; `state.rotation` is the current R1–R6 label. New set setup defaults to R1 when serving and R6 when receiving, with manual and previous-set ending rotation choices. Six regular starters are required; enter a libero as an explicit action before the first rally if needed. Planned setter pairs may include a player currently on the bench; the active setter label is null until the appropriate designated setter is actually on court.
 
 ## Commands
@@ -65,7 +67,7 @@ Every `dispatch(record, command, meta)` returns a new `{ record, state, action }
 | `libero.plan` | `{ role: 'mid', 'oh', or 'none' }` | Records the coach's libero-plan choice. |
 | `undo` | `{}` | Appends an undo reference to the latest active action and replays the remainder. |
 
-Team values are `us` and `them`. The UI resolves those IDs to actual names. Codes currently use the fixed paper legend plus NET/VIO; configurable code lists remain future work.
+Team values are `us` and `them`. The UI resolves those IDs to actual names. Codes include the fixed paper legend plus OE (Other Error), NET, and VIO; legacy BKE, BHE, and DigE records remain readable. Configurable code lists remain future work.
 
 Unknown players, duplicate on-court players, unavailable players, front-row libero assignments, stale occupants, and illegal serving/receive code choices are rejected. The engine does not reinterpret the coach's choice of terminal code or infer unrecorded contacts.
 
