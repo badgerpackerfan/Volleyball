@@ -8,7 +8,7 @@ export const DEFAULT_RULES = Object.freeze({
   timeoutsPerTeam: 2, liberoMayServe: true, liberoRalliesBetweenEntries: 1,
 });
 export const ACTION_CODES = Object.freeze({
-  K: 'earned', BK: 'earned', SA: 'earned', HE: 'error', BKE: 'error',
+  K: 'earned', BK: 'earned', SA: 'earned', HE: 'error', OE: 'error', BKE: 'error',
   SE: 'error', SrE: 'error', BHE: 'error', DigE: 'error', NET: 'error', VIO: 'error',
 });
 const POSITIONS = [1, 2, 3, 4, 5, 6];
@@ -16,7 +16,7 @@ const BACK = [5, 6, 1];
 const FRONT = [4, 3, 2];
 const TYPES = new Set(['rally', 'substitution', 'libero.in', 'libero.out',
   'libero.switch', 'timeout', 'set.end', 'undo', 'receive.edit', 'receive.select', 'receive.rating', 'attack.attempt', 'libero.plan',
-  'rally.edit', 'correction']);
+  'opponent.substitution', 'rally.edit', 'correction']);
 // Historical edits and scoresheet corrections are allowed after the set has ended.
 const AFTER_END = new Set(['undo', 'rally.edit', 'correction']);
 const own = (obj, key) => Object.hasOwn(obj, key);
@@ -63,6 +63,10 @@ function id(value, label) {
 function integer(value, min, label) {
   requireThat(Number.isSafeInteger(value) && value >= min,
     'INVALID_INPUT', `${label} must be an integer of at least ${min}.`);
+}
+function courtZone(value, label) {
+  requireThat(Number.isSafeInteger(value) && value >= 1 && value <= 6,
+    'INVALID_ZONE', `${label} must be a court zone from 1 to 6.`);
 }
 function team(value) {
   requireThat(value === 'us' || value === 'them', 'INVALID_TEAM', 'Team must be us or them.');
@@ -178,7 +182,7 @@ function initialState(c) {
     substitutionsUsed: 0, timeoutsRemaining: { us: c.rules.timeoutsPerTeam, them: c.rules.timeoutsPerTeam },
     partners: Object.fromEntries(c.players.map(p => [p.id, []])),
     libero: null, lastLiberoExit: Object.fromEntries(c.liberos.map(p => [p, null])),
-    rallies: [], attackAttempts: [], substitutions: [], liberoReplacements: [], timeouts: [], overrides: [], corrections: [],
+    rallies: [], attackAttempts: [], substitutions: [], opponentSubstitutions: [], liberoReplacements: [], timeouts: [], overrides: [], corrections: [],
     pendingSetWinner: null, winner: null, receiveEdits: {}, receivePasser: null, receiveRatings: [], liberoFor: 'mid',
   };
 }
@@ -220,6 +224,15 @@ function expectedOccupant(c, state, payload) {
 function applyRally(c, s, a) {
   const p = a.payload; team(p.team);
   requireThat(own(ACTION_CODES, p.code), 'INVALID_CODE', `Unknown terminal code: ${p.code}.`);
+  const hasAttackDetails = p.attackSourceZone != null || p.attackTargetZone != null;
+  requireThat(!hasAttackDetails || p.code === 'K' || p.code === 'HE', 'INVALID_ATTACK_DETAILS',
+    'Attack zones can only be attached to a kill or hitting error.');
+  requireThat(p.attackSourceZone == null || p.team === 'them', 'INVALID_ATTACK_DETAILS',
+    'Only an opponent attack uses a source zone.');
+  requireThat(p.team !== 'them' || p.attackTargetZone == null || p.attackSourceZone != null,
+    'INVALID_ATTACK_DETAILS', 'Choose the opponent attack source before recording its target.');
+  if (p.attackSourceZone != null) courtZone(p.attackSourceZone, 'Attack source');
+  if (p.attackTargetZone != null) courtZone(p.attackTargetZone, 'Attack target');
   const servingCode = p.code === 'SA' || p.code === 'SE';
   requireThat(!servingCode || s.servingTeam === p.team, 'WRONG_SERVING_TEAM', 'Only the serving team can record an ace or serve error.');
   requireThat(p.code !== 'SrE' || s.servingTeam !== p.team, 'NOT_RECEIVING', 'Only the receiving team can record a receive error.');
@@ -237,6 +250,8 @@ function applyRally(c, s, a) {
   const winner = ACTION_CODES[p.code] === 'earned' ? p.team : other(p.team);
   const rally = { ...context(s, a), seq: s.rallies.length + 1,
     team: p.team, code: p.code, playerId, winner, ...(a.edited ? { edited: true } : {}),
+    ...(p.attackSourceZone != null ? { attackSourceZone: p.attackSourceZone } : {}),
+    ...(p.attackTargetZone != null ? { attackTargetZone: p.attackTargetZone } : {}),
     servingTeam: s.servingTeam, serverId: s.servingTeam === 'us' ? playerAt(s, 1) : null,
     setterPosition: setterPosition(c, s), backRowPlayerIds: BACK.map(pos => playerAt(s, pos)),
     court: POSITIONS.map(position => ({ position, slotId: s.order[position - 1], playerId: playerAt(s, position) })),
@@ -284,6 +299,14 @@ function applySubstitution(c, s, a) {
   s.onCourt[p.slotId] = p.inPlayerId; s.substitutionsUsed++;
   s.substitutions.push({ ...context(s, a), slotId: p.slotId, outPlayerId: p.outPlayerId,
     inPlayerId: p.inPlayerId, planned: p.planned ?? false, overridden: !!p.override });
+}
+function applyOpponentSubstitution(s, a) {
+  const outJersey = typeof a.payload.outJersey === 'string' ? a.payload.outJersey.trim() : '';
+  const inJersey = typeof a.payload.inJersey === 'string' ? a.payload.inJersey.trim() : '';
+  requireThat(outJersey.length > 0, 'INVALID_INPUT', 'Enter the jersey number of the player coming out.');
+  requireThat(inJersey.length > 0, 'INVALID_INPUT', 'Enter the jersey number of the player coming in.');
+  requireThat(outJersey !== inJersey, 'INVALID_INPUT', 'The incoming and outgoing players must be different.');
+  s.opponentSubstitutions.push({ ...context(s, a), outJersey, inJersey });
 }
 function removeLibero(s, a, reason) {
   const replacement = s.libero;
@@ -360,10 +383,20 @@ function apply(c, state, action) {
       break;
     }
     case 'attack.attempt': {
-      const { playerId } = action.payload;
-      id(playerId, 'Player'); player(c, playerId);
-      requireThat(Object.values(state.onCourt).includes(playerId), 'PLAYER_NOT_ON_COURT', 'Choose a player who is currently on court.');
-      state.attackAttempts.push({ ...context(state, action), playerId });
+      const actionTeam = action.payload.team ?? 'us';
+      const { playerId, sourceZone, targetZone } = action.payload;
+      team(actionTeam);
+      if (targetZone != null) courtZone(targetZone, 'Attack target');
+      if (actionTeam === 'us') {
+        requireThat(sourceZone == null, 'INVALID_ATTACK_DETAILS', 'A player attack does not use an opponent source zone.');
+        id(playerId, 'Player'); player(c, playerId);
+        requireThat(Object.values(state.onCourt).includes(playerId), 'PLAYER_NOT_ON_COURT', 'Choose a player who is currently on court.');
+      } else {
+        requireThat(playerId == null, 'OPPONENT_PLAYER_NOT_TRACKED', 'Opponent players are not tracked.');
+        courtZone(sourceZone, 'Attack source');
+      }
+      state.attackAttempts.push({ ...context(state, action), team: actionTeam, playerId: playerId ?? null,
+        ...(sourceZone != null ? { sourceZone } : {}), ...(targetZone != null ? { targetZone } : {}) });
       break;
     }
     case 'libero.plan':
@@ -372,6 +405,7 @@ function apply(c, state, action) {
       break;
     case 'rally': applyRally(c, state, action); break;
     case 'substitution': applySubstitution(c, state, action); break;
+    case 'opponent.substitution': applyOpponentSubstitution(state, action); break;
     case 'libero.in': case 'libero.out': case 'libero.switch': applyLibero(c, state, action); break;
     case 'timeout': {
       const t = action.payload.team; team(t);
@@ -431,7 +465,10 @@ function rebuild(c, active) {
     if (a.type === 'rally.edit') continue;
     const edit = a.type === 'rally' ? edits.get(a.id) : null;
     if (edit?.delete) continue;
-    const effective = edit ? { ...a, edited: true, payload: { team: edit.team, code: edit.code, playerId: edit.playerId ?? null } } : a;
+    const effective = edit ? { ...a, edited: true, payload: { team: edit.team, code: edit.code,
+      playerId: edit.playerId ?? null,
+      ...(edit.team==='them' && ['K','HE'].includes(edit.code) && a.payload.attackSourceZone != null ? { attackSourceZone: a.payload.attackSourceZone } : {}),
+      ...(['K','HE'].includes(edit.code) && a.payload.attackTargetZone != null ? { attackTargetZone: a.payload.attackTargetZone } : {}) } } : a;
     try { apply(c, state, effective); }
     catch (e) {
       if (!(e instanceof EngineError) || !edits.size || edit) throw e;
@@ -473,6 +510,12 @@ export function replaySet(record) {
     serverId: state.servingTeam === 'us' ? playerAt(state, 1) : null,
     prompts: plannedSwaps(c, state), warnings: warnings(c, state),
   };
+}
+const LINEUP_LOCKING_ACTIONS = new Set(['rally','receive.edit','receive.select','receive.rating',
+  'attack.attempt','substitution','libero.in','libero.out','libero.switch','correction']);
+export function lineupSetupLocked(record,state=replaySet(record)) {
+  return state.status!=='live'||state.score.us+state.score.them>0
+    ||record.actions.some(action=>LINEUP_LOCKING_ACTIONS.has(action.type));
 }
 function plannedSwaps(c, s) {
   if (s.status === 'ended') return [];
@@ -580,6 +623,7 @@ export function getSetStats(state) {
   }
   for (const rally of receiveErrors.values()) recordPass(rally.playerId, 0);
   for (const attempt of state.attackAttempts ?? []) {
+    if ((attempt.team ?? 'us') !== 'us' || !attempt.playerId) continue;
     const p = players.get(attempt.playerId) ?? { earned: 0, errors: 0, codes: {} };
     p.attacking ??= { nonTerminalAttempts: 0 };
     p.attacking.nonTerminalAttempts++;
