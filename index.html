@@ -169,6 +169,12 @@
     border-top: 4px solid var(--panel-color); border-radius: 10px;
     background: color-mix(in srgb, var(--panel-color) 8%, var(--card));
   }
+  .action-panel.inactive {
+    border-color: color-mix(in srgb, var(--panel-color) 18%, var(--line));
+    border-top-color: color-mix(in srgb, var(--panel-color) 52%, var(--line));
+    background: color-mix(in srgb, var(--card) 88%, var(--line));
+  }
+  .action-panel.inactive h3 { color: var(--ink-dim); }
   .outcome-group {
     --panel-color: var(--box-points); --panel-label: var(--action-points);
     min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 8px;
@@ -188,7 +194,7 @@
   .category-panel .code b.abbr { font-size: 20px; line-height: 1; }
   .category-panel .code span.cap { font-size: 10px; line-height: 1.1; text-align: center; }
   .category-panel .code b.word { font-size: 13px; line-height: 1.1; }
-  .category-panel .code:disabled { opacity: .52; }
+  .category-panel .code:disabled { opacity: .68; filter: grayscale(.8); }
   .category-panel .code.pending { box-shadow: 0 0 0 3px var(--ink); }
   .receive-panel .pass-score-panel { display: grid; gap: 3px; padding: 0; border: 0; background: transparent; }
   .receive-panel .pass-score-panel h4, .attack-target-label, .attack-result-label { margin: 0; color: var(--ink-dim); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
