@@ -209,7 +209,7 @@ function command(type, payload) { return perform({type, payload}); }
 async function selectReceive(passer) {
   if(receiveDrag) return;
   ui={...ui,pendingCode:null,pendingSlot:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
-    themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
+    themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null};
   if(await command('receive.select',{passer})) {ui.showBase=false;render();}
 }
 function commit(team, code, player, details = {}) {
@@ -225,8 +225,7 @@ function recordOurAttack(result, slot=ui.attackPlayerSlot) {
   return commit('us',result==='kill'?'K':'HE',jersey,
     targetZone==null?{}:{attackTargetZone:targetZone});
 }
-function recordOpponentAttack(result) {
-  const sourceZone=ui.themAttackSourceZone, targetZone=ui.themAttackTargetZone;
+function recordOpponentAttack(result, sourceZone=ui.themAttackSourceZone, targetZone=ui.themAttackTargetZone) {
   if(sourceZone==null)return;
   if(result==='in') return command('attack.attempt',{team:'them',sourceZone,
     ...(targetZone==null?{}:{targetZone})});
@@ -332,7 +331,7 @@ async function perform(cmd, clear=true) {
     if (cmd.type === 'timeout') {
       ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, showBase: false,
         pendingPassRating: null, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
-        themAttackCourtOpen: false, themAttackSourceZone: null, themAttackTargetZone: null,
+        themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null,
         timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
         timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} } };
     } else if (cmd.type === 'receive.rating' || cmd.type === 'attack.attempt') {
@@ -343,7 +342,7 @@ async function perform(cmd, clear=true) {
     }
     if (['attack.attempt','rally','correction','substitution','libero.in','libero.out','libero.switch'].includes(cmd.type))
       ui = { ...ui, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
-        themAttackCourtOpen: false, themAttackSourceZone: null, themAttackTargetZone: null };
+        themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null };
     syncState();
     if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
     if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null}; $('sheet').classList.remove('open'); }
@@ -464,7 +463,7 @@ function render() {
   const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
   const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : autoBaseDefense ? form.base.spots : rcv?.spots;
   const usAttackTargetMode=!timeoutMode&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
-  const opponentAttackMode=!timeoutMode&&Boolean(ui.themAttackCourtOpen);
+  const opponentAttackMode=!timeoutMode&&ui.themAttackResult!==null;
   const attackTargetMode=usAttackTargetMode||opponentAttackMode;
   const wasAttackTargetMode=court.classList.contains('attack-target-mode');
   if(attackTargetMode){
@@ -571,23 +570,13 @@ function render() {
     if(!passEnabled)return;
     const rating=Number(button.dataset.rating);
     ui={...ui,pendingCode:null,pendingSlot:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
-      themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null,
+      themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,
       pendingPassRating:ui.pendingPassRating===rating?null:rating};
     render();
   });
   $('passScoreStatus').hidden=!recordedPass;
   if(recordedPass) $('passScoreStatus').textContent=`Recorded: #${numberFor(recordedPass.playerId)} · score ${recordedPass.rating} (Undo to change)`;
   const attackDisabled=timeoutMode||editingReceive||session.state.status==='ended'||!!ui.mode;
-  const ourAttackSlot=ui.attackPlayerSlot;
-  const ourHitter=ourAttackSlot==null?null:S.onCourt[ourAttackSlot];
-  $('usAttackStatus').textContent=ourHitter==null
-    ?ui.pendingAttackResult==null
-      ?ui.attackTargetZone==null?'Choose a result, then tap an opponent zone (optional) and our hitter.':'Target selected · choose a result, then tap our hitter.'
-      :`${ui.pendingAttackResult==='kill'?'Kill':ui.pendingAttackResult==='in'?'In Play':'Hitting Error'} selected · tap an opponent zone (optional), then our hitter.`
-    :`#${ourHitter} selected · target optional.`;
-  $('usAttackSelected').hidden=ourHitter==null;
-  $('usAttackPlayer').textContent=ourHitter==null?'—':`#${ourHitter}`;
-  $('usAttackTarget').textContent=ui.attackTargetZone==null?'—':`Z${ui.attackTargetZone}`;
   const attackTargetOverlay=$('attackZoneOverlay');
   attackTargetOverlay.hidden=!usAttackTargetMode;
   attackTargetOverlay.querySelectorAll('[data-us-target]').forEach(button=>{
@@ -609,12 +598,6 @@ function render() {
     button.setAttribute('aria-pressed',String(selected));
   });
   const theirSource=ui.themAttackSourceZone, theirTarget=ui.themAttackTargetZone;
-  $('themAttackSource').textContent=theirSource==null?'—':`Z${theirSource}`;
-  $('themAttackTarget').textContent=theirTarget==null?'—':`Z${theirTarget}`;
-  const themAttackCourtToggle=$('themAttackCourtToggle');
-  themAttackCourtToggle.disabled=attackDisabled;
-  themAttackCourtToggle.setAttribute('aria-pressed',String(opponentAttackMode));
-  themAttackCourtToggle.textContent=opponentAttackMode?'Close court view':'Choose zones on court';
   const themSourceOverlay=$('themSourceZoneOverlay'), themTargetOverlay=$('themTargetZoneOverlay');
   themSourceOverlay.hidden=!opponentAttackMode;
   themTargetOverlay.hidden=!opponentAttackMode;
@@ -624,13 +607,13 @@ function render() {
     button.onclick=()=>{
       if(button.disabled)return;
       const zone=Number(button.dataset.themSource);
-      ui={...ui,themAttackSourceZone:ui.themAttackSourceZone===zone?null:zone,themAttackTargetZone:null};
-      render();
+      ui={...ui,themAttackSourceZone:zone};
+      void recordOpponentAttack(ui.themAttackResult,zone,ui.themAttackTargetZone);
     };
   });
   themTargetOverlay.querySelectorAll('[data-them-target]').forEach(button=>{
     button.setAttribute('aria-pressed',String(Number(button.dataset.themTarget)===theirTarget));
-    button.disabled=!opponentAttackMode||theirSource==null||attackDisabled;
+    button.disabled=!opponentAttackMode||attackDisabled;
     button.onclick=()=>{
       if(button.disabled)return;
       const zone=Number(button.dataset.themTarget);
@@ -638,14 +621,16 @@ function render() {
       render();
     };
   });
-  document.querySelectorAll('[data-them-result]').forEach(button=>button.disabled=theirSource==null||attackDisabled);
+  document.querySelectorAll('[data-them-result]').forEach(button=>{
+    const selected=button.dataset.themResult===ui.themAttackResult;
+    button.disabled=attackDisabled;
+    button.classList.toggle('pending',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
   let hint;
   if (ui.mode === 'sub') hint = '<b>Sub:</b> tap the player coming out. <a href="#" id="cx">Cancel</a>';
   else if (ui.mode === 'libero') hint = '<b>Libero:</b> tap the back-row player the libero replaces. <a href="#" id="cx">Cancel</a>';
   else if (ui.pendingPassRating !== null) hint = `<b>Pass score ${ui.pendingPassRating}</b> — tap the passer on court. <a href="#" id="cx">Cancel</a>`;
-  else if (ui.pendingAttackResult !== null) hint = `<b>Attack ${ui.pendingAttackResult==='kill'?'kill':ui.pendingAttackResult==='in'?'in play':'hitting error'}${ui.attackTargetZone==null?'':` · target Z${ui.attackTargetZone}`}</b> — tap the attacking player. <a href="#" id="cx">Cancel</a>`;
-  else if (ourHitter != null) hint = `<b>Attack #${ourHitter}</b> — target optional; choose a result. <a href="#" id="cx">Cancel</a>`;
-  else if (ui.attackTargetZone !== null) hint = `<b>Attack target Z${ui.attackTargetZone}</b> — choose a result and tap the attacking player. <a href="#" id="cx">Cancel</a>`;
   else if (ui.pendingCode) hint = `<b>${codeName(ui.pendingCode)}</b> — tap the player on the court${EARNED.includes(ui.pendingCode) ? '' : ', or Team'}. <a href="#" id="cx">Cancel</a>`;
   else if (ui.pendingSlot) hint = `<b>#${S.onCourt[ui.pendingSlot]}</b> selected — now tap a code. <a href="#" id="cx">Cancel</a>`;
   else hint = '';
@@ -1008,14 +993,14 @@ function passRatingForCurrentPoint() {
 }
 
 function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, pendingAttackResult:null,
-  attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null }; render(); }
+  attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null }; render(); }
 
 /* ---------------- Interaction ---------------- */
 function onCode(team, code) {
   if (ui.mode) return;
-  if (ui.pendingPassRating !== null || ui.pendingAttackResult !== null || ui.attackTargetZone !== null || ui.themAttackCourtOpen)
+  if (ui.pendingPassRating !== null || ui.pendingAttackResult !== null || ui.attackTargetZone !== null || ui.themAttackResult !== null)
     ui={...ui,pendingPassRating:null,pendingAttackResult:null,attackTargetZone:null,
-      themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
+      themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null};
   if (team === 'them') { commit('them', code, null); return; }
   if (code === 'SA' || code === 'SE') { commit('us', code, server()); return; }
   if (ui.pendingSlot) { commit('us', code, S.onCourt[ui.pendingSlot]); return; }
@@ -1055,7 +1040,7 @@ $('editReceive').onclick = () => {
   editingReceive = !editingReceive;
   if (editingReceive) {
     ui.showBase=false; ui.pendingCode=null; ui.pendingSlot=null; ui.mode=null;
-    ui.pendingAttackResult=null;ui.attackPlayerSlot=null;ui.attackTargetZone=null;ui.themAttackCourtOpen=false;ui.themAttackSourceZone=null;ui.themAttackTargetZone=null;
+    ui.pendingAttackResult=null;ui.attackPlayerSlot=null;ui.attackTargetZone=null;ui.themAttackResult=null;ui.themAttackSourceZone=null;ui.themAttackTargetZone=null;
   }
   $('receiveStatus').textContent=editingReceive ? 'Drag one player at a time. Other players stay put; illegal moves are blocked.' : '';
   render();
@@ -1191,7 +1176,7 @@ $('timeoutDone').onclick = () => {
   if (!ui.timeoutMode || tacticalDrag) return;
   ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null,
     pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, showBase: false,
-    pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null };
+    pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null };
   $('receiveStatus').textContent = '';
   render();status('Timeout ended · ready to continue the set.');
 };
@@ -1204,32 +1189,30 @@ document.querySelectorAll('[data-us-result]').forEach(button=>button.onclick=()=
   if(button.disabled)return;
   const result=button.dataset.usResult;
   if(ui.attackPlayerSlot!=null) { void recordOurAttack(result); return; }
+  const deselect=ui.pendingAttackResult===result;
   ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,
-    pendingAttackResult:ui.pendingAttackResult===result?null:result,
-    themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
+    pendingAttackResult:deselect?null:result,attackTargetZone:deselect?null:ui.attackTargetZone,
+    themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null};
   render();
 });
-$('themAttackCourtToggle').onclick=()=>{
-  if($('themAttackCourtToggle').disabled)return;
-  const open=!ui.themAttackCourtOpen;
-  ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,pendingAttackResult:null,
-    attackPlayerSlot:null,attackTargetZone:null,mode:null,themAttackCourtOpen:open,
-    themAttackSourceZone:null,themAttackTargetZone:null};
-  render();
-};
 document.querySelectorAll('[data-them-result]').forEach(button=>button.onclick=()=>{
   if(button.disabled)return;
-  void recordOpponentAttack(button.dataset.themResult);
+  const result=button.dataset.themResult;
+  ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,pendingAttackResult:null,
+    attackPlayerSlot:null,attackTargetZone:null,mode:null,
+    themAttackResult:ui.themAttackResult===result?null:result,
+    themAttackSourceZone:null,themAttackTargetZone:null};
+  render();
 });
 
 $('actSub').onclick = () => { ui = { ...ui, pendingCode: null, pendingSlot: null, pendingPassRating: null,
-  pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null,mode: ui.mode === 'sub' ? null : 'sub' }; render(); };
+  pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,mode: ui.mode === 'sub' ? null : 'sub' }; render(); };
 $('actTheirSub').onclick = () => { clearUi(); openOpponentSub(); };
 
 $('actLib').onclick = () => {
   if (ui.mode === 'libero') { ui = { ...ui, mode: null, pendingPassRating: null }; render(); return; }
   ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,
-    attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};
+    attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null};
   openLiberoPlan();
 };
 
@@ -1542,7 +1525,7 @@ async function openSetSetup(context){
       PAST_SETS=siblings.slice(0,currentIndex).flatMap(record=>{const state=replaySet(record);return state.status==='ended'?[{...state.score,number:record.config.setNumber??1}]:[];});
       setupContext=null;lockLiveSetForSetup(false);$('sheet').classList.remove('open');
       ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
-        themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null};syncState();render();status('Lineup saved · ready to play');
+        themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null};syncState();render();status('Lineup saved · ready to play');
     }catch(error){
       message.textContent=error.message;status(error.message,error instanceof StorageConflict);
       if(error instanceof StorageConflict){document.body.classList.add('failed');$('retrySave').hidden=true;$('reloadSaved').hidden=false;}
@@ -1592,7 +1575,7 @@ async function start() {
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
     session=new SetSession(store,record); syncState();
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
-      pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackCourtOpen:false,themAttackSourceZone:null,themAttackTargetZone:null,
+      pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,
       timeoutMode:false,timeoutView:null,timeoutPasser:null,timeoutPositions:null};
     failedCommand=null; document.body.classList.remove('failed'); $('reloadSaved').hidden=true; $('retrySave').hidden=true;
     render();fit();status(session.state.status==='ended'?'Set ended · saved on this device':'Saved on this device');
