@@ -1226,7 +1226,7 @@ if($('opponentMenu'))$('opponentMenu').onclick = () => openOpponentScout();
 
 function openOpponentScout(){
   openSheet(`<h4>${esc(TEAM_NAMES.them)} scouting</h4>
-    <p>Enter their starting six before the set, or the six currently on court if you join mid-set. Add the system and setters as you learn them.</p>
+    <p>Tap a court position and enter its jersey number with the in-screen keypad. Mark setters on court or add an off-court setter; set the system and defense as you learn them. No device keyboard opens.</p>
     <div id="opponentScoutEditor"></div>`,true,'scouting');
   mountOpponentScoutEditor($('opponentScoutEditor'),OPPONENT_SCOUT,async scout=>{
     if(saving)throw new Error('Wait for the current save to finish.');
