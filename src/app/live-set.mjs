@@ -554,8 +554,6 @@ function render() {
     const team = b.dataset.team, code = b.dataset.code;
     b.disabled = timeoutMode || editingReceive || session.state.status==='ended' || !possible(team, code);
     b.classList.toggle('pending', ui.pendingCode === code && team === 'us');
-    const auto = team === 'us' && (code === 'SA' || code === 'SE');
-    if (auto && !b.querySelector('.auto')) b.insertAdjacentHTML('beforeend', '<span class="auto">AUTO</span>');
   });
   const tb = $('teamBtn');
   const teamOk = ['OE','NET','VIO'].includes(ui.pendingCode);
