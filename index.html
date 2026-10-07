@@ -415,8 +415,12 @@
   .set-result {
     display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px;
     border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
-    font-size: 13px; color: var(--ink-dim);
+    font: inherit; font-size: 13px; color: var(--ink-dim); text-align: center; cursor: pointer;
+    touch-action: manipulation; -webkit-appearance: none; appearance: none;
   }
+  .set-result:hover { border-color: var(--accent); }
+  .set-result:active { transform: scale(.97); }
+  .set-result .set-summary-hint { font-size: 10px; font-weight: 700; color: var(--ink-dim); }
   .set-result .set-label { font-size: 11px; font-weight: 700; }
   .set-result.won .set-label { color: var(--win-ink); }
   .set-result.lost .set-label { color: var(--lose-ink); }
