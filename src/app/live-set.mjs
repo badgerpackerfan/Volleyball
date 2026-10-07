@@ -205,7 +205,7 @@ const rotLabel = () => `R${rotNum()} · ${setterPos() ? 'S' + setterPos() : 'S�
 
 
 /* ---------------- Engine ---------------- */
-function command(type, payload) { return perform({type, payload}); }
+function command(type, payload, clear = true) { return perform({type, payload}, clear); }
 async function selectReceive(passer) {
   if(receiveDrag) return;
   ui={...ui,pendingCode:null,pendingSlot:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
@@ -425,8 +425,9 @@ function render() {
     $(id).innerHTML = PAST_SETS.map((s, i) => {
       const won = s.us > s.them;
       if (won !== ourWin) return '';
-      return `<div class="set-result ${won ? 'won' : 'lost'}" role="listitem" aria-label="Set ${s.number}: ${esc(TEAM_NAMES.us)} ${s.us}, ${esc(TEAM_NAMES.them)} ${s.them}, ${won ? 'won' : 'lost'}"><span class="set-label">Set ${s.number}</span><strong>${s.us}–${s.them}</strong></div>`;
+      return `<button type="button" class="set-result ${won ? 'won' : 'lost'}" data-set-summary-id="${esc(s.id)}" aria-label="View Set ${s.number} summary: ${esc(TEAM_NAMES.us)} ${s.us}, ${esc(TEAM_NAMES.them)} ${s.them}, ${won ? 'won' : 'lost'}"><span class="set-label">Set ${s.number}</span><strong>${s.us}–${s.them}</strong><span class="set-summary-hint" aria-hidden="true">View summary</span></button>`;
     }).join('');
+    $(id).querySelectorAll('[data-set-summary-id]').forEach(button=>button.onclick=()=>matchSummary(menuContext,button.dataset.setSummaryId));
   }
 
   // Rotation +/- lives in the Recent rallies bar; colored boxes show runs.
@@ -737,7 +738,10 @@ function openLiberoPlan() {
     <div class="lib-plan">${['mid','oh','none'].map(role=>`<button class="pill" data-plan="${role}" aria-pressed="${S.liberoFor===role}">${PAIR_NAME[role] || 'No libero'}</button>`).join('')}</div>
     <div class="two">${S.libero ? `<button id="libOut">Libero out</button><button id="libSw" ${other == null ? 'disabled' : ''}>Switch to #${other ?? '—'}</button>` : '<button id="libIn">Put libero in</button>'}</div>
     <button class="cancel" id="shCancel">Close</button>`);
-  $('sheetCard').querySelectorAll('[data-plan]').forEach(b=>b.onclick=async()=>{if(await command('libero.plan',{role:b.dataset.plan})) openLiberoPlan();});
+  $('sheetCard').querySelectorAll('[data-plan]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.plan===S.liberoFor||saving)return;
+    if(await command('libero.plan',{role:b.dataset.plan},false))openLiberoPlan();
+  });
   if(S.libero) { $('libOut').onclick=liberoOut; $('libSw').onclick=()=>liberoSwitch(other); }
   else $('libIn').onclick=()=>{closeSheet();ui.mode='libero';render();};
 }
@@ -1520,7 +1524,7 @@ async function openSetSetup(context){
       MATCH_RECORDS=await store.listSets();
       const siblings=orderMatchSets(MATCH_RECORDS.filter(record=>record.config.teamId===next.config.teamId&&record.config.matchId===next.config.matchId));
       const currentIndex=siblings.findIndex(record=>record.config.id===next.config.id);
-      PAST_SETS=siblings.slice(0,currentIndex).flatMap(record=>{const state=replaySet(record);return state.status==='ended'?[{...state.score,number:record.config.setNumber??1}]:[];});
+      PAST_SETS=siblings.slice(0,currentIndex).flatMap(record=>{const state=replaySet(record);return state.status==='ended'?[{...state.score,id:record.config.id,number:record.config.setNumber??1}]:[];});
       setupContext=null;lockLiveSetForSetup(false);$('sheet').classList.remove('open');
       ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,
         themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null};syncState();render();status('Lineup saved · ready to play');
@@ -1569,7 +1573,7 @@ async function start() {
     if(!record) {location.replace('./teams.html');return;}
     const siblings=orderMatchSets(allSets.filter(r=>r.config.teamId===record.config.teamId&&r.config.matchId===record.config.matchId));
     const currentIndex=siblings.findIndex(r=>r.config.id===record.config.id);MATCH_RECORDS=siblings;
-    PAST_SETS=siblings.slice(0,currentIndex).flatMap((r,i)=>{const state=replaySet(r);return state.status==='ended'?[{...state.score,number:r.config.setNumber??i+1}]:[];});
+    PAST_SETS=siblings.slice(0,currentIndex).flatMap((r,i)=>{const state=replaySet(r);return state.status==='ended'?[{...state.score,id:r.config.id,number:r.config.setNumber??i+1}]:[];});
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
     session=new SetSession(store,record); syncState();
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
