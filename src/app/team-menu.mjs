@@ -227,7 +227,7 @@ export function fixScore(ctx) {
 }
 
 /* Match summary: set scores, key stats, players, and rotation tables per set. */
-export function matchSummary(ctx) {
+export function matchSummary(ctx, initialSetId = null) {
   const records=ctx.matchRecords();
   const sets = records.map(record => { const state = replaySet(record); return { record, state, stats: getSetStats(state), exhibition:isExhibitionSet(record,records) }; });
   const lineups = matchSetLineups(records);
@@ -305,7 +305,7 @@ export function matchSummary(ctx) {
   const renderMatchSummary = () => {
     ctx.open(`<h4>Match summary · ${esc(ctx.teams.us)} vs ${esc(ctx.teams.them)}</h4>
     <p>${esc(c.matchDate || '')}${c.bestOf ? ` · Best of ${c.bestOf}` : ''} · Official sets ${won}–${lost}${exhibitionCount?` · ${exhibitionCount} exhibition set${exhibitionCount===1?'':'s'} excluded from result`:''}</p>
-    <div class="set-chips">${sets.map((x, i) => { const lineup = lineups[i], number=x.record.config.setNumber??i+1, result=x.state.status==='ended'?(x.state.winner==='us'?'won':'lost'):'live'; return `<button type="button" data-summary-set="${i}" class="${result}" aria-label="View Set ${number}${x.exhibition?' exhibition':''} summary, ${x.state.score.us} to ${x.state.score.them}"><small>Set ${number}${x.exhibition?' · Exhibition':''}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b><small class="set-lineup">${esc(lineup.name)}${lineup.inheritedFromSet ? ` · continued from Set ${lineup.inheritedFromSet}` : ''}</small></button>`; }).join('')}</div>
+    <div class="set-chips">${sets.map((x, i) => { const lineup = lineups[i], number=x.record.config.setNumber??i+1, result=x.state.status==='ended'?(x.state.winner==='us'?'won':'lost'):'live'; return `<button type="button" data-summary-set-id="${esc(x.record.config.id)}" class="${result}" aria-label="View Set ${number}${x.exhibition?' exhibition':''} summary, ${x.state.score.us} to ${x.state.score.them}"><small>Set ${number}${x.exhibition?' · Exhibition':''}${x.state.status === 'ended' ? '' : ' · in progress'}</small><b>${x.state.score.us}–${x.state.score.them}</b><small class="set-lineup">${esc(lineup.name)}${lineup.inheritedFromSet ? ` · continued from Set ${lineup.inheritedFromSet}` : ''}</small></button>`; }).join('')}</div>
     ${takeaways.length ? `<h5>Takeaways</h5><ul class="fix-list">${takeaways.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
     <div class="summary-grid"><div><h5>Point source</h5><p>Won = our kills, blocks, or aces; received = opponent errors; gifted = our errors; lost = opponent kills, blocks, or aces.</p><table class="lib-table stat-table"><thead><tr><th></th>${head}</tr></thead><tbody>
       ${row('Won by us · K/BK/SA', m => m.ourE)}${row('Received · opponent errors', m => m.theirX)}${row('Gifted · our errors', m => m.ourX)}${row('Lost · opponent K/BK/SA', m => m.theirE)}
@@ -322,9 +322,13 @@ export function matchSummary(ctx) {
       <p>Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
-    summaryRoot()?.querySelectorAll('[data-summary-set]').forEach(button=>button.addEventListener('click',()=>renderSetSummary(Number(button.dataset.summarySet))));
+    summaryRoot()?.querySelectorAll('[data-summary-set-id]').forEach(button=>button.onclick=()=>{
+      const index=sets.findIndex(x=>x.record.config.id===button.dataset.summarySetId);
+      if(index>=0)renderSetSummary(index);
+    });
   };
-  renderMatchSummary();
+  const initialSetIndex=initialSetId===null?-1:sets.findIndex(x=>x.record.config.id===initialSetId);
+  if(initialSetIndex>=0)renderSetSummary(initialSetIndex);else renderMatchSummary();
 }
 
 /* Settings: saved on this device and applied immediately. */
