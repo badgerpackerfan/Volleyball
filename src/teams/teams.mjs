@@ -442,18 +442,24 @@ function home(){
   <div class="toolbar">${canStartNext?`<button id="nextSet" class="primary" ${team.players.length<6?'disabled':''}>${optionalThird?'Record optional set 3':match.sets.length?`Set up set ${next}`:'Set up set 1'}</button>`:''}${team.editable?'<button id="editMatchDetails">Edit match details</button>':''}<button id="deleteMatch" class="danger">Delete match</button></div>
   ${match.inProgress?`<p class="muted">${match.winner?'Official result decided; finish the exhibition set in progress to complete its stats.':'Finish the set in progress before starting another set in this match.'}</p>`:''}
   ${match.sets.length?'<h2 class="list-title">Sets</h2>':''}
-  <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1,exhibition=isExhibitionSet(r,match.sets),canCorrectServe=n===1||n===match.bestOf;return item(team.color,`<h3>Set ${n}${exhibition?' · Exhibition':''}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target} · ${r.config.firstServe==='us'?esc(team.name):esc(match.opponent||'Opponent')} served first${exhibition?' · statistics count; excluded from match result':''}</p>`,
-   `<button data-resume="${esc(r.config.id)}" class="primary">${state.status==='ended'?'Open set':'Resume set'}</button>${canCorrectServe?`<button data-correct-first-serve="${esc(r.config.id)}">Correct first serve</button>`:''}${i===match.sets.length-1?`<button data-delete-set="${esc(r.config.id)}" class="danger">Delete set</button>`:''}`,'set-card');}).join('')}</div>
+  <div class="list">${match.sets.map((r,i)=>{const state=replaySet(r),n=r.config.setNumber??i+1,exhibition=isExhibitionSet(r,match.sets),canCorrectServe=n===1||n===match.bestOf,canDeleteSet=i===match.sets.length-1&&(exhibition||!match.winner);return item(team.color,`<h3>Set ${n}${exhibition?' · Exhibition':''}</h3><p class="set-score">${state.score.us}–${state.score.them}</p><p>${state.status==='ended'?'Finished':'In progress'} · to ${r.config.rules.target} · ${r.config.firstServe==='us'?esc(team.name):esc(match.opponent||'Opponent')} served first${exhibition?' · statistics count; excluded from match result':''}</p>`,
+   `<button data-resume="${esc(r.config.id)}" class="primary">${state.status==='ended'?'Open set':'Resume set'}</button>${canCorrectServe?`<button data-correct-first-serve="${esc(r.config.id)}">Correct first serve</button>`:''}${canDeleteSet?`<button data-delete-set="${esc(r.config.id)}" class="danger">${exhibition?'Delete Exhibition Set':'Delete set'}</button>`:''}`,'set-card');}).join('')}</div>
   ${match.sets.length?'':`<div class="card"><p>Not started · ${esc(match.date)} · Best of ${match.bestOf}. Choose Set up set 1 to change the details or pick the lineup and first serve.</p></div>`}
-  ${match.sets.length>1?'<p class="muted">Only the latest set can be deleted, so set numbers and first serve stay in order.</p>':''}`;
+  ${match.sets.length>1?`<p class="muted">${match.winner?match.sets.some(record=>isExhibitionSet(record,match.sets))?'The match is complete. Official sets are locked; exhibition sets can still be deleted.':'The match is complete. Delete the match to remove its sets.':'Only the latest set can be deleted, so set numbers and first serve stay in order.'}</p>`:''}`;
  $('deleteMatch').onclick=()=>deleteMatch(team,match);
  $('editMatchDetails')?.addEventListener('click',()=>go(team.id,match.id,'edit-match'));
  document.querySelectorAll('[data-correct-first-serve]').forEach(button=>button.onclick=()=>{
   const record=match.sets.find(set=>set.config.id===button.dataset.correctFirstServe);
   if(record)editSetFirstServe(team,match,record);
  });
- document.querySelector('[data-delete-set]')?.addEventListener('click',()=>remove(`Delete set ${match.sets.length} vs ${match.opponent} and all of its rallies?`,
-  {teamId:team.id,setId:match.sets.at(-1).config.id},()=>{if(match.sets.length>1)home();else go(team.id);notice(`Set ${match.sets.length} deleted.`);}));
+ document.querySelector('[data-delete-set]')?.addEventListener('click',button=>{
+  const record=match.sets.find(set=>set.config.id===button.currentTarget.dataset.deleteSet);
+  if(!record)return;
+  const setNumber=record.config.setNumber??match.sets.indexOf(record)+1,exhibition=isExhibitionSet(record,match.sets);
+  const deleteLabel=exhibition?`Exhibition Set ${setNumber}`:`set ${setNumber}`;
+  remove(`Delete ${deleteLabel} vs ${match.opponent} and all of its rallies?`,
+   {teamId:team.id,setId:record.config.id},()=>{if(match.sets.length>1)home();else go(team.id);notice(`${deleteLabel} deleted.`);});
+ });
  $('nextSet')?.addEventListener('click',()=>matchSetup(team,match));
  document.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>save(async()=>{await withFreshStore(()=>store.activateSet(b.dataset.resume,expected()));busy=false;location.href='./index.html';}));
 }
