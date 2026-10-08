@@ -744,6 +744,16 @@
   .lib-rec { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-left: 5px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.4; margin-bottom: 10px; }
   .lib-plan { display: flex; gap: 8px; margin-bottom: 12px; }
   .sheet .card { max-height: 960px; overflow-y: auto; }
+  .lib-plan .libero-plan-choice { display: flex; flex: 1; align-items: center; justify-content: center; min-width: 0; min-height: 58px; padding: 5px 8px; white-space: normal; background: #000; border-color: #000; color: #fff; }
+  .lib-plan .libero-plan-choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .libero-plan-note { margin: 0 0 10px !important; font-size: 13px !important; line-height: 1.35; }
+  .libero-plan-note.warning,.libero-plan-warning { padding: 9px 11px; border-left: 4px solid #b76b12; border-radius: 8px; background: color-mix(in srgb,#d97706 12%,var(--card)); color: color-mix(in srgb,#8a4b08 85%,var(--ink)) !important; }
+  .libero-plan-warning { margin: 0 0 10px !important; font-size: 13px !important; font-weight: 750; line-height: 1.35; }
+  .libero-actions { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0 0 10px; }
+  .libero-actions.two { grid-template-columns: 1fr 1fr; }
+  .libero-actions button { min-width: 0; min-height: 52px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-size: 16px; font-weight: 850; }
+  .libero-actions #libIn { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .libero-actions button:disabled { opacity: .45; }
 
   .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .menu-list button { text-align: left; padding: 12px 14px; min-height: 68px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 2px; }
