@@ -1438,7 +1438,7 @@ async function openSetSetup(context){
   const canCarry=Boolean(previousSet&&replaySet(previousSet).status==='ended');
   const mode=originalMode==='carry'&&canCarry?'carry':originalMode==='manual'?'manual':'auto';
   const rotationOptions=`<option value="auto" ${mode==='auto'?'selected':''}>Automatic · R1 serving / R6 receiving</option><option value="manual" ${mode==='manual'?'selected':''}>Choose a rotation</option><option value="carry" ${mode==='carry'?'selected':''} ${canCarry?'':'disabled'}>${canCarry?`Carry previous set’s ending rotation (R${replaySet(previousSet).rotation})`:'Carry previous set’s ending rotation'}</option>`;
-  openSheet(`<form class="set-setup-form" id="setSetupForm"><h4>${context.initial?'Choose lineup':`Lineup · Set ${setNumber}`}</h4>
+  openSheet(`<form class="set-setup-form" id="setSetupForm"><div class="set-setup-content"><h4>${context.initial?'Choose lineup':`Lineup · Set ${setNumber}`}</h4>
     <p>${esc(team.name)} vs ${esc(match.opponent)} · Set ${setNumber} of ${match.bestOf}${exhibition?' · Exhibition':''}. The court stays locked until this is saved.</p>
     <div class="set-setup-grid"><div class="set-setup-controls">
       <label>Your lineup<select id="setupLineupSelect">${setupLineupOptions(team,selected)}</select></label>
@@ -1447,7 +1447,7 @@ async function openSetSetup(context){
       <details class="setup-advanced"><summary>Starting rotation · automatic</summary><label>Start choice<select id="setupRotationMode">${rotationOptions}</select></label><label id="setupRotationLabel" hidden>Starting rotation<select id="setupRotation">${[1,2,3,4,5,6].map(number=>`<option value="${number}" ${number===originalRotation?'selected':''}>R${number}</option>`).join('')}</select></label><p id="setupRotationNote" class="muted"></p></details>
       <div class="setup-save-lineup" id="setupSaveLineup"><details><summary>Save a custom lineup for later</summary><label>Lineup name<input id="setupLineupName" maxlength="100" placeholder="Standard 6-2"></label><button type="button" id="setupSaveLineupButton">Save lineup</button></details></div>
     </div><div class="set-setup-court"><div id="setupLineupPreview" class="lineup-court lineup-preview"></div><div id="setupLineupFields"></div></div></div>
-    <p id="setupMessage" class="setup-message" role="status" aria-live="polite"></p>
+    </div><p id="setupMessage" class="setup-message" role="status" aria-live="polite"></p>
     <div class="sheet-row"><button type="button" class="cancel" id="setupCancel">Cancel</button><button type="submit" class="primary">${context.initial?'Save lineup & open set':'Save lineup'}</button></div>
   </form>`,true,'set-setup');
   const selector=$('setupLineupSelect'),fields=$('setupLineupFields');
