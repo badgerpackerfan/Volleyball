@@ -468,8 +468,7 @@
   }
   .court .net { position: absolute; inset: 0 0 auto 0; height: 1.7%; background: var(--chalk); z-index: 2; transition: top .24s ease-in-out; }
   .court .attack-line { position: absolute; top: 33.333%; left: 0; width: 100%; border-top: 2px dashed rgba(255,255,255,.75); pointer-events: none; transition: top .24s ease-in-out; }
-  .court .opponent-court-half { display: none; position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 50%; pointer-events: none;
-    background: linear-gradient(color-mix(in srgb, var(--action-attack) 28%, var(--court)), color-mix(in srgb, var(--action-attack) 28%, var(--court-2))); }
+  .court .opponent-court-half { display: none; position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 50%; pointer-events: none; }
   .court .opponent-attack-line { display: none; }
   .court.attack-target-mode .opponent-court-half { display: block; }
   .court.attack-target-mode .net { top: 50%; }
@@ -1482,6 +1481,7 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
         <h3 id="themOtherTitle">Other</h3>
         <div class="category-grid" id="themOtherActions"></div>
       </section>
+      <div class="pad-hint" id="hintThem" role="status" aria-live="polite"></div>
       <div class="pad-actions them">
         <button class="act act-sub" id="actTheirSub" title="Record an opponent substitution">Sub<small>Opponent</small></button>
         <button class="act act-to" id="toThemBtn">Timeout<span class="dots"><span id="toT1"></span><span id="toT2"></span></span></button>
