@@ -274,6 +274,7 @@ function syncState() {
     partner:Object.fromEntries(Object.entries(s.partners).map(([k,v])=>[numberFor(k),v.length===1 ? numberFor(v[0]) : null])),
     rotations:s.rotations, rotation:s.rotation, serving:s.servingTeam, us:s.score.us, them:s.score.them,
     subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
+    liberoPlanChosen:activeActions.some(action=>action.type==='libero.plan'),
     rallies,timeouts,timeline,passRatedThisRally,attackTrackedThisRally,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
@@ -732,18 +733,46 @@ function render() {
    rally, this season plus tonight. The pair with the worse rate gains the most. */
 // Demo only: season-to-date before tonight, [back-row rallies, errors there].
 const PAIR_NAME = {mid:'middles',oh:'outsides'};
+function plannedLiberoEntry() {
+  if(!S.liberoPlanChosen)return {warning:'No libero plan selected. Choose Middles or Outsides first.'};
+  if(S.liberoFor==='none')return {warning:'The current plan is “No libero”. Choose Middles or Outsides to put the libero in.'};
+  const slots=Object.keys(S.onCourt).filter(slot=>SLOTS[slot]?.role===S.liberoFor&&!isFront(posOf(Number(slot))));
+  if(slots.length!==1)return {warning:slots.length
+    ?`The current rotation has ${slots.length} back-row ${PAIR_NAME[S.liberoFor]} players. The libero entry needs exactly one.`
+    :`No back-row ${PAIR_NAME[S.liberoFor]} player is on court in this rotation.`};
+  const libero=LIBEROS.find(player=>player!==S.libero?.player&&ROSTER[player]?.available!==false);
+  if(libero==null)return {warning:'No designated libero is available to enter.'};
+  const slot=slots[0],jersey=S.onCourt[slot];
+  const payload={slotId:String(slot),outPlayerId:playerId(jersey),inPlayerId:playerId(libero)};
+  const check=checkCommand(session.record,{type:'libero.in',payload});
+  if(!check.allowed)return {warning:check.error.message};
+  return {slot:Number(slot),jersey,libero};
+}
 function openLiberoPlan() {
   const other=LIBEROS.find(l=>l!==S.libero?.player);
+  const entry=S.libero?null:plannedLiberoEntry();
+  const chosen=S.liberoPlanChosen;
+  const planNote=!chosen
+    ?'No libero plan selected yet. Choose Middles or Outsides before putting the libero in.'
+    :'';
   openSheet(`<h4>Libero plan</h4><p>${S.libero ? `#${S.libero.player} is in for #${S.libero.replaced}.` : 'Libero is off the court.'}</p>
-    <div class="lib-plan">${['mid','oh','none'].map(role=>`<button class="pill" data-plan="${role}" aria-pressed="${S.liberoFor===role}">${PAIR_NAME[role] || 'No libero'}</button>`).join('')}</div>
-    <div class="two">${S.libero ? `<button id="libOut">Libero out</button><button id="libSw" ${other == null ? 'disabled' : ''}>Switch to #${other ?? '—'}</button>` : '<button id="libIn">Put libero in</button>'}</div>
+    <div class="lib-plan" role="group" aria-label="Choose the libero plan">${['mid','oh','none'].map(role=>{const selected=chosen&&S.liberoFor===role;return `<button type="button" class="pill libero-plan-choice" data-plan="${role}" aria-pressed="${selected}">${PAIR_NAME[role] || 'No libero'}</button>`;}).join('')}</div>
+    ${planNote?`<p class="libero-plan-note warning" role="status">${esc(planNote)}</p>`:''}
+    <div class="libero-actions${S.libero?' two':''}">${S.libero ? `<button type="button" id="libOut">Libero out</button><button type="button" id="libSw" ${other == null ? 'disabled' : ''}>Switch to #${other ?? '—'}</button>` : `<button type="button" id="libIn" ${entry?.slot==null?'disabled':''}>${entry?.slot==null?'Put libero in':`Put libero in for #${entry.jersey}`}</button>`}</div>
+    ${!S.libero&&chosen&&entry?.warning?`<p class="libero-plan-warning" role="alert">${esc(entry.warning)}</p>`:''}
     <button class="cancel" id="shCancel">Close</button>`);
   $('sheetCard').querySelectorAll('[data-plan]').forEach(b=>b.onclick=async()=>{
     if(b.dataset.plan===S.liberoFor||saving)return;
     if(await command('libero.plan',{role:b.dataset.plan},false))openLiberoPlan();
   });
   if(S.libero) { $('libOut').onclick=liberoOut; $('libSw').onclick=()=>liberoSwitch(other); }
-  else $('libIn').onclick=()=>{closeSheet();ui.mode='libero';render();};
+  else $('libIn').onclick=async()=>{
+    if(saving)return;
+    const target=plannedLiberoEntry();
+    if(target.slot==null){openLiberoPlan();return;}
+    const saved=await liberoIn(target.slot,target.libero);
+    if(!saved&&!document.body.classList.contains('failed'))openLiberoPlan();
+  };
 }
 
 /* ---------------- Form: recent performance by skill ----------------
