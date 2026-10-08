@@ -227,12 +227,15 @@ function applyRally(c, s, a) {
   const hasAttackDetails = p.attackSourceZone != null || p.attackTargetZone != null;
   requireThat(!hasAttackDetails || p.code === 'K' || p.code === 'HE', 'INVALID_ATTACK_DETAILS',
     'Attack zones can only be attached to a kill or hitting error.');
+  requireThat(p.serveTargetZone == null || (p.team === 'them' && p.code === 'SrE'), 'INVALID_SERVE_DETAILS',
+    'A serve target zone can only be attached to an opponent receive error.');
   requireThat(p.attackSourceZone == null || p.team === 'them', 'INVALID_ATTACK_DETAILS',
     'Only an opponent attack uses a source zone.');
   requireThat(p.team !== 'them' || p.attackTargetZone == null || p.attackSourceZone != null,
     'INVALID_ATTACK_DETAILS', 'Choose the opponent attack source before recording its target.');
   if (p.attackSourceZone != null) courtZone(p.attackSourceZone, 'Attack source');
   if (p.attackTargetZone != null) courtZone(p.attackTargetZone, 'Attack target');
+  if (p.serveTargetZone != null) courtZone(p.serveTargetZone, 'Serve target');
   const servingCode = p.code === 'SA' || p.code === 'SE';
   requireThat(!servingCode || s.servingTeam === p.team, 'WRONG_SERVING_TEAM', 'Only the serving team can record an ace or serve error.');
   requireThat(p.code !== 'SrE' || s.servingTeam !== p.team, 'NOT_RECEIVING', 'Only the receiving team can record a receive error.');
@@ -252,6 +255,7 @@ function applyRally(c, s, a) {
     team: p.team, code: p.code, playerId, winner, ...(a.edited ? { edited: true } : {}),
     ...(p.attackSourceZone != null ? { attackSourceZone: p.attackSourceZone } : {}),
     ...(p.attackTargetZone != null ? { attackTargetZone: p.attackTargetZone } : {}),
+    ...(p.serveTargetZone != null ? { serveTargetZone: p.serveTargetZone } : {}),
     servingTeam: s.servingTeam, serverId: s.servingTeam === 'us' ? playerAt(s, 1) : null,
     setterPosition: setterPosition(c, s), backRowPlayerIds: BACK.map(pos => playerAt(s, pos)),
     court: POSITIONS.map(position => ({ position, slotId: s.order[position - 1], playerId: playerAt(s, position) })),
@@ -468,7 +472,8 @@ function rebuild(c, active) {
     const effective = edit ? { ...a, edited: true, payload: { team: edit.team, code: edit.code,
       playerId: edit.playerId ?? null,
       ...(edit.team==='them' && ['K','HE'].includes(edit.code) && a.payload.attackSourceZone != null ? { attackSourceZone: a.payload.attackSourceZone } : {}),
-      ...(['K','HE'].includes(edit.code) && a.payload.attackTargetZone != null ? { attackTargetZone: a.payload.attackTargetZone } : {}) } } : a;
+      ...(['K','HE'].includes(edit.code) && a.payload.attackTargetZone != null ? { attackTargetZone: a.payload.attackTargetZone } : {}),
+      ...(edit.team==='them' && edit.code==='SrE' && a.payload.serveTargetZone != null ? { serveTargetZone: a.payload.serveTargetZone } : {}) } } : a;
     try { apply(c, state, effective); }
     catch (e) {
       if (!(e instanceof EngineError) || !edits.size || edit) throw e;
