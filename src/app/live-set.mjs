@@ -1296,6 +1296,7 @@ const TEAM_MENU = [
   ['edit-rallies', 'Edit rallies', 'Fix or delete any logged rally'],
   ['fix-score', 'Fix score / rotation / server', 'Match the official scoresheet'],
   ['match-summary', 'Match summary', 'Set scores, key stats, rotation tables'],
+  ['my-team', 'My team', 'Open this team’s roster, matches, practices, and stats'],
   ['switch-team', 'Switch team', 'Keep this set saved and open Teams, rosters, and match setup'],
   ['settings', 'Settings', "Coach’s corner rules, button labels, rule presets"],
 ];
@@ -1309,6 +1310,11 @@ $('teamMenu').onclick = () => {
     'match-summary': matchSummary, settings: settingsSheet };
   $('sheetCard').querySelectorAll('[data-menu]').forEach(b => b.onclick = () => {
     if (b.dataset.menu === 'switch-team') { location.href = './teams.html'; return; }
+    if (b.dataset.menu === 'my-team') {
+      const params = new URLSearchParams({ team: session.record.config.teamId });
+      location.href = `./teams.html#${params}`;
+      return;
+    }
     if (b.dataset.menu === 'lineup' && menuContext.canEditLineup) { void openCurrentSetLineupSetup(); return; }
     screens[b.dataset.menu](menuContext);
   });
