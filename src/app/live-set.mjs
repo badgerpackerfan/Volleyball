@@ -14,6 +14,7 @@ import { loadSettings, applyColorTheme, saveSettings } from './themes.mjs';
 import { normalizeOpponentScout, opponentScoutHasInfo, mountOpponentScoutEditor } from '../teams/opponent-scout.mjs';
 let session, store, saving = false, failedCommand = null, MATCH_RECORDS = [];
 let setupLocked = false, setupContext = null;
+let liberoPromptSetId = null, lastLiberoPromptContext = null, dismissedLiberoPromptContext = null;
 let SETTINGS = loadSettings();
 let ACTIVE_THEME = null;
 let OPPONENT_SCOUT = null;
@@ -251,6 +252,15 @@ function liberoSwitch(lib) { return command('libero.switch', {outPlayerId:player
 
 function syncState() {
   const s = session.state;
+  const promptContext=`${s.rotation}:${s.servingTeam}`;
+  if(liberoPromptSetId!==session.record.config.id) {
+    liberoPromptSetId=session.record.config.id;
+    lastLiberoPromptContext=null;
+    dismissedLiberoPromptContext=null;
+  }
+  if(lastLiberoPromptContext!==null&&lastLiberoPromptContext!==promptContext)
+    dismissedLiberoPromptContext=null;
+  lastLiberoPromptContext=promptContext;
   SYSTEM = session.record.config.system;
   const actionsById=new Map(session.record.actions.map(action=>[action.id,action]));
   const activeActions=s.activeActionIds.map(id=>actionsById.get(id)).filter(Boolean);
@@ -282,8 +292,9 @@ function syncState() {
     rallies,timeouts,timeline,passRatedThisRally,attackTrackedThisRally,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
-  if (LIBEROS.length && !s.libero && s.liberoFor !== 'none' && SLOTS[S.order[0]].role === s.liberoFor && s.status === 'live')
-    S.banners.push({kind:'libero',slot:S.order[0],text:`Libero in for #${S.onCourt[S.order[0]]}?`});
+  if (LIBEROS.length && !s.libero && s.liberoFor !== 'none' && SLOTS[S.order[0]].role === s.liberoFor
+      && s.status === 'live' && dismissedLiberoPromptContext!==promptContext)
+    S.banners.push({kind:'libero',slot:S.order[0],promptContext,text:`Libero in for #${S.onCourt[S.order[0]]}?`});
   receiveEdits = clone(s.receiveEdits);
   if(ui) ui.passer=s.receivePasser;
   history = activeActions.map(action=>({desc:actionLabel(action)}));
@@ -732,7 +743,10 @@ function render() {
     d.className = 'banner' + (b.kind === 'info' ? ' info' : '');
     d.innerHTML = `<div class="t">${b.text}${b.sub ? `<small>${b.sub}</small>` : ''}</div>` +
       (b.kind === 'info' ? `<button class="no">OK</button>` : `<button class="no">Skip</button><button class="yes">${b.kind === 'swap' ? 'Swap' : 'Libero in'}</button>`);
-    d.querySelector('.no').onclick = () => { S.banners.splice(i, 1); render(); };
+    d.querySelector('.no').onclick = () => {
+      if(b.kind==='libero')dismissedLiberoPromptContext=b.promptContext;
+      S.banners.splice(i, 1); render();
+    };
     const yes = d.querySelector('.yes');
     if (yes) yes.onclick = () => {
       if (b.kind === 'swap') doSub(b.slot, b.in, null, true);
