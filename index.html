@@ -787,10 +787,11 @@
   .two-courts .mini-court b { font-size: 26px; }
   .lineup-facts ul { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.5; }
   .lineup-facts p { margin: 0 0 6px; }
-  .sheet .card.set-setup { width: 1300px; max-width: 96%; max-height: 94%; overflow-y: auto; }
-  .set-setup-form { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; background: transparent; }
+  .sheet .card.set-setup { display: flex; flex-direction: column; width: 1300px; max-width: 96%; max-height: 94%; overflow: hidden; }
+  .set-setup-form { display: flex; flex: 1 1 auto; flex-direction: column; gap: 10px; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent; }
+  .set-setup-content { display: grid; flex: 1 1 auto; align-content: start; gap: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .set-setup-form h4 { margin: 0; }
-  .set-setup-form > p { margin: 0; }
+  .set-setup-content > p { margin: 0; }
   .set-setup-grid { display: grid; grid-template-columns: minmax(280px, .72fr) minmax(520px, 1.28fr); gap: 18px; align-items: start; }
   .set-setup-controls { display: grid; gap: 10px; align-content: start; }
   .set-setup-controls label { display: grid; gap: 4px; font-size: 13px; font-weight: 800; }
@@ -811,8 +812,11 @@
   #setupLineupFields .help, #setupLineupFields .muted { margin: 4px 0; font-size: 11px; }
   #setupLineupFields .grid { gap: 8px; }
   #setupLineupFields select { margin: 0; }
-  .setup-message { min-height: 0; color: var(--lose) !important; font-weight: 700; }
-  .set-setup-form .sheet-row { position: sticky; bottom: -20px; z-index: 3; margin: 0; padding: 8px 0 0; background: var(--card); }
+  .setup-message { min-height: 0; margin: 0 !important; color: var(--lose) !important; font-weight: 700; }
+  .set-setup-form .sheet-row { position: static; flex: none; gap: 10px; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--line); background: var(--card); }
+  .set-setup-form .sheet-row button { min-height: 50px; border-radius: 12px; font-size: 16px; font-weight: 850; }
+  .set-setup-form .sheet-row .cancel { flex: 0 0 auto; width: auto; height: 50px; min-width: 112px; margin: 0; padding: 0 18px; background: var(--bg); }
+  .set-setup-form .sheet-row .primary { flex: 1 1 auto; min-width: 0; height: 50px; padding: 0 16px; border: 1px solid var(--accent); background: var(--accent); color: #fff; white-space: nowrap; }
   .set-setup-court .lineup-court { position: relative; aspect-ratio: 1; container-type: inline-size; background: linear-gradient(var(--court),var(--court-2)); border: 3px solid #fff; border-radius: 4px; }
   .set-setup-court .lineup-net { position: absolute; inset: 0 0 auto; height: 2%; background: #fff; }
   .set-setup-court .lineup-attack-line { position: absolute; top: 33.333%; width: 100%; border-top: 2px dashed #ffffffbf; }
@@ -827,7 +831,7 @@
   .set-setup-court .lineup-name { max-width: 100%; margin-top: 5px; color: #fff; font-size: clamp(9px,2.6cqw,14px); line-height: 1.15; text-shadow: 0 1px 2px #0006; overflow: hidden; }
   #setupLineupFields > label { display: grid; gap: 4px; margin: 0 0 8px; max-width: 360px; }
   #setupLineupFields fieldset label:not(.lineup-player) { display: grid; gap: 4px; }
-  @media (max-width: 760px) { .set-setup-grid { grid-template-columns: 1fr; } .set-setup-court .lineup-court, #setupLineupFields .lineup-court { max-width: 460px; } }
+  @media (max-width: 760px), (orientation: portrait) { .set-setup-grid { grid-template-columns: 1fr; } .set-setup-court .lineup-court, #setupLineupFields .lineup-court { max-width: 460px; } }
   .rally-list { display: grid; gap: 6px; max-height: 660px; overflow-y: auto; }
   .rally-row { display: grid; grid-template-columns: 36px 78px 1fr auto; align-items: center; gap: 8px; min-height: 54px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: left; font-size: 16px; }
   .rally-row.won { border-left: 6px solid var(--win); } .rally-row.lost { border-left: 6px solid var(--lose); }
