@@ -236,6 +236,16 @@ function applyRally(c, s, a) {
   if (p.attackSourceZone != null) courtZone(p.attackSourceZone, 'Attack source');
   if (p.attackTargetZone != null) courtZone(p.attackTargetZone, 'Attack target');
   if (p.serveTargetZone != null) courtZone(p.serveTargetZone, 'Serve target');
+  const assistPlayerId = p.assistPlayerId ?? null;
+  if (assistPlayerId !== null) {
+    requireThat(p.team === 'us' && p.code === 'K', 'INVALID_ASSIST',
+      'An assist can only be recorded on one of our kills.');
+    id(assistPlayerId, 'Assister');
+    player(c, assistPlayerId);
+    requireThat(assistPlayerId !== p.playerId, 'INVALID_ASSIST', 'The hitter cannot be credited as the assister.');
+    requireThat(Object.values(s.onCourt).includes(assistPlayerId), 'PLAYER_NOT_ON_COURT',
+      'Choose an assister who was on court for the kill.');
+  }
   const servingCode = p.code === 'SA' || p.code === 'SE';
   requireThat(!servingCode || s.servingTeam === p.team, 'WRONG_SERVING_TEAM', 'Only the serving team can record an ace or serve error.');
   requireThat(p.code !== 'SrE' || s.servingTeam !== p.team, 'NOT_RECEIVING', 'Only the receiving team can record a receive error.');
@@ -253,6 +263,7 @@ function applyRally(c, s, a) {
   const winner = ACTION_CODES[p.code] === 'earned' ? p.team : other(p.team);
   const rally = { ...context(s, a), seq: s.rallies.length + 1,
     team: p.team, code: p.code, playerId, winner, ...(a.edited ? { edited: true } : {}),
+    ...(assistPlayerId !== null ? { assistPlayerId } : {}),
     ...(p.attackSourceZone != null ? { attackSourceZone: p.attackSourceZone } : {}),
     ...(p.attackTargetZone != null ? { attackTargetZone: p.attackTargetZone } : {}),
     ...(p.serveTargetZone != null ? { serveTargetZone: p.serveTargetZone } : {}),
@@ -471,6 +482,7 @@ function rebuild(c, active) {
     if (edit?.delete) continue;
     const effective = edit ? { ...a, edited: true, payload: { team: edit.team, code: edit.code,
       playerId: edit.playerId ?? null,
+      ...(edit.team === 'us' && edit.code === 'K' ? { assistPlayerId: edit.assistPlayerId ?? null } : {}),
       ...(edit.team==='them' && ['K','HE'].includes(edit.code) && a.payload.attackSourceZone != null ? { attackSourceZone: a.payload.attackSourceZone } : {}),
       ...(['K','HE'].includes(edit.code) && a.payload.attackTargetZone != null ? { attackTargetZone: a.payload.attackTargetZone } : {}),
       ...(edit.team==='them' && edit.code==='SrE' && a.payload.serveTargetZone != null ? { serveTargetZone: a.payload.serveTargetZone } : {}) } } : a;
@@ -606,6 +618,11 @@ export function getSetStats(state) {
       const p = players.get(r.playerId) ?? { earned: 0, errors: 0, codes: {} };
       p[ACTION_CODES[r.code] === 'earned' ? 'earned' : 'errors']++;
       p.codes[r.code] = (p.codes[r.code] ?? 0) + 1; players.set(r.playerId, p);
+    }
+    if (r.team === 'us' && r.code === 'K' && r.assistPlayerId) {
+      const p = players.get(r.assistPlayerId) ?? { earned: 0, errors: 0, codes: {} };
+      p.assists = (p.assists ?? 0) + 1;
+      players.set(r.assistPlayerId, p);
     }
   }
   const receiveErrors = new Map();
