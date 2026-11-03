@@ -13,6 +13,8 @@ function add(target, source) {
   target.serving.aces += source.serving.aces;
   target.serving.errors += source.serving.errors;
   target.attacking.kills += source.attacking.kills;
+  if (Object.hasOwn(source.attacking, 'assists'))
+    target.attacking.assists = (target.attacking.assists ?? 0) + source.attacking.assists;
   target.attacking.hittingErrors += source.attacking.hittingErrors;
   target.attacking.plusMinus += source.attacking.plusMinus;
   target.attacking.actions += source.attacking.actions;
@@ -45,12 +47,12 @@ function rowsForSet(record, currentPlayers = new Map()) {
       passing: { count: row.passing?.count ?? 0, sum: row.passing?.sum ?? 0 },
       serving: { attempts: row.serving?.attempts ?? 0, in: row.serving?.in ?? 0,
         aces: row.serving?.aces ?? 0, errors: row.serving?.errors ?? 0 },
-      attacking: { kills: row.codes?.K ?? 0, hittingErrors: row.codes?.HE ?? 0, plusMinus: row.net ?? 0,
+      attacking: { kills: row.codes?.K ?? 0, assists: row.assists ?? 0, hittingErrors: row.codes?.HE ?? 0, plusMinus: row.net ?? 0,
         actions: Object.values(row.codes ?? {}).reduce((sum, count) => sum + count, 0),
         nonTerminalAttempts: row.attacking?.nonTerminalAttempts ?? 0 },
     },
   })).filter(row => row.stats.passing.count || row.stats.serving.attempts
-    || row.stats.attacking.actions || row.stats.attacking.nonTerminalAttempts);
+    || row.stats.attacking.assists || row.stats.attacking.actions || row.stats.attacking.nonTerminalAttempts);
 }
 function ordered(rows) {
   return [...rows].sort((a, b) => Number(a.player.jersey) - Number(b.player.jersey)
@@ -141,7 +143,7 @@ const playerAnalysisZero = player => ({
   player: profile(player),
   passing: { count: 0, sum: 0, ratings: { 0: 0, 1: 0, 2: 0, 3: 0 }, linked: 0, sideoutWins: 0 },
   serving: { attempts: 0, in: 0, aces: 0, errors: 0, pointsWon: 0, pointsLost: 0 },
-  attacking: { kills: 0, hittingErrors: 0, nonTerminalAttempts: 0 },
+  attacking: { kills: 0, assists: 0, hittingErrors: 0, nonTerminalAttempts: 0 },
 });
 const addPass = (target, rating) => {
   target.count++; target.sum += rating.rating; target.ratings[rating.rating]++;
@@ -327,6 +329,8 @@ export function buildLineupAnalysis(team) {
         if (rally.code === 'K') player.attacking.kills++;
         else if (rally.code === 'HE') player.attacking.hittingErrors++;
       }
+      if (rally.team === 'us' && rally.code === 'K' && rally.assistPlayerId)
+        analysisPlayer(lineup, rally.assistPlayerId).attacking.assists++;
       rotation.rallies++; lineup.rallies++;
       if (rally.winner === 'us') { rotation.won++; lineup.won++; }
       else { rotation.lost++; lineup.lost++; }
