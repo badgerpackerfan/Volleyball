@@ -289,7 +289,7 @@ function statTable(rows,matchStats=false){
 const analysisPercent=(part,total)=>total?`${Math.round(part*100/total)}%`:'—';
 const analysisSigned=value=>value>0?`+${value}`:String(value);
 function lineupPlayerTable(players){
- const rows=players.filter(({passing,serving,attacking})=>passing.count||serving.attempts||attacking.kills||attacking.hittingErrors||attacking.nonTerminalAttempts);
+ const rows=players.filter(({passing,serving,attacking})=>passing.count||serving.attempts||attacking.kills||attacking.assists||attacking.hittingErrors||attacking.nonTerminalAttempts);
  if(!rows.length)return '<div class="stats-empty">No passing, serving, or attacking results recorded for this lineup.</div>';
  return `<div class="stats-table-scroll"><table class="stats-table player-performance-table lineup-player-table"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}<th>Serve points W–L</th><th>Ace %</th><th>Pass scores · 0 / 1 / 2 / 3</th></tr></thead><tbody>${rows.map(({player,passing,serving,attacking})=>{
   const serveRecord=serving.attempts?`${serving.pointsWon}–${serving.pointsLost} <small>n=${serving.attempts}</small>`:'—';
@@ -321,7 +321,7 @@ function lineupAnalysisMarkup(lineups){
    <summary><strong>${esc(lineup.name)}</strong><span>${esc(lineup.system)} · ${lineup.matches} matches · ${lineup.setsWon}–${lineup.setsLost} sets · ${lineup.won}–${lineup.lost} rallies · <b class="${delta>0?'pos':delta<0?'neg':''}">${analysisSigned(delta)}</b></span></summary>
    <div class="lineup-analysis-body"><p class="muted"><strong>R1:</strong> ${esc(lineup.starterLabel)} · <strong>Setters:</strong> ${esc(lineup.setterLabel)} · ${lineup.rallies} rallies in ${lineup.setsPlayed} sets. Cells with fewer than 10 rallies are marked as small samples.</p>
     <div class="analysis-rotation-grid">${rotationCards}</div>
-    <details class="stats-set analysis-players"><summary>Serving and passing by player</summary>${lineupPlayerTable(lineup.players)}</details>
+    <details class="stats-set analysis-players"><summary>Serving, passing, and attacking by player</summary>${lineupPlayerTable(lineup.players)}</details>
    </div>
   </details>`;
  }).join('')}</div>`;
@@ -331,14 +331,14 @@ function teamStatsPage(team){
  const lineupAnalysis=buildLineupAnalysis(team);
  const exhibitionCount=stats.matches.reduce((count,match)=>count+match.sets.filter(set=>set.exhibition).length,0);
  const seasonRows=source=>stats.players.map(row=>({player:row.player,stats:row[source]}))
-  .filter(row=>row.stats.passing.count||row.stats.serving.attempts||row.stats.attacking.actions
+  .filter(row=>row.stats.passing.count||row.stats.serving.attempts||row.stats.attacking.assists||row.stats.attacking.actions
    ||row.stats.attacking.nonTerminalAttempts);
  const seasonSourceText=source=>source==='matches'
   ?`Match stats · ${plural(stats.counts.sets,'set')} recorded${exhibitionCount?` · includes ${plural(exhibitionCount,'exhibition set')}`:''}`
   :`Practice stats · ${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.practiceResults,'result')}`;
  $('content').innerHTML=`<section class="season-stats-summary card" style="--team-color:${team.color}">
    <div><h2>${esc(team.name)} · ${esc(team.season||'Season stats')}</h2><p>${plural(stats.counts.practices,'practice')} · ${plural(stats.counts.matches,'match')} · ${plural(stats.counts.sets,'set')} · ${plural(stats.counts.practiceResults,'practice result')}</p></div>
-   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Exhibition set stats count here, but those sets do not change official match results. Serve In % includes aces; Ace % shows aces as a share of attempts. Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
+   <p class="muted">Practice results are tapped individually; match serve attempts come from completed rallies. Use the source selector to review each separately. Exhibition set stats count here, but those sets do not change official match results. Serve In % includes aces; Ace % shows aces as a share of attempts. Ast = assists credited on kills. Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Match +/− is kills, blocks, and aces minus errors credited to that player.</p>
   </section>
   <h2 class="list-title">Lineup and rotation analysis</h2>
   <p class="help">Rally outcomes are grouped by the lineup used in each set and the rotation at the start of each rally. Pass-to-side-out rates include scores linked to a recorded rally.</p>
