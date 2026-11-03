@@ -223,8 +223,20 @@ function recordOurAttack(result, slot=ui.attackPlayerSlot) {
   if(!rosterId)return;
   if(result==='in') return command('attack.attempt',{team:'us',playerId:rosterId,
     ...(targetZone==null?{}:{targetZone})});
-  return commit('us',result==='kill'?'K':'HE',jersey,
+  if(result==='kill') {
+    ui={...ui,pendingAssist:{hitterSlot:slot,hitterId:rosterId,hitterJersey:jersey,targetZone},attackPlayerSlot:slot};
+    render();return;
+  }
+  return commit('us','HE',jersey,
     targetZone==null?{}:{attackTargetZone:targetZone});
+}
+function savePendingKill(assistPlayerId=null) {
+  const pending=ui.pendingAssist;
+  if(!pending||assistPlayerId===pending.hitterId)return;
+  commit('us','K',pending.hitterJersey,{
+    ...(pending.targetZone==null?{}:{attackTargetZone:pending.targetZone}),
+    ...(assistPlayerId?{assistPlayerId}:{}),
+  });
 }
 function recordOpponentAttack(result, sourceZone=ui.themAttackSourceZone, targetZone=ui.themAttackTargetZone) {
   if(sourceZone==null)return;
@@ -311,7 +323,8 @@ function syncState() {
 function actionLabel(a) {
   if(a.type==='rally') {
     const zones=`${a.payload.attackSourceZone?` Z${a.payload.attackSourceZone}`:''}${a.payload.attackTargetZone?` → Z${a.payload.attackTargetZone}`:''}${a.payload.serveTargetZone?` · Serve Z${a.payload.serveTargetZone}`:''}`;
-    return `${TEAM_NAMES[a.payload.team]} ${a.payload.code}${a.payload.playerId ? ' #'+numberFor(a.payload.playerId) : ''}${zones}`;
+    const assist=a.payload.assistPlayerId?` · A #${numberFor(a.payload.assistPlayerId)}`:'';
+    return `${TEAM_NAMES[a.payload.team]} ${a.payload.code}${a.payload.playerId ? ' #'+numberFor(a.payload.playerId) : ''}${assist}${zones}`;
   }
   if(a.type==='receive.rating') return `Pass #${numberFor(a.payload.playerId)} · ${a.payload.rating}`;
   if(a.type==='attack.attempt') {
@@ -357,7 +370,7 @@ async function perform(cmd, clear=true) {
       const timeoutActionId=session.record.actions.at(-1)?.id??null;
       const timeoutPrefs=readTimeoutPrefs(timeoutActionId);
       ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, showBase: false,
-        pendingPassRating: null, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
+        pendingPassRating: null, pendingAttackResult: null, pendingAssist: null, attackPlayerSlot: null, attackTargetZone: null,
         themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null,pendingServeZone:false,
         timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
         timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} },
@@ -370,11 +383,11 @@ async function perform(cmd, clear=true) {
       tacticalDrag = null;
     }
     if (['attack.attempt','rally','correction','substitution','libero.in','libero.out','libero.switch'].includes(cmd.type))
-      ui = { ...ui, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
+      ui = { ...ui, pendingAttackResult: null, pendingAssist: null, attackPlayerSlot: null, attackTargetZone: null,
         themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null };
     syncState();
     if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
-    if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,pendingServeZone:false}; $('sheet').classList.remove('open'); }
+    if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,pendingAssist:null,pendingServeZone:false}; $('sheet').classList.remove('open'); }
     status(session.state.status==='ended' ? 'Set ended · saved on this device' : 'Saved on this device');
     return true;
   } catch(e) {
@@ -632,7 +645,9 @@ function render() {
   if(opponentMenu){
     opponentMenu.innerHTML=`<span>${esc(TEAM_NAMES.them)}</span><span class="caret">▾</span>`;
     opponentMenu.setAttribute('aria-label',`${TEAM_NAMES.them} opponent scouting${opponentScoutHasInfo(OPPONENT_SCOUT)?', information entered':' not entered'}`);
+    opponentMenu.disabled=Boolean(ui.pendingAssist);
   }
+  $('teamMenu').disabled=Boolean(ui.pendingAssist);
   // Header
   $('subsVal').textContent = `${S.subs} / ${SUB_LIMIT}`;
   $('subsBar').className = 'bar' + (S.subs >= 15 ? ' warn' : '');
@@ -690,10 +705,12 @@ function render() {
   }
   const timeoutView = ui.timeoutView || (S.serving === 'them' ? 'receive' : 'defense');
   const form = formation(timeoutMode && timeoutView === 'receive');
+  const assistSelecting=Boolean(ui.pendingAssist)&&!timeoutMode;
+  const assistBaseSpots=assistSelecting?form?.base?.spots:null;
   const autoBaseDefense=!timeoutMode&&!ui.showBase&&(S.passRatedThisRally||S.attackTrackedThisRally)&&Boolean(form?.base?.spots);
   const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
-  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : autoBaseDefense ? form.base.spots : rcv?.spots;
-  const usAttackTargetMode=!timeoutMode&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
+  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : assistBaseSpots || (autoBaseDefense ? form.base.spots : rcv?.spots);
+  const usAttackTargetMode=!timeoutMode&&!assistSelecting&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
   const opponentAttackMode=!timeoutMode&&ui.themAttackResult!==null;
   const serveTargetMode=!timeoutMode&&ui.pendingServeZone;
   const attackTargetMode=usAttackTargetMode||opponentAttackMode||serveTargetMode;
@@ -708,6 +725,7 @@ function render() {
   }
   court.classList.toggle('attack-target-mode',attackTargetMode);
   court.classList.toggle('opponent-attack-mode',opponentAttackMode);
+  court.classList.toggle('assist-choosing',assistSelecting);
   $('courtWrap').classList.toggle('attack-target-mode',attackTargetMode);
   if (!form.receiving || form.none || ui.showBase || autoBaseDefense) { editingReceive = false; $('receiveStatus').textContent = ''; }
   if (timeoutMode) $('receiveStatus').textContent = timeoutView === 'receive'
@@ -719,7 +737,7 @@ function render() {
   $('editReceive').textContent = editingReceive ? 'Done' : 'Adjust receive';
   $('editReceive').setAttribute('aria-pressed', String(editingReceive));
   $('resetReceive').hidden = timeoutMode || !editingReceive;
-  const needPlayer = ui.pendingCode || ui.mode || ui.pendingPassRating !== null || ui.pendingAttackResult !== null || ui.attackTargetZone !== null || ui.attackPlayerSlot != null;
+  const needPlayer = ui.pendingCode || ui.mode || ui.pendingPassRating !== null || ui.pendingAttackResult !== null || ui.pendingAssist || ui.attackTargetZone !== null || ui.attackPlayerSlot != null;
   [4, 3, 2, 5, 6, 1].forEach((pos, i) => {
     const slot = slotAt(pos), p = S.onCourt[slot], info = ROSTER[p] || { n: '', r: '' };
     const z = court.querySelector(`[data-slot="${slot}"]`);
@@ -729,6 +747,7 @@ function render() {
     if (timeoutMode) cls += ' tactical';
     if (ui.pendingSlot === slot || ui.attackPlayerSlot === slot) cls += ' selected';
     if (needPlayer) cls += canPick(pos, slot) ? ' pick' : ' nopick';
+    if (ui.pendingAssist?.hitterSlot === slot) cls += ' assist-hitter';
     z.className = cls;
     if (activeSpots) {
       // Hit area: a square around the dot, centered on the receive spot.
@@ -741,7 +760,7 @@ function render() {
     const disc = `disc ${isLib ? 'lib' : SLOTS[slot].role}${!isFront(pos) && !isLib ? ' back' : ''}`;
     const plan = SLOTS[slot].plan;
     const swapTag = plan && !isLib && !rcv ? `<span class="swap-tag">⇄ #${S.onCourt[slot] === plan.back ? plan.front : plan.back}</span>` : '';
-    const serving = !timeoutMode && !autoBaseDefense && pos === 1 && S.serving === 'us';
+    const serving = !timeoutMode && !autoBaseDefense && !assistSelecting && pos === 1 && S.serving === 'us';
     z.innerHTML = `<span class="pos">P${pos}</span>
       <span class="dwrap"><span class="${disc}">${p}</span>${formMark(p,pos)}${serving ? '<span class="ball"><svg viewBox="0 0 512 512"><use href="#vb"/></svg></span>' : ''}${swapTag}</span>
       <span class="name">${info.n}<small>${info.r}</small></span>`;
@@ -749,12 +768,16 @@ function render() {
 
   // Court view (label on the court; controls in the Us pad)
   const mode = S.serving === 'them' ? 'SERVE RECEIVE' : 'SERVING';
-  const viewTitle = timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : autoBaseDefense ? 'BASE DEFENSE' : !rcv ? 'ROTATION SPOTS' : mode;
+  const viewTitle = assistSelecting ? 'CHOOSE ASSISTER' : timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : autoBaseDefense ? 'BASE DEFENSE' : !rcv ? 'ROTATION SPOTS' : mode;
   court.querySelector('.court-mark').textContent = `${viewTitle} · ${rotLabel().replace(' · ', ' · ')}`;
+  court.setAttribute('aria-label',assistSelecting?'Choose Assister. Tap an assisting teammate on court, or choose No Assist below.':viewTitle);
   const tools = document.querySelector('.court-tools'), inCourt = !timeoutMode && document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
   if (!inCourt && tools.parentElement === court) $('courtWrap').appendChild(tools);
-  tools.hidden=attackTargetMode;
+  tools.hidden=attackTargetMode||assistSelecting;
+  const assistChoice=$('assistChoice'),noAssistKill=$('noAssistKill');
+  assistChoice.hidden=!assistSelecting;
+  noAssistKill.disabled=!assistSelecting||saving||session.state.status==='ended';
   $('courtWrap').classList.toggle('serving', S.serving === 'us');
   $('rcvPassers').innerHTML = form && !form.none && form.options.length > 1
     ? form.options.map(o => `<button class="pill" data-pass="${o}" aria-pressed="${o === form.passer && !ui.showBase}">${PASS_LABEL[o]}</button>`).join('')
@@ -764,7 +787,7 @@ function render() {
       if (ui.timeoutPasser !== b.dataset.pass) { ui.timeoutPasser = b.dataset.pass; ui.timeoutPositions.receive = {}; ui.timeoutUndo=null; render(); }
     } else selectReceive(b.dataset.pass);
   });
-  $('rcvPassers').hidden = autoBaseDefense || (timeoutMode && timeoutView !== 'receive');
+  $('rcvPassers').hidden = autoBaseDefense || assistSelecting || (timeoutMode && timeoutView !== 'receive');
   $('rcvToggle').hidden = timeoutMode;
   $('rcvToggle').textContent = 'Rotation spots';
   $('rcvToggle').setAttribute('aria-pressed', ui.showBase ? 'true' : 'false');
@@ -785,16 +808,16 @@ function render() {
   }
   document.querySelectorAll('.code').forEach(b => {
     const team = b.dataset.team, code = b.dataset.code;
-    b.disabled = timeoutMode || editingReceive || session.state.status==='ended' || !possible(team, code);
+    b.disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || session.state.status==='ended' || !possible(team, code);
     b.classList.toggle('pending', ui.pendingCode === code && team === 'us'
       || ui.pendingServeZone && team === 'them' && code === 'SrE');
   });
   const tb = $('teamBtn');
   const teamOk = ['OE','NET','VIO'].includes(ui.pendingCode);
-  tb.disabled = timeoutMode || editingReceive || session.state.status==='ended' || !teamOk; tb.classList.toggle('ready', !!teamOk);
+  tb.disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || session.state.status==='ended' || !teamOk; tb.classList.toggle('ready', !!teamOk);
   tb.querySelector('small').textContent=teamOk?'Record without a player':'Select an error first';
   const recordedPass = passRatingForCurrentPoint();
-  const passEnabled = S.serving === 'them' && !timeoutMode && !editingReceive
+  const passEnabled = S.serving === 'them' && !timeoutMode && !editingReceive && !ui.pendingAssist
     && session.state.status !== 'ended' && !recordedPass && !ui.mode;
   $('passScoreGrid').innerHTML = PASS_RATINGS.map(([rating,title,description])=>
     `<button type="button" data-rating="${rating}" class="${ui.pendingPassRating===rating?'on':''}" aria-pressed="${ui.pendingPassRating===rating}" aria-label="Pass score ${rating}: ${title}, ${description}" title="${description}" ${passEnabled?'':'disabled'}><b>${rating}</b><span>${title}</span></button>`).join('');
@@ -808,7 +831,7 @@ function render() {
   });
   $('passScoreStatus').hidden=!recordedPass;
   if(recordedPass) $('passScoreStatus').textContent=`Recorded: #${numberFor(recordedPass.playerId)} · score ${recordedPass.rating} (Undo to change)`;
-  const attackDisabled=timeoutMode||editingReceive||session.state.status==='ended'||!!ui.mode;
+  const attackDisabled=timeoutMode||editingReceive||session.state.status==='ended'||!!ui.mode||Boolean(ui.pendingAssist);
   const attackTargetOverlay=$('attackZoneOverlay');
   attackTargetOverlay.hidden=!usAttackTargetMode;
   attackTargetOverlay.querySelectorAll('[data-us-target]').forEach(button=>{
@@ -872,6 +895,7 @@ function render() {
   if (ui.mode === 'sub') hint = '<b>Sub:</b> tap the player coming out. <a href="#" id="cx">Cancel</a>';
   else if (ui.mode === 'libero') hint = '<b>Libero:</b> tap the back-row player the libero replaces. <a href="#" id="cx">Cancel</a>';
   else if (ui.pendingPassRating !== null) hint = `<b>Pass score ${ui.pendingPassRating}</b> — tap the passer on court. <a href="#" id="cx">Cancel</a>`;
+  else if (ui.pendingAssist) hint = '<b>Choose Assister</b> · tap a teammate or <a href="#" id="cx">Cancel</a>.';
   else if (ui.pendingCode) hint = `<b>${codeName(ui.pendingCode)}</b> — tap the player on the court${EARNED.includes(ui.pendingCode) ? '' : ', or Team'}. <a href="#" id="cx">Cancel</a>`;
   else if (ui.pendingSlot) hint = `<b>#${S.onCourt[ui.pendingSlot]}</b> selected — now tap a code. <a href="#" id="cx">Cancel</a>`;
   else hint = '';
@@ -885,12 +909,12 @@ function render() {
 
   // Actions
   $('actSub').classList.toggle('on', ui.mode === 'sub');
-  $('actSub').disabled = timeoutMode || editingReceive;
-  $('actTheirSub').disabled = timeoutMode || editingReceive || session.state.status==='ended';
-  $('actLib').disabled = timeoutMode || editingReceive || !LIBEROS.length;
+  $('actSub').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist);
+  $('actTheirSub').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || session.state.status==='ended';
+  $('actLib').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || !LIBEROS.length;
   $('actLib').classList.toggle('on', ui.mode === 'libero' || !!S.libero);
   $('actLibSm').textContent = S.libero ? `#${S.libero.player} in for #${S.libero.replaced}` : `Off · plan: ${S.liberoFor === 'none' ? 'none' : PAIR_NAME[S.liberoFor]}`;
-  $('toUsBtn').disabled = timeoutMode || editingReceive || !S.toUs; $('toThemBtn').disabled = timeoutMode || editingReceive || !S.toThem;
+  $('toUsBtn').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || !S.toUs; $('toThemBtn').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || !S.toThem;
 
   // Log
   const log = $('log');
@@ -947,7 +971,7 @@ function render() {
   renderCorner();
 
   // Undo
-  $('undoBtn').disabled = timeoutMode || editingReceive || history.length === 0;
+  $('undoBtn').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || history.length === 0;
   $('undoSm').textContent = history.length ? history[history.length - 1].desc : 'nothing to undo';
 
   // Banners
@@ -1358,6 +1382,7 @@ function formMark(p,pos) {
 }
 
 function canPick(pos, slot) {
+  if (ui.pendingAssist) return slot !== ui.pendingAssist.hitterSlot;
   if (ui.mode === 'libero') return !isFront(pos) && !(S.libero && S.libero.slot === slot);
   return true;
 }
@@ -1374,11 +1399,12 @@ function passRatingForCurrentPoint() {
   return null;
 }
 
-function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, pendingAttackResult:null,
+function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, pendingAttackResult:null,pendingAssist:null,
   attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false }; render(); }
 
 /* ---------------- Interaction ---------------- */
 function onCode(team, code) {
+  if (ui.pendingAssist) return;
   if (ui.mode) return;
   if(team==='them'&&code==='SrE') {
     ui={...ui,pendingCode:null,pendingSlot:null,pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,
@@ -1401,6 +1427,12 @@ function onTile(pos, slot) {
   if (ui.pendingServeZone) return;
   if (editingReceive) return;
   if (session.state.status==='ended') return;
+  if (ui.pendingAssist) {
+    if (slot === ui.pendingAssist.hitterSlot) return;
+    const assistPlayerId=playerId(S.onCourt[slot]);
+    if(assistPlayerId)savePendingKill(assistPlayerId);
+    return;
+  }
   if (ui.mode === 'sub') { ui.mode = null; openBench(slot); return; }
   if (ui.mode === 'libero') {
     if (!canPick(pos, slot)) return;
@@ -1592,6 +1624,7 @@ $('timeoutUndoPosition').onclick=()=>{
 
 $('teamBtn').onclick = () => { if (ui.pendingCode) { commit('us', ui.pendingCode, null); } };
 
+$('noAssistKill').onclick = () => savePendingKill(null);
 $('undoBtn').onclick = () => command('undo', {});
 
 document.querySelectorAll('[data-us-result]').forEach(button=>button.onclick=()=>{
@@ -1993,7 +2026,7 @@ async function start() {
     const lastActiveAction=activeNow.at(-1),resumeTimeout=lastActiveAction?.type==='timeout'&&!readTimeoutPrefs(lastActiveAction.id).done;
     const resumedTimeoutPrefs=resumeTimeout?readTimeoutPrefs(lastActiveAction.id):{};
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
-      pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false,
+      pendingPassRating:null,pendingAttackResult:null,pendingAssist:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false,
       timeoutMode:resumeTimeout,timeoutView:resumeTimeout?(session.state.servingTeam==='them'?'receive':'defense'):null,
       timeoutPasser:resumeTimeout?session.state.receivePasser:null,timeoutPositions:resumeTimeout?{receive:{},defense:{}}:null,
       timeoutActionId:resumeTimeout?lastActiveAction.id:null,timeoutFocus:resumedTimeoutPrefs.focus??null,
