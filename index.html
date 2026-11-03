@@ -1316,6 +1316,99 @@
 #saveStatus { flex:1; min-width:180px; } #saveStatus.error { color:#b52f40; font-weight:600; }
 body.saving .save-bar,body.failed .save-bar { transform:translate(-50%,0); }
 body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
+
+/* Focused timeout view: retain the live court and theme, while replacing the
+   scoring pads, Coach's Corner, and ordinary rally footer with one cue. */
+body.timeout-active .hdr, body.timeout-active .foot,
+body.timeout-active #padUs, body.timeout-active #padThem { display:none !important; }
+body.timeout-active .ipad { grid-template-rows:minmax(0,1fr); }
+body.timeout-active .body { grid-template-columns:minmax(0,1fr); gap:0; padding:14px 18px; }
+body.timeout-active .center { min-height:0; display:flex; }
+body.timeout-active .center-main {
+  display:grid; flex:1; min-height:0; gap:10px 14px;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  grid-template-rows:auto auto minmax(0,1fr) auto;
+  grid-template-areas:"banner banner" "score score" "court coach" "rallies coach";
+}
+body.timeout-active #timeoutBanner { grid-area:banner; display:flex; min-height:52px; align-items:center; gap:12px; padding:7px 13px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+#timeoutBanner[hidden], #timeoutRallies[hidden], #timeoutCoach[hidden] { display:none !important; }
+.timeout-banner-tag { flex:none; padding:7px 10px; border-radius:9px; background:var(--accent); color:#fff; font-size:13px; font-weight:900; letter-spacing:.04em; }
+.timeout-banner-tag.their { background:color-mix(in srgb,var(--accent) 24%,var(--card)); color:var(--ink); border:1px solid var(--line); }
+#timeoutBanner strong, #timeoutBanner small { display:block; }
+#timeoutBanner strong { font-size:17px; line-height:1.2; }
+#timeoutBanner small { margin-top:2px; color:var(--ink-dim); font-size:12px; font-weight:700; }
+body.timeout-active #scoreBox { grid-area:score; min-height:84px; padding:5px 18px; grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr); }
+body.timeout-active #scoreBox .set-history { display:none; }
+body.timeout-active #scoreBox .side { flex-direction:row; gap:8px; }
+body.timeout-active #scoreBox #sideUs { justify-self:end; }
+body.timeout-active #scoreBox #sideThem { justify-self:start; }
+body.timeout-active #scoreBox #sideUs { grid-column:2; }
+body.timeout-active #scoreBox .colon { grid-column:3; }
+body.timeout-active #scoreBox #sideThem { grid-column:4; }
+body.timeout-active #scoreBox .who { font-size:17px; }
+body.timeout-active #scoreBox .num { font-size:56px; }
+body.timeout-active #scoreBox .colon { font-size:42px; }
+body.timeout-active #courtWrap { grid-area:court; min-height:0; padding:8px 10px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+.timeout-rotation-heading { display:none; }
+body.timeout-active .timeout-rotation-heading { display:block; width:100%; margin:0 0 7px; color:var(--ink); font-size:19px; line-height:1.2; font-weight:850; }
+body.timeout-active .timeout-rotation-heading small { margin-left:8px; color:var(--ink-dim); font-size:14px; font-weight:700; }
+body.timeout-active .court-wrap:has(> .court-tools) { --court-reserve:128px; }
+body.timeout-active .court-wrap .court { flex:1 1 auto; width:min(100cqw,calc(100cqh - var(--court-reserve))); height:min(100cqw,calc(100cqh - var(--court-reserve))); max-height:100%; }
+body.timeout-active .end-zone { height:6px; flex:0 0 6px; }
+body.timeout-active #receiveStatus { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+body.timeout-active .court-tools, body.timeout-active .court .court-tools {
+  position:static; inset:auto; transform:none; width:100%; max-width:none; flex:none; flex-direction:column; margin:5px 0 0;
+  display:flex; align-items:center; justify-content:center; gap:7px; white-space:normal;
+}
+body.timeout-active .court-tools > .tools-lbl,
+body.timeout-active .court-tools > #rcvToggle,
+body.timeout-active .court-tools > #editReceive,
+body.timeout-active .court-tools > #resetReceive { display:none !important; }
+body.timeout-active #timeoutTools { display:flex; width:100%; justify-content:center; gap:8px; }
+body.timeout-active #timeoutTools { order:1; }
+body.timeout-active #rcvPassers { order:2; justify-content:center; }
+body.timeout-active #timeoutTools .pill { min-height:46px; padding:5px 13px; border:1px solid var(--line); border-radius:11px; background:var(--bg); color:var(--ink); font-size:14px; font-weight:800; }
+body.timeout-active #timeoutTools .pill[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:#fff; }
+body.timeout-active #timeoutUndoPosition:disabled { opacity:.45; }
+body.timeout-active #timeoutRallies { grid-area:rallies; min-width:0; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+.timeout-section-heading { margin:0 0 8px; color:var(--ink); font-size:19px; line-height:1.2; font-weight:850; }
+.timeout-rally-strip { display:flex; align-items:stretch; gap:7px; min-width:0; overflow-x:auto; padding:2px 2px 5px; scrollbar-width:thin; }
+.timeout-rally { flex:0 0 auto; min-width:78px; display:grid; grid-template-rows:auto auto; justify-items:center; gap:3px; padding:7px 9px; border:1px solid color-mix(in srgb,var(--win) 32%,var(--line)); border-top:4px solid var(--win); border-radius:10px; background:var(--win-tint); color:var(--win-ink); font-size:15px; }
+.timeout-rally.them { border-color:color-mix(in srgb,var(--lose) 32%,var(--line)); border-top-color:var(--lose); background:var(--lose-tint); color:var(--lose-ink); }
+.timeout-rally .score { display:block; min-height:0; padding:0; border:0; background:transparent; color:inherit; font-size:15px; font-weight:850; font-variant-numeric:tabular-nums; }
+.timeout-rally b { font-size:17px; line-height:1.05; font-weight:900; }
+.timeout-rally-divider { flex:0 0 2px; align-self:stretch; margin:4px 2px; border-radius:1px; background:var(--ink-dim); }
+.timeout-rallies-empty { align-self:center; padding:8px 2px; color:var(--ink-dim); font-size:14px; }
+body.timeout-active #timeoutCoach { grid-area:coach; min-width:0; min-height:0; display:flex; flex-direction:column; gap:10px; overflow-y:auto; overscroll-behavior:contain; }
+.timeout-advice-card, .timeout-intangible-card { min-width:0; padding:13px 15px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+.timeout-data-message { margin:0; color:var(--ink); font-size:clamp(21px,2.4cqw,29px); line-height:1.28; letter-spacing:-.018em; font-weight:850; }
+.timeout-evidence { display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); color:var(--ink-dim); font-size:15px; line-height:1.35; }
+.timeout-evidence b { flex:none; color:var(--accent); font-size:13px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.timeout-no-signal { margin:0; color:var(--ink-dim); font-size:16px; line-height:1.4; }
+.timeout-intangible-card { padding-bottom:12px; }
+.timeout-focuses { display:flex; flex-wrap:wrap; gap:8px; }
+.timeout-focus { min-height:46px; padding:8px 13px; border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line)); border-radius:11px; background:color-mix(in srgb,var(--accent) 9%,var(--card)); color:var(--accent); font-size:16px; font-weight:900; }
+.timeout-focus[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:#fff; }
+.timeout-intangible-tip { margin:10px 0 0; padding:0; border:0; background:transparent; color:var(--ink); font-size:clamp(21px,2.4cqw,29px); line-height:1.28; letter-spacing:-.018em; font-weight:850; }
+.timeout-reset { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--bg); }
+.timeout-reset[hidden] { display:none !important; }
+.timeout-reset small { display:block; margin-bottom:3px; color:var(--ink-dim); font-size:12px; font-weight:850; letter-spacing:.04em; text-transform:uppercase; }
+.timeout-reset p { margin:0; color:var(--ink); font-size:15px; line-height:1.35; font-weight:700; }
+.timeout-reset button { flex:none; min-height:42px; padding:7px 12px; border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink); font-size:14px; font-weight:800; }
+.timeout-done-row { margin-top:auto; display:flex; justify-content:flex-end; padding-top:2px; }
+.timeout-done { min-height:50px; padding:8px 17px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:17px; font-weight:900; }
+body.timeout-active .corner { display:none; }
+@media (max-width:900px) {
+  body.timeout-active .center-main { gap:8px; }
+  body.timeout-active #timeoutCoach { gap:8px; }
+  body.timeout-active .timeout-advice-card, body.timeout-active .timeout-intangible-card { padding:10px 11px; }
+  body.timeout-active .timeout-focuses { gap:5px; }
+  body.timeout-active .timeout-focus { min-height:42px; padding:6px 9px; font-size:14px; }
+  body.timeout-active .timeout-section-heading, body.timeout-active .timeout-rotation-heading { font-size:17px; }
+  body.timeout-active .timeout-data-message, body.timeout-active .timeout-intangible-tip { font-size:20px; }
+  body.timeout-active #timeoutTools { gap:5px; }
+  body.timeout-active #timeoutTools .pill { min-height:42px; padding:4px 8px; font-size:12px; }
+}
 </style></head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -1419,7 +1512,11 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
     </section>
 
     <div class="center">
-     <div class="center-main">
+      <div class="center-main">
+      <section class="timeout-banner" id="timeoutBanner" aria-live="polite" hidden>
+        <span class="timeout-banner-tag" id="timeoutTeamTag">OUR TIMEOUT</span>
+        <div><strong id="timeoutTitle">Our team called timeout</strong><small id="timeoutSubtitle">Set 1 · 1 timeout remaining</small></div>
+      </section>
       <!-- ③ Scoreboard -->
       <section class="score" id="scoreBox">
         <div class="set-history" id="pastSetsUs" role="list" aria-label="Sets we won, scores in 8th Grade–West Fargo order"></div>
@@ -1431,6 +1528,7 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
 
       <!-- ④ Court -->
       <section class="court-wrap" id="courtWrap">
+        <h2 class="timeout-rotation-heading" id="timeoutRotationHeading">Current Rotation <small id="timeoutRotationMeta"></small></h2>
         <div class="court" id="court"></div>
         <div class="end-zone"><span id="receiveStatus" role="status" aria-live="polite"></span></div>
         <div class="court-tools">
@@ -1440,12 +1538,42 @@ body.saving .stage,body.failed .stage { pointer-events:none; opacity:.7; }
           <button id="editReceive" class="pill" aria-pressed="false">Adjust receive</button>
           <button id="resetReceive" class="pill" hidden>Reset</button>
           <div id="timeoutTools" class="timeout-tools" hidden>
-            <button type="button" class="pill" data-timeout-view="receive">Serve receive</button>
-            <button type="button" class="pill" data-timeout-view="defense">Base defense</button>
-            <button type="button" id="timeoutDone" class="timeout-done">Done with timeout</button>
+            <button type="button" class="pill" data-timeout-view="receive">Serve Receive</button>
+            <button type="button" class="pill" data-timeout-view="defense">Base Defense</button>
+            <button type="button" id="timeoutUndoPosition" class="pill">Undo Position</button>
           </div>
         </div>
       </section>
+
+      <section class="timeout-rallies" id="timeoutRallies" aria-label="Recent rallies" hidden>
+        <h2 class="timeout-section-heading">Recent Rallies</h2>
+        <div class="timeout-rally-strip" id="timeoutRallyStrip" role="list" aria-label="Recent point scores and termination codes"></div>
+      </section>
+
+      <aside class="timeout-coach" id="timeoutCoach" aria-label="Timeout coaching" hidden>
+        <section class="timeout-advice-card" aria-labelledby="timeoutDataHeading">
+          <h2 class="timeout-section-heading" id="timeoutDataHeading">Data Driven</h2>
+          <p class="timeout-data-message" id="timeoutDataMessage" aria-live="polite"></p>
+          <div class="timeout-evidence" id="timeoutEvidence" hidden><b>Why</b><span id="timeoutEvidenceText"></span></div>
+          <p class="timeout-no-signal" id="timeoutNoSignal" hidden>No clear data signal in the recorded points. Choose the Intangible focus that fits what you're seeing.</p>
+        </section>
+        <section class="timeout-intangible-card" aria-labelledby="timeoutIntangibleHeading">
+          <h2 class="timeout-section-heading" id="timeoutIntangibleHeading">Intangible</h2>
+          <div class="timeout-focuses" role="group" aria-label="Choose one intangible focus">
+            <button type="button" class="timeout-focus" data-timeout-focus="ace" aria-pressed="false">A.C.E.</button>
+            <button type="button" class="timeout-focus" data-timeout-focus="breathe" aria-pressed="false">Breathe</button>
+            <button type="button" class="timeout-focus" data-timeout-focus="energy" aria-pressed="false">Energy</button>
+            <button type="button" class="timeout-focus" data-timeout-focus="trust" aria-pressed="false">Trust</button>
+            <button type="button" class="timeout-focus" data-timeout-focus="resilience" aria-pressed="false">Resilience</button>
+          </div>
+          <p class="timeout-intangible-tip" id="timeoutIntangibleTip" aria-live="polite">Choose a focus to show a brief physical or mental reminder. The data-driven cue stays separate.</p>
+          <div class="timeout-reset" id="timeoutReset" hidden>
+            <div><small id="timeoutResetLabel">Optional physical reset</small><p id="timeoutResetText"></p></div>
+            <button type="button" id="timeoutSwapReset">Swap</button>
+          </div>
+        </section>
+        <div class="timeout-done-row"><button type="button" id="timeoutDone" class="timeout-done">Done with timeout</button></div>
+      </aside>
 
       <!-- ⑩ Coach's corner -->
       <aside class="corner">
