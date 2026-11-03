@@ -24,10 +24,11 @@ export function playerPerformanceCells(stats) {
   const serveAttempts = serving.attempts ?? (serveIn + (serving.errors ?? 0));
   const servePercent = serveAttempts ? `${Math.round(serveIn * 100 / serveAttempts)}%` : '—';
   const kills = attacking.kills ?? attacking.kill ?? 0;
+  const assistDetail = Object.hasOwn(attacking, 'assists') ? ` · Ast ${attacking.assists ?? 0}` : '';
   const errors = attacking.hittingErrors ?? attacking.error ?? 0;
   const inPlay = attacking.nonTerminalAttempts ?? attacking.in ?? 0;
 
   return metric(passAverage, `n=${passCount}`, 'passing')
     + metric(servePercent, `n=${serveAttempts}`, 'serving')
-    + metric(hittingPercent(attacking), `K ${kills} · In ${inPlay} · E ${errors}`, 'attacking');
+    + metric(hittingPercent(attacking), `K ${kills}${assistDetail} · In ${inPlay} · E ${errors}`, 'attacking');
 }
