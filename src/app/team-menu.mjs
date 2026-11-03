@@ -159,7 +159,7 @@ export function lineupSheet(ctx) {
 /* Edit rallies: change the team, code, or player of any rally, or delete it. */
 export function editRallies(ctx) {
   const { state, record } = ctx, { jersey } = people(record.config);
-  const describe = r => `${esc(ctx.teams[r.team])} ${WORDS[r.code]}${r.team === 'us' && r.playerId ? ` #${esc(jersey(r.playerId))}` : ''}`;
+  const describe = r => `${esc(ctx.teams[r.team])} ${WORDS[r.code]}${r.team === 'us' && r.playerId ? ` #${esc(jersey(r.playerId))}` : ''}${r.assistPlayerId ? ` · A #${esc(jersey(r.assistPlayerId))}` : ''}`;
   const rows = [...state.rallies].reverse().map(r => `<button class="rally-row ${r.winner === 'us' ? 'won' : 'lost'}" data-rally="${esc(r.actionId)}">
     <span class="n">${r.seq}</span><b>${r.score.us}–${r.score.them}</b><span>${describe(r)}${r.edited ? ' <em>edited</em>' : ''}</span><small>R${r.rotation}</small></button>`).join('');
   ctx.open(`<h4>Edit rallies</h4><p>${state.rallies.length ? 'Newest first. Tap a rally to change it or delete it. Later score, rotation, serve, and stats update automatically, and Undo reverses the change.' : 'No rallies recorded in this set yet.'}</p>
@@ -168,13 +168,18 @@ export function editRallies(ctx) {
 }
 function editRally(ctx, actionId) {
   const { state, record } = ctx, rally = state.rallies.find(r => r.actionId === actionId), { jersey, name } = people(record.config);
-  let draft = { team: rally.team, code: rally.code, playerId: rally.team === 'us' && !['SA', 'SE'].includes(rally.code) ? rally.playerId : null };
-  const payload = () => ({ targetActionId: actionId, team: draft.team, code: draft.code, ...(draft.team === 'us' && draft.playerId ? { playerId: draft.playerId } : {}) });
+  let draft = { team: rally.team, code: rally.code, playerId: rally.team === 'us' && !['SA', 'SE'].includes(rally.code) ? rally.playerId : null,
+    assistPlayerId: rally.assistPlayerId ?? null };
+  const payload = () => ({ targetActionId: actionId, team: draft.team, code: draft.code,
+    ...(draft.team === 'us' && draft.playerId ? { playerId: draft.playerId } : {}),
+    ...(draft.team === 'us' && draft.code === 'K' ? { assistPlayerId: draft.assistPlayerId } : {}) });
   const draw = () => {
     const serveCode = ['SA', 'SE'].includes(draft.code), earned = ACTION_CODES[draft.code] === 'earned';
     const codeAllowed = code => (!['SA', 'SE'].includes(code) || rally.servingTeam === draft.team) && (code !== 'SrE' || rally.servingTeam !== draft.team);
     const needsPlayer = draft.team === 'us' && !serveCode;
-    const unchanged = draft.team === rally.team && draft.code === rally.code && (serveCode || (draft.playerId ?? null) === (rally.team === 'us' ? rally.playerId : null));
+    const unchanged = draft.team === rally.team && draft.code === rally.code
+      && (serveCode || (draft.playerId ?? null) === (rally.team === 'us' ? rally.playerId : null))
+      && (draft.team !== 'us' || draft.code !== 'K' || (draft.assistPlayerId ?? null) === (rally.assistPlayerId ?? null));
     const check = ctx.check({ type: 'rally.edit', payload: payload() });
     const problem = needsPlayer && earned && !draft.playerId ? 'Choose the player who earned the point.' : check.allowed ? '' : check.error.message;
     ctx.open(`<h4>Rally ${rally.seq} · ${rally.score.us}–${rally.score.them}</h4>
@@ -183,13 +188,15 @@ function editRally(ctx, actionId) {
       <h5>What happened?</h5><div class="code-grid">${CODES.map(code => `<button data-code="${code}" class="${draft.code === code ? 'on ' : ''}${(ACTION_CODES[code] === 'earned') === (draft.team === 'us') ? 'win' : 'lose'}" ${codeAllowed(code) ? '' : 'disabled'}>${WORDS[code]}</button>`).join('')}</div>
       ${needsPlayer ? `<h5>Player</h5><div class="player-grid">${rally.court.map(p => `<button data-player="${esc(p.playerId)}" class="${draft.playerId === p.playerId ? 'on' : ''}"><b>${esc(jersey(p.playerId))}</b><span>${name(p.playerId)}</span></button>`).join('')}${earned ? '' : `<button data-player="" class="${draft.playerId ? '' : 'on'}"><b>Team</b><span>No player</span></button>`}</div>`
         : draft.team === 'us' ? `<p>The server, #${esc(jersey(rally.serverId))}, is filled in automatically.</p>` : ''}
+      ${draft.team === 'us' && draft.code === 'K' && draft.playerId ? `<h5>Assister · optional</h5><div class="player-grid">${rally.court.filter(p => p.playerId !== draft.playerId).map(p => `<button data-assist="${esc(p.playerId)}" class="${draft.assistPlayerId === p.playerId ? 'on' : ''}"><b>#${esc(jersey(p.playerId))}</b><span>${name(p.playerId)}</span></button>`).join('')}<button data-assist="" class="${draft.assistPlayerId ? '' : 'on'}"><b>No Assist</b><span>Unassisted kill</span></button></div>` : ''}
       <p class="edit-error" role="alert">${esc(unchanged ? '' : problem)}</p>
       <div class="sheet-row"><button class="cancel" id="shBack">Back</button><button class="danger-btn" id="shDelete">Delete rally</button><button class="save-btn" id="shSave" ${unchanged || problem ? 'disabled' : ''}>Save change</button></div>
       <button class="cancel" id="shCancel" hidden>Close</button>`);
     const q = s => sheet().querySelectorAll(s);
-    q('[data-team]').forEach(b => b.onclick = () => { draft.team = b.dataset.team; if (!codeAllowed(draft.code)) draft.code = 'K'; draft.playerId = null; draw(); });
-    q('[data-code]').forEach(b => b.onclick = () => { draft.code = b.dataset.code; if (ACTION_CODES[draft.code] === 'earned' && !draft.playerId && draft.team === 'us') draft.playerId = null; draw(); });
-    q('[data-player]').forEach(b => b.onclick = () => { draft.playerId = b.dataset.player || null; draw(); });
+    q('[data-team]').forEach(b => b.onclick = () => { draft.team = b.dataset.team; if (!codeAllowed(draft.code)) draft.code = 'K'; draft.playerId = null; draft.assistPlayerId = null; draw(); });
+    q('[data-code]').forEach(b => b.onclick = () => { draft.code = b.dataset.code; if (draft.code !== 'K') draft.assistPlayerId = null; if (ACTION_CODES[draft.code] === 'earned' && !draft.playerId && draft.team === 'us') draft.playerId = null; draw(); });
+    q('[data-player]').forEach(b => b.onclick = () => { draft.playerId = b.dataset.player || null; if (draft.playerId === draft.assistPlayerId) draft.assistPlayerId = null; draw(); });
+    q('[data-assist]').forEach(b => b.onclick = () => { draft.assistPlayerId = b.dataset.assist || null; draw(); });
     document.getElementById('shBack').onclick = () => editRallies(ctx);
     document.getElementById('shSave').onclick = async () => { if (await ctx.command('rally.edit', payload())) editRallies(ctx); };
     document.getElementById('shDelete').onclick = async () => {
@@ -243,11 +250,12 @@ export function matchSummary(ctx, initialSetId = null) {
   const players = new Map();
   const currentRoster = new Map((ctx.players ?? []).map(player => [player.id, player]));
   for (const { record, stats } of sets) for (const [id, p] of Object.entries(stats.players)) {
-    const who = currentRoster.get(id) ?? record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, HE: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0, nonTerminalAttacks: 0 };
+    const who = currentRoster.get(id) ?? record.config.players.find(x => x.id === id), row = players.get(id) ?? { jersey: who?.jersey ?? '?', name: who?.name ?? '', K: 0, BK: 0, SA: 0, HE: 0, errors: 0, net: 0, passCount: 0, passSum: 0, serveAttempts: 0, servesIn: 0, assists: 0, nonTerminalAttacks: 0 };
     for (const code of ['K', 'BK', 'SA', 'HE']) row[code] += p.codes[code] ?? 0;
     row.errors += p.errors; row.net += p.net;
     row.passCount += p.passing?.count ?? 0; row.passSum += p.passing?.sum ?? 0;
     row.serveAttempts += p.serving?.attempts ?? 0; row.servesIn += p.serving?.in ?? 0;
+    row.assists += p.assists ?? 0;
     row.nonTerminalAttacks += p.attacking?.nonTerminalAttempts ?? 0;
     players.set(id, row);
   }
@@ -295,10 +303,10 @@ export function matchSummary(ctx, initialSetId = null) {
         <div><h5>Players · Set ${number}</h5><div class="stats-table-scroll"><table class="lib-table stat-table player-performance-table"><thead><tr><th>Player</th>${PLAYER_PERFORMANCE_HEADERS}<th>BK</th><th>Aces</th><th>Err</th><th>+/-</th></tr></thead><tbody>
           ${setPlayers.map(player=>`<tr><td>#${esc(player.jersey)} ${esc(player.who?.name??'')}</td>${playerPerformanceCells({
             passing:player.passing??{},serving:{...player.serving,aces:player.SA},
-            attacking:{...player.attacking,kills:player.K,hittingErrors:player.HE},
+            attacking:{...player.attacking,kills:player.K,assists:player.assists??0,hittingErrors:player.HE},
           })}<td>${player.BK}</td><td>${player.SA}</td><td>${player.errors}</td><td class="${player.net>0?'pos':player.net<0?'neg':''}">${signed(player.net)}</td></tr>`).join('')||'<tr><td colspan="8">No player stats yet</td></tr>'}</tbody></table></div>
           <p>Serve in counts each rally-ending serve once; aces count in and serve errors count out.</p>
-          <p>Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts.</p></div></div>
+          <p>Ast = assists credited on kills. Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts.</p></div></div>
       <button class="cancel" id="shCancel">Close</button>`,true);
     summaryRoot()?.querySelector('#backToMatchSummary')?.addEventListener('click',renderMatchSummary);
   };
@@ -316,10 +324,10 @@ export function matchSummary(ctx, initialSetId = null) {
       ${ranked.map(p => `<tr><td>#${esc(p.jersey)} ${esc(p.name)}</td>${playerPerformanceCells({
         passing:{count:p.passCount,sum:p.passSum},
         serving:{attempts:p.serveAttempts,in:p.servesIn,aces:p.SA},
-        attacking:{kills:p.K,hittingErrors:p.HE,nonTerminalAttempts:p.nonTerminalAttacks},
+        attacking:{kills:p.K,assists:p.assists,hittingErrors:p.HE,nonTerminalAttempts:p.nonTerminalAttacks},
       })}<td>${p.BK}</td><td>${p.SA}</td><td>${p.errors}</td><td class="${p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}">${signed(p.net)}</td></tr>`).join('') || '<tr><td colspan="8">No player stats yet</td></tr>'}</tbody></table></div>
       <p>Serve in counts each rally-ending serve once: aces count in, serve errors count out.</p>
-      <p>Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
+      <p>Ast = assists credited on kills. Hitting % = (kills − hitting errors) ÷ all attacks, including non-terminal attempts. Player +/- counts kills, blocks, and aces credited to them minus errors credited to them.</p>
       <p>Team errors with no player count in Our errors but not in any player’s row.</p></div></div>
     <button class="cancel" id="shCancel">Close</button>`, true);
     summaryRoot()?.querySelectorAll('[data-summary-set-id]').forEach(button=>button.onclick=()=>{
