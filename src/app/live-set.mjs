@@ -278,6 +278,15 @@ function syncState() {
     attackTargetZone:r.attackTargetZone??null,serveTargetZone:r.serveTargetZone??null,
     us:r.score.us,them:r.score.them,winner:r.winner,actionId:r.actionId}));
   const timeouts=s.timeouts.map(t=>({team:t.team,us:t.score.us,them:t.score.them,actionId:t.actionId}));
+  const receiveRatings=s.receiveRatings.map(r=>({rating:r.rating,player:numberFor(r.playerId),actionId:r.actionId}));
+  const attackEvents=activeActions.flatMap(action=>{
+    if(action.type==='attack.attempt'&&action.payload.team==='us')return [{player:numberFor(action.payload.playerId),code:'In',actionId:action.id}];
+    if(action.type==='rally'&&action.payload.team==='us'&&['K','HE'].includes(action.payload.code))
+      return [{player:numberFor(action.payload.playerId),code:action.payload.code,actionId:action.id}];
+    if(action.type==='rally'&&action.payload.team==='them'&&action.payload.code==='BK')
+      return [{player:null,code:'BK',actionId:action.id}];
+    return [];
+  });
   const visibleEvents=new Map([
     ...rallies.map(r=>[r.actionId,{kind:'rally',...r}]),
     ...timeouts.map(t=>[t.actionId,{kind:'timeout',...t}]),
@@ -289,7 +298,7 @@ function syncState() {
     rotations:s.rotations, rotation:s.rotation, serving:s.servingTeam, us:s.score.us, them:s.score.them,
     subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
     liberoPlanChosen:activeActions.some(action=>action.type==='libero.plan'),
-    rallies,timeouts,timeline,passRatedThisRally,attackTrackedThisRally,
+    rallies,timeouts,receiveRatings,attackEvents,timeline,passRatedThisRally,attackTrackedThisRally,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
   if (LIBEROS.length && !s.libero && s.liberoFor !== 'none' && SLOTS[S.order[0]].role === s.liberoFor
@@ -345,11 +354,15 @@ async function perform(cmd, clear=true) {
   try {
     await session.run(cmd);
     if (cmd.type === 'timeout') {
+      const timeoutActionId=session.record.actions.at(-1)?.id??null;
+      const timeoutPrefs=readTimeoutPrefs(timeoutActionId);
       ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, showBase: false,
         pendingPassRating: null, pendingAttackResult: null, attackPlayerSlot: null, attackTargetZone: null,
         themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null,pendingServeZone:false,
         timeoutMode: true, timeoutView: S.serving === 'them' ? 'receive' : 'defense',
-        timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} } };
+        timeoutPasser: ui.passer, timeoutPositions: { receive: {}, defense: {} },
+        timeoutActionId, timeoutFocus: timeoutPrefs.focus??null,
+        timeoutResetIndex: timeoutPrefs.resetIndex??0, timeoutUndo: null };
     } else if (cmd.type === 'receive.rating' || cmd.type === 'attack.attempt') {
       ui = { ...ui, showBase: false };
     } else if (cmd.type === 'rally' || cmd.type === 'correction') {
@@ -412,7 +425,207 @@ function possible(team, code) {
   return true;
 }
 
+const TIMEOUT_FOCUSES = {
+  ace: { tip: 'Lift your chin, make eye contact, and tell a teammate: “Next ball.”' },
+  breathe: { tip: 'Breathe out slowly, soften your shoulders, and remind yourself: “Next ball.”', resets: [
+    'Take one slow group exhale, release your shoulders, and loosen your hands.',
+    'Exhale slowly together, then shake out your arms and hands.',
+    'Press your feet into the floor for one slow breath, then relax your shoulders.',
+  ] },
+  energy: { tip: 'Stand tall, shake out your arms, and encourage each other: “One ball at a time, one point at a time.”', resets: [
+    'Shake out together for 10 seconds, then share one thing you appreciate about each other.',
+    'Stretch your arms overhead, then clap together.',
+    'Give a teammate a quick high-five, then take three energetic jumps in place.',
+  ] },
+  trust: { tip: 'Trust your preparation, rely on one another, and remember that everyone has a role.' },
+  resilience: { tip: 'Release the last moment. One ball at a time, one point at a time. Next ball.' },
+};
+const timeoutPrefsKey=id=>`vb.timeout.coaching.${id}`;
+function readTimeoutPrefs(id) {
+  if(!id)return {};
+  try{return JSON.parse(localStorage.getItem(timeoutPrefsKey(id))||'{}')||{};}catch{return {};}
+}
+function saveTimeoutPrefs() {
+  if(!ui?.timeoutActionId)return;
+  const previous=readTimeoutPrefs(ui.timeoutActionId);
+  try{localStorage.setItem(timeoutPrefsKey(ui.timeoutActionId),JSON.stringify({...previous,focus:ui.timeoutFocus??null,resetIndex:ui.timeoutResetIndex||0}));}catch{}
+}
+function markTimeoutClosed(id) {
+  if(!id)return;
+  try{localStorage.setItem(timeoutPrefsKey(id),JSON.stringify({...readTimeoutPrefs(id),done:true}));}catch{}
+}
+
+function timeoutPassTrouble() {
+  if(S.serving!=='them')return null;
+  const ratings=(S.receiveRatings||[]).slice(-3),lowCounts=new Map();
+  for(const r of ratings)if(r.player!=null&&r.rating<=1)lowCounts.set(r.player,(lowCounts.get(r.player)||0)+1);
+  const errors=(S.rallies||[]).filter(r=>r.srv==='them').slice(-3).filter(r=>r.team==='us'&&r.code==='SrE'),errorCounts=new Map();
+  for(const r of errors)if(r.player!=null)errorCounts.set(r.player,(errorCounts.get(r.player)||0)+1);
+  const found=[...lowCounts].map(([player,count])=>({player,count,kind:'low-rated passes'}))
+    .concat([...errorCounts].map(([player,count])=>({player,count,kind:'receive errors'})))
+    .filter(x=>x.count>=2).sort((a,b)=>b.count-a.count)[0];
+  if(!found)return null;
+  const {player,count,kind}=found,alternate=alternateReceiveFor(player);
+  const formationCue=alternate?` Switch to ${PASS_LABEL[alternate]} to hide #${player} from more of the passing responsibility.`:'';
+  return { player,count,alternate,formationCue,
+    note:`#${player} had ${count} of the last 3 ${kind}.` };
+}
+
+function timeoutRunCause(rally) {
+  if((rally.team==='us'&&rally.code==='SrE')||(rally.team==='them'&&rally.code==='SA'))return 'receive';
+  if(rally.team==='them'&&rally.code==='K')return 'their-kills';
+  if(rally.team==='us'&&isErr(rally))return 'our-errors';
+  if(rally.team==='them'&&isErr(rally))return 'their-errors';
+  return 'other';
+}
+
+function timeoutRunAdvice() {
+  const rallies=S.rallies||[], last=rallies.at(-1);
+  if(!last)return null;
+  let start=rallies.length-1;
+  while(start>0&&rallies[start-1].winner===last.winner)start--;
+  const run=rallies.slice(start),count=run.length;
+  const latestTimeout=S.timeouts?.at(-1);
+  if(latestTimeout?.team==='them'&&last.winner==='us'&&(count>=3||(crunch()&&count>=2)))
+    return {message:'Expect their best. Be ready, anticipate, and start our run.',evidence:`We scored ${count} straight before their timeout.`};
+  if(last.winner!=='them'||count<3)return null;
+  const counts=new Map();for(const r of run){const cause=timeoutRunCause(r);counts.set(cause,(counts.get(cause)||0)+1);}
+  const ranked=[...counts].sort((a,b)=>b[1]-a[1]);
+  const tied=ranked.length>1&&ranked[0][1]===ranked[1][1];
+  const cause=tied?'other':ranked[0][0];
+  const causeLabels={receive:'aces/receive errors', 'their-kills':'opponent kills', 'our-errors':'our errors', 'their-errors':'their errors', other:'other points'};
+  const evidence=`They scored ${count} straight: ${[...counts].map(([key,n])=>`${n} ${causeLabels[key]}`).join(', ')}.`;
+  if(cause==='our-errors')return {message:'Settle down. Execute what we practiced.',evidence};
+  if(cause==='receive'){
+    const pass=timeoutPassTrouble();
+    return {message:`See the serve early. Call the seam. Move your feet and pass to target so we can attack aggressively.${pass?.formationCue||''}`,
+      evidence:pass?`${evidence} ${pass.note}`:evidence};
+  }
+  if(cause==='their-kills'){
+    const zone=timeoutKillZoneCue();
+    return {message:`Rotate to your spot and split step to react. Read the attacker’s feet, hips, shoulder, and hand.${zone?.message?` ${zone.message}`:''}`,
+      evidence:zone?`${evidence} ${zone.evidence}`:evidence};
+  }
+  if(cause==='their-errors')return {message:'Stay disciplined. Play the way we practice.',evidence};
+  return {message:'Next ball. Reset and play together.',evidence};
+}
+
+function timeoutKillZoneCue() {
+  const kills=(S.rallies||[]).filter(r=>r.team==='them'&&r.code==='K').slice(-3),zones=new Map();
+  for(const r of kills)if(r.attackTargetZone!=null)zones.set(r.attackTargetZone,(zones.get(r.attackTargetZone)||0)+1);
+  const found=[...zones].filter(([,n])=>n>=2).sort((a,b)=>b[1]-a[1])[0];
+  return found?{zone:found[0],count:found[1],message:`Shift our defense to Zone ${found[0]}.`,evidence:`${found[1]} of their last ${kills.length} kills targeted Zone ${found[0]}.`}:null;
+}
+
+function matchAttackEvents() {
+  if(!session?.record)return [];
+  const config=session.record.config;
+  const records=orderMatchSets(MATCH_RECORDS.filter(r=>r.config.teamId===config.teamId&&r.config.matchId===config.matchId)
+    .map(r=>r.config.id===config.id?session.record:r));
+  return records.flatMap(record=>{
+    const active=new Set(replaySet(record).activeActionIds),jerseys=new Map(record.config.players.map(p=>[p.id,Number(p.jersey)]));
+    return record.actions.filter(a=>active.has(a.id)).flatMap(a=>{
+      if(a.type==='attack.attempt'&&a.payload.team==='us')return [{player:jerseys.get(a.payload.playerId),code:'In'}];
+      if(a.type==='rally'&&a.payload.team==='us'&&['K','HE'].includes(a.payload.code))return [{player:jerseys.get(a.payload.playerId),code:a.payload.code}];
+      return [];
+    });
+  });
+}
+
+function timeoutHitterCue() {
+  const front=[2,3,4].map(pos=>S.onCourt[slotAt(pos)]).filter(p=>p!=null);
+  const events=S.attackEvents||[];
+  const stats=(source,player)=>{const swings=source.filter(e=>e.player===player),kills=swings.filter(e=>e.code==='K').length;
+    return {kills,attempts:swings.length,errors:swings.filter(e=>e.code==='HE').length};};
+  const weak=front.map(player=>({player,...stats(events,player)}))
+    .filter(x=>x.attempts>=3&&x.kills===0)
+    .sort((a,b)=>b.attempts-a.attempts)[0];
+  if(weak){
+    let alternate=front.filter(p=>p!==weak.player).map(player=>({player,...stats(events,player)}))
+      .filter(x=>x.attempts>=2&&x.kills>0).sort((a,b)=>b.kills/a.attempts-a.kills/b.attempts||b.kills-a.kills)[0];
+    let period='this set';
+    if(!alternate){const historical=matchAttackEvents();alternate=front.filter(p=>p!==weak.player).map(player=>({player,...stats(historical,player)}))
+      .filter(x=>x.attempts>=2&&x.kills>0).sort((a,b)=>b.kills/a.attempts-a.kills/b.attempts||b.kills-a.kills)[0];period='this match';}
+    if(alternate)return {message:`Try setting #${alternate.player} next time she’s front row.`,
+      evidence:`#${weak.player}: 0/${weak.attempts} kills; #${alternate.player}: ${alternate.kills}/${alternate.attempts} kills ${period}.`,impact:weak.attempts};
+  }
+  const hot=front.map(player=>({player,last:(events.filter(e=>e.player===player)).slice(-4)}))
+    .map(x=>({...x,kills:x.last.filter(e=>e.code==='K').length}))
+    .find(x=>x.last.length===4&&x.kills===4);
+  return hot?{message:`#${hot.player} is hot · attacking. Front row this rotation only — set her now.`,
+    evidence:`${hot.kills} kills in her last ${hot.last.length} attacks.`,impact:hot.kills}:null;
+}
+
+function timeoutAdvice() {
+  const run=timeoutRunAdvice();if(run)return run;
+  const candidates=[],pass=timeoutPassTrouble();
+  if(pass)candidates.push({message:`See the serve early. Call the seam. Move your feet and pass to target so we can attack aggressively.${pass.formationCue}`,
+    evidence:pass.note,impact:pass.count,priority:0});
+  const attackOutcomes=S.attackEvents||[];
+  const blocked=attackOutcomes.slice(-3).filter(r=>r.code==='BK');
+  if(blocked.length>=2)candidates.push({message:'Change the attack: drive around the block, tip over it, hit high and flat for a touch, or tool the outside hand. The setter can find another hitter or set off the net; everyone covers. Then transition fast: aggressive approach, max jump, contact in front.',
+    evidence:`${blocked.length} of our last ${attackOutcomes.slice(-3).length} recorded attack outcomes were blocks.`,impact:blocked.length,priority:1});
+  const zone=timeoutKillZoneCue();if(zone)candidates.push({message:zone.message,evidence:zone.evidence,impact:zone.count,priority:2});
+  const hitter=timeoutHitterCue();if(hitter)candidates.push({...hitter,priority:3});
+  const current=rotNum(),rotationRallies=(S.rallies||[]).filter(r=>r.rotN===current),won=rotationRallies.filter(r=>r.winner==='us').length,lost=rotationRallies.length-won;
+  const rotationThreshold=crunch()?CRUNCH.rotNet:RULES.rotNet;
+  if(won-lost<=rotationThreshold)candidates.push({message:'Review the lineup. Then adjust serve receive. If needed, vary the attack zone or type, including a setter dump.',
+    evidence:`R${current} is ${won-lost} this set (${won}–${lost}).`,impact:lost-won,priority:4});
+  const serveErrors=(S.rallies||[]).filter(r=>r.team==='us'&&r.code==='SE');
+  if(serveErrors.length>=3){const reminder=previousServerMissed(S.serving==='them')?' If the player before you missed, get yours in.':'';
+    candidates.push({message:`${SERVE_ROUTINE}${reminder}`,evidence:`${serveErrors.length} missed serves this set.`,impact:serveErrors.length,priority:5});}
+  if(S.serving==='us'){
+    const scoredServes=(S.rallies||[]).filter(r=>r.srv==='us'&&r.sv===server()).slice(-5),aces=scoredServes.filter(r=>r.team==='us'&&r.code==='SA').length;
+    if(aces>=3){const zones=new Map();for(const r of scoredServes)if(r.team==='them'&&r.code==='SrE'&&r.serveTargetZone!=null)zones.set(r.serveTargetZone,(zones.get(r.serveTargetZone)||0)+1);
+      const target=[...zones].sort((a,b)=>b[1]-a[1])[0];
+      candidates.push({message:`#${server()} is hot · serving. Keep her serving aggressively${target?` to Zone ${target[0]}`:''}.`,
+        evidence:`${aces} aces in her last ${scoredServes.length} serves${target?`; Zone ${target[0]} has drawn ${target[1]} recorded receive error${target[1]===1?'':'s'}`:''}.`,impact:aces,priority:5});}
+    const targetError=(S.rallies||[]).slice(-6).filter(r=>r.team==='them'&&r.code==='SrE'&&r.serveTargetZone!=null).at(-1);
+    if(targetError)candidates.push({message:`Keep serving to Zone ${targetError.serveTargetZone}.`,
+      evidence:`Their most recent recorded receive error was on a serve to Zone ${targetError.serveTargetZone}.`,impact:1,priority:5});
+  }
+  return candidates.sort((a,b)=>b.impact-a.impact||a.priority-b.priority)[0]||null;
+}
+
+function renderTimeoutScreen() {
+  const timeout=S.timeouts?.find(t=>t.actionId===ui.timeoutActionId)||S.timeouts?.at(-1);
+  const team=timeout?.team||'us',name=team==='us'?TEAM_NAMES.us:TEAM_NAMES.them;
+  $('timeoutTeamTag').textContent=`${team==='us'?'OUR':'THEIR'} TIMEOUT`;
+  $('timeoutTeamTag').classList.toggle('their',team==='them');
+  $('timeoutTitle').textContent=`${name} called timeout`;
+  const remaining=team==='us'?S.toUs:S.toThem,setNumber=session?.record?.config?.setNumber||1;
+  $('timeoutSubtitle').textContent=`Set ${setNumber} · ${remaining} timeout${remaining===1?'':'s'} remaining`;
+  $('timeoutRotationMeta').textContent=`${rotLabel()} · ${S.serving==='us'?'Our':'Their'} serve`;
+  const advice=timeoutAdvice();
+  $('timeoutDataMessage').hidden=!advice;
+  $('timeoutEvidence').hidden=!advice;
+  $('timeoutNoSignal').hidden=Boolean(advice);
+  if(advice){$('timeoutDataMessage').textContent=advice.message;$('timeoutEvidenceText').textContent=advice.evidence;}
+  const focus=TIMEOUT_FOCUSES[ui.timeoutFocus]||null;
+  document.querySelectorAll('[data-timeout-focus]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.timeoutFocus===ui.timeoutFocus)));
+  $('timeoutIntangibleTip').textContent=focus?.tip||'Choose a focus to show a brief physical or mental reminder. The data-driven cue stays separate.';
+  const reset=focus?.resets;
+  $('timeoutReset').hidden=!reset;
+  if(reset){const index=(ui.timeoutResetIndex||0)%reset.length;$('timeoutResetText').textContent=reset[index];
+    $('timeoutResetLabel').textContent=index===0?'Optional physical reset · suggested':'Optional physical reset · swapped';}
+  const recent=(S.rallies||[]).slice(-6),strip=$('timeoutRallyStrip');strip.innerHTML='';
+  if(!recent.length){strip.innerHTML='<span class="timeout-rallies-empty">No points recorded yet.</span>';}
+  recent.forEach((r,index)=>{
+    const card=document.createElement('span');card.className=`timeout-rally ${r.winner==='them'?'them':'us'}`;card.setAttribute('role','listitem');
+    card.setAttribute('aria-label',`${r.winner==='us'?TEAM_NAMES.us:TEAM_NAMES.them} point, ${r.us}–${r.them}, ${r.code}`);
+    card.innerHTML=`<span class="score">${r.us}–${r.them}</span><b>${esc(r.code)}</b>`;strip.appendChild(card);
+    if(r.srv==='them'&&r.winner==='us'&&index<recent.length-1){const divider=document.createElement('span');divider.className='timeout-rally-divider';
+      divider.setAttribute('role','separator');divider.setAttribute('aria-label','Side-out and rotation change');strip.appendChild(divider);}
+  });
+}
+
 function render() {
+  const timeoutMode=Boolean(ui.timeoutMode);
+  document.body.classList.toggle('timeout-active',timeoutMode);
+  $('timeoutBanner').hidden=!timeoutMode;
+  $('timeoutRallies').hidden=!timeoutMode;
+  $('timeoutCoach').hidden=!timeoutMode;
+  if(timeoutMode)renderTimeoutScreen();
   $('scoreTeamUs').textContent = TEAM_NAMES.us;
   $('scoreTeamThem').textContent = TEAM_NAMES.them;
   const opponentMenu=$('opponentMenu');
@@ -475,7 +688,7 @@ function render() {
     }
     court.dataset.built = '1';
   }
-  const timeoutMode = Boolean(ui.timeoutMode), timeoutView = ui.timeoutView || (S.serving === 'them' ? 'receive' : 'defense');
+  const timeoutView = ui.timeoutView || (S.serving === 'them' ? 'receive' : 'defense');
   const form = formation(timeoutMode && timeoutView === 'receive');
   const autoBaseDefense=!timeoutMode&&!ui.showBase&&(S.passRatedThisRally||S.attackTrackedThisRally)&&Boolean(form?.base?.spots);
   const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
@@ -538,7 +751,7 @@ function render() {
   const mode = S.serving === 'them' ? 'SERVE RECEIVE' : 'SERVING';
   const viewTitle = timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : autoBaseDefense ? 'BASE DEFENSE' : !rcv ? 'ROTATION SPOTS' : mode;
   court.querySelector('.court-mark').textContent = `${viewTitle} · ${rotLabel().replace(' · ', ' · ')}`;
-  const tools = document.querySelector('.court-tools'), inCourt = document.body.classList.contains('tools-in');
+  const tools = document.querySelector('.court-tools'), inCourt = !timeoutMode && document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
   if (!inCourt && tools.parentElement === court) $('courtWrap').appendChild(tools);
   tools.hidden=attackTargetMode;
@@ -548,7 +761,7 @@ function render() {
     : '';
   $('rcvPassers').querySelectorAll('[data-pass]').forEach(b => b.onclick = () => {
     if (timeoutMode) {
-      if (ui.timeoutPasser !== b.dataset.pass) { ui.timeoutPasser = b.dataset.pass; ui.timeoutPositions.receive = {}; render(); }
+      if (ui.timeoutPasser !== b.dataset.pass) { ui.timeoutPasser = b.dataset.pass; ui.timeoutPositions.receive = {}; ui.timeoutUndo=null; render(); }
     } else selectReceive(b.dataset.pass);
   });
   $('rcvPassers').hidden = autoBaseDefense || (timeoutMode && timeoutView !== 'receive');
@@ -562,6 +775,7 @@ function render() {
     button.setAttribute('aria-pressed', String(button.dataset.timeoutView === timeoutView));
     button.onclick = () => { ui.timeoutView = button.dataset.timeoutView; ui.pendingSlot = null; render(); };
   });
+  $('timeoutUndoPosition').disabled=!ui.timeoutUndo;
 
   // Pads
   for (const [padId, team] of [['padUs','us'],['padThem','them']]) {
@@ -709,12 +923,12 @@ function render() {
     const c = document.createElement('div');
     c.className = `rchip${r.winner === 'them' ? ' lost' : ''}${i === last.length - 1 ? ' latest' : ''}`;
     const zones=`${r.attackSourceZone!=null?` from zone ${r.attackSourceZone}`:''}${r.attackTargetZone!=null?` to zone ${r.attackTargetZone}`:''}${r.serveTargetZone!=null?`, serve targeted zone ${r.serveTargetZone}`:''}`;
-    c.setAttribute('aria-label', `${r.winner === 'us' ? TEAM_NAMES.us : 'Opponent'} won the point${zones}`);
+    c.setAttribute('aria-label', `${r.winner === 'us' ? TEAM_NAMES.us : 'Opponent'} won the point · ${r.code} · ${r.us}–${r.them}${zones}`);
     const who = r.team === 'us' ? (r.player != null ? `#${r.player}` : TEAM_NAMES.us) : '';
     const whoLabel = who ? ` <small style="font-weight:600;font-size:12px">${esc(who)}</small>` : '';
     const zoneLabel=`${r.attackSourceZone!=null?` Z${r.attackSourceZone}`:''}${r.attackTargetZone!=null?` → Z${r.attackTargetZone}`:''}${r.serveTargetZone!=null?` · Serve Z${r.serveTargetZone}`:''}`;
     const zoneDetail=zoneLabel?`<small>${zoneLabel}</small>`:'';
-    c.innerHTML = `<span class="c">${r.code}${whoLabel}${zoneDetail}</span><span class="s">${r.us}–${r.them}</span>`;
+    c.innerHTML = `<span class="s">${r.us}–${r.them}</span><span class="c">${r.code}${whoLabel}${zoneDetail}</span>`;
     track.appendChild(c);
     if (r.srv === 'them' && r.winner === 'us' && (i < last.length - 1 || session.state.status !== 'ended')) {
       const divider = document.createElement('div');
@@ -839,6 +1053,81 @@ function formOf(p) {
 }
 const recent = (list, good) => list.map(x => ((x.r || x).code === good ? '✓' : '✗')).join(' ');
 
+const SERVE_ROUTINE = 'Breathe. Feet toward the bench/bleachers; toss in front of your hitting shoulder; rotate your hips; contact with the heel of your palm so you can see the back of your hand.';
+function previousServerMissed(nextServer = false) {
+  // The server immediately before this player in the rotation is at P6 when
+  // she serves now, and at P1 when she is next in line while we receive.
+  const previousPos = nextServer ? 1 : 6;
+  const previous = S.onCourt[slotAt(previousPos)];
+  if (previous == null) return false;
+  const lastServe = [...S.rallies].reverse().find(r => r.sv === previous);
+  return lastServe?.srv === 'us' && lastServe.team === 'us' && lastServe.code === 'SE';
+}
+
+function attackLine(rallies, player) {
+  const swings = rallies.filter(r => r.team === 'us' && r.player === player && (r.code === 'K' || r.code === 'HE'));
+  const kills = swings.filter(r => r.code === 'K').length;
+  return { kills, errors: swings.length - kills, attempts: swings.length,
+    rate: swings.length ? kills / swings.length : 0 };
+}
+
+function matchRallies() {
+  if (!session?.record) return [];
+  const config = session.record.config;
+  const records = orderMatchSets(MATCH_RECORDS.filter(r => r.config.teamId === config.teamId && r.config.matchId === config.matchId)
+    .map(r => r.config.id === config.id ? session.record : r));
+  return records.flatMap(record => replaySet(record).rallies.map(r => ({
+    ...r, player: r.playerId == null ? null : numberFor(r.playerId),
+  })));
+}
+
+function betterFrontRowHitter(weakPlayer, positions) {
+  const candidates = positions.map(pos => S.onCourt[slotAt(pos)]).filter(p => p != null && p !== weakPlayer);
+  const find = rallies => {
+    const weak = attackLine(rallies, weakPlayer);
+    return candidates.map(player => ({ player, ...attackLine(rallies, player) }))
+      .filter(x => x.attempts >= 2 && x.rate > weak.rate)
+      .sort((a, b) => b.rate - a.rate || b.kills - a.kills || b.attempts - a.attempts)[0] || null;
+  };
+  return find(S.rallies) || find(matchRallies());
+}
+
+function receiveRoles(key, passer) {
+  // These are the passers named by the formation descriptions. Rotations 3,6
+  // currently draw identical OH/RS diagrams, so they deliberately have no
+  // alternate recommendation.
+  if (key === '1,4' && passer === 'OH') return new Set(['OH1', 'OH2', 'M2']);
+  if (key === '1,4' && passer === 'RS') return new Set(['RS', 'M1', 'OH2', 'M2']);
+  if (key === '2,5' && passer === 'OH') return new Set(['OH2', 'M2', 'OH1', 'M1']);
+  if (key === '3,6' && ['OH','RS'].includes(passer)) return new Set(['OH2','RS','OH1','M1']);
+  return null;
+}
+
+function playerPassesInFormation(player, key, passer) {
+  const roles=receiveRoles(key,passer);
+  return roles ? [...roles].some(role=>{
+    const [x,y]=FORMATIONS[key].start[role];
+    return S.onCourt[slotAt(gridPos(x,y))]===player;
+  }) : false;
+}
+
+function alternateReceiveFor(player) {
+  if (S.serving !== 'them') return null;
+  const f = formation();
+  if (f.none || f.options.length < 2) return null;
+  const current = receiveRoles(f.key, f.passer);
+  if (!current) return null;
+  if (!playerPassesInFormation(player,f.key,f.passer)) return null;
+  for (const passer of f.options) {
+    if (passer === f.passer) continue;
+    const next = receiveRoles(f.key, passer);
+    if (!next || ![...current].some(role => !next.has(role))) continue;
+    const stillPasses=playerPassesInFormation(player,f.key,passer);
+    if (!stillPasses) return passer;
+  }
+  return null;
+}
+
 // How many more rotations she stays front (if front), or rotations until she's front (if back).
 function frontOutlook(pos) {
   if (isFront(pos)) return { front: true, more: pos - 2 };            // P4: 2 more, P3: 1, P2: 0
@@ -854,24 +1143,31 @@ function playerFormTip(p,pos,F=formOf(p)) {
   const cold=[];
   if(F.coldHit&&available('attacking')) {
     const errors=F.last3.filter(x=>x.r.code==='HE').length;
+    const alternative=betterFrontRowHitter(p,[2,3,4]);
     cold.push({id:`hit-${errors}`,category:'attacking',label:'hitting',
-      note:`${errors} errors in her last ${F.last3.length} attacks. Ask for shots or tips, or set elsewhere briefly.`});
+      note:alternative
+        ? `${errors} errors in her last ${F.last3.length} attacks. Try setting #${alternative.player} next time she's front row. #${alternative.player}: ${alternative.kills}/${alternative.attempts} kills (${alternative.kills} K, ${alternative.errors} E).`
+        : `${errors} errors in her last ${F.last3.length} attacks. Try a different attack option.`});
   }
-  if(F.weakPass&&available('passing')) {
+  if(F.weakPass&&available('passing')&&S.serving==='them'&&playerPassesInFormation(p,formation().key,formation().passer)) {
     const errors=F.lastRc.filter(r=>r.team==='us'&&r.code==='SrE'&&r.player===p).length;
+    const alternate=alternateReceiveFor(p);
     cold.push({id:`pass-${errors}`,category:'passing',label:'serve receive',
-      note:`${errors} errors in her last ${F.lastRc.length} receiving rallies. Adjust her position or coverage.`});
+      note:`${errors} errors in her last ${F.lastRc.length} receiving rallies. See the serve early. Call the seam. Move your feet and pass to target so we can attack aggressively.${alternate ? ` Switch to ${PASS_LABEL[alternate]} to reduce her passing responsibility.` : ''}`,
+      ...(alternate ? { acts: [{ label:`Switch to ${PASS_LABEL[alternate]}`, fn:()=>selectReceive(alternate) }] } : {})});
   }
-  if(F.coldServe&&available('serving')) {
+  const servesNow=S.serving==='us'&&pos===1, servesNext=S.serving==='them'&&pos===2;
+  if(F.coldServe&&(servesNow||servesNext)&&available('serving')) {
     const misses=F.lastSv.filter(r=>r.team==='us'&&r.code==='SE').length;
+    const missedReminder=previousServerMissed(servesNext) ? ' If the player before you missed, get yours in.' : '';
     cold.push({id:`serve-${misses}`,category:'serving',label:'serving',
-      note:`${misses} misses in her last ${F.lastSv.length} serves. Ask for a safe serve to a comfortable target.`});
+      note:`${misses} misses in her last ${F.lastSv.length} serves. ${SERVE_ROUTINE}${missedReminder}`});
   }
   if(cold.length) {
     return {key:`form-${p}-cold-${cold.map(x=>x.id).join('-')}`,state:'cold',formFlag:true,
       category:cold[0].category,pri:0.5,urgent:crunch()&&cold.some(x=>x.category!=='attacking'),
       title:`#${p} could use support · ${cold.map(x=>x.label).join(' / ')}`,
-      why:cold.map(x=>x.note).join(' ')};
+      why:cold.map(x=>x.note).join(' '),acts:cold.flatMap(x=>x.acts||[])};
   }
   const hot=[];
   if(F.hotHit&&available('attacking')) {
@@ -883,8 +1179,12 @@ function playerFormTip(p,pos,F=formOf(p)) {
   }
   if(F.hotServe&&S.serving==='us'&&pos===1&&available('serving')) {
     const serves=F.serves.slice(-FORM.aceWindow),aces=serves.filter(r=>r.team==='us'&&r.code==='SA').length;
+    const zones=new Map();
+    serves.filter(r=>r.team==='them'&&r.code==='SrE'&&r.serveTargetZone!=null)
+      .forEach(r=>zones.set(r.serveTargetZone,(zones.get(r.serveTargetZone)||0)+1));
+    const proven=[...zones].filter(([,count])=>count>=2).sort((a,b)=>b[1]-a[1])[0];
     hot.push({id:`serve-${aces}`,category:'serving',label:'serving',
-      note:`${aces} aces in her last ${serves.length} serves. Keep her serving aggressively.`});
+      note:`${aces} aces in her last ${serves.length} serves. Keep her serving aggressively.${proven?` Target Zone ${proven[0]} has drawn ${proven[1]} receive errors.`:''}`});
   }
   if(!hot.length)return null;
   return {key:`form-${p}-hot-${hot.map(x=>x.id).join('-')}`,state:'hot',formFlag:true,
@@ -918,9 +1218,24 @@ function suggestions() {
   let run = 0; for (let i = R.length - 1; i >= 0 && R[i].winner === 'them'; i--) run++;
   if (run >= T.run) {
     const last = R.slice(-run).map(r => r.team === 'us' ? `our ${words(r.code)}` : `their ${words(r.code)}`).join(', ');
+    const causeOf = r => {
+      if ((r.team === 'us' && r.code === 'SrE') || (r.team === 'them' && r.code === 'SA')) return 'receive';
+      if (r.team === 'us' && ERRORS.includes(r.code)) return 'our-errors';
+      if (r.team === 'them' && r.code === 'K') return 'their-kills';
+      return 'other';
+    };
+    const counts=new Map();
+    R.slice(-run).forEach(r=>counts.set(causeOf(r),(counts.get(causeOf(r))||0)+1));
+    const ranked=[...counts].sort((a,b)=>b[1]-a[1]);
+    const cue=ranked.length>1&&ranked[0][1]===ranked[1][1]
+      ? 'Next ball. Reset and play together.'
+      : ({'our-errors':'Settle down. Execute what we practiced.',
+          'receive':'See the serve early. Call the seam. Move your feet and pass to target so we can attack aggressively.',
+          'their-kills':'Rotate to your spot and split step to react. Read the attacker’s feet, hips, shoulder, and hand.',
+          'other':'Next ball. Reset and play together.'}[ranked[0][0]]);
     out.push({ key: `run-${R.length - run}-${run >= 5 ? 5 : 3}`, pri: 1, urgent: true, to: true,
       title: S.toUs ? `Timeout? They've scored ${run} straight` : `They've scored ${run} straight (no timeouts left)`,
-      why: `${last}.`, acts: S.toUs ? [timeoutAct] : [] });
+      why: `${last}. ${cue}`, acts: S.toUs ? [timeoutAct] : [] });
   }
   // Our own errors piling up.
   const lastN = R.slice(-T.errWindow), ourErr = lastN.filter(r => r.team === 'us' && isErr(r));
@@ -928,13 +1243,13 @@ function suggestions() {
     out.push({ key: `errs-${R.length - lastN.length + lastN.indexOf(ourErr[0])}`, pri: 2, urgent: true, to: true,
       acts: S.toUs ? [timeoutAct] : [],
       title: 'Settle them down: we are giving points away',
-      why: `${ourErr.length} of the last ${lastN.length} points were our errors (${ourErr.map(r => words(r.code) + (r.player != null ? ' #' + r.player : '')).join(', ')}).` });
+      why: `${ourErr.length} of the last ${lastN.length} points were our errors (${ourErr.map(r => words(r.code) + (r.player != null ? ' #' + r.player : '')).join(', ')}). Settle down. Execute what we practiced.` });
   // Current rotation struggling this set.
   const cur = rotNum(), net = rotNet(cur);
   if (net <= T.rotNet) {
     const f = formation(), alt = f && !f.none && f.options.length > 1 && S.serving === 'them' ? f.options.find(o => o !== f.passer) : null;
     out.push({ key: `rot-${cur}-${net}`, pri: 3, title: `R${cur} is ${net} this set (${rotRec(cur)})`,
-      why: alt ? `Try switching to ${PASS_LABEL[alt]}, or a sub.` : 'Consider a sub or a timeout to reset this rotation.',
+      why: 'Review the lineup. Then adjust serve receive. If needed, vary the attack zone or type, including a setter dump.',
       acts: alt ? [{ label: `Switch to ${PASS_LABEL[alt]}`, fn: () => selectReceive(alt) }] : [] });
   }
   // Heads-up: the rotation we move to after a side-out has been bad.
@@ -942,7 +1257,7 @@ function suggestions() {
     const nxt = cur % 6 + 1, nn = rotNet(nxt);
     if (nn <= T.rotNet)
       out.push({ key: `next-${nxt}-${nn}`, pri: 3, title: `Heads-up: R${nxt} is next and it's ${nn} this set`,
-        why: `Record there so far: ${rotRec(nxt)}. Plan the serve and who's in before it comes up.` });
+        why: `Record there so far: ${rotRec(nxt)}. Review the lineup. Then adjust serve receive. If needed, vary the attack zone or type, including a setter dump.` });
   }
   // Libero passing trouble: pull her and bring the middle back, or switch liberos.
   if (S.libero) {
@@ -968,14 +1283,15 @@ function suggestions() {
   const se = byUs('SE');
   if (se.length >= T.seTeam) {
     const who = players.map(p => [p, byUs('SE', p).length]).filter(([, n]) => n >= 2).map(([p, n]) => `#${p} ×${n}`);
+    const missedReminder=previousServerMissed(S.serving==='them') ? ' If the player before you missed, get yours in.' : '';
     out.push({ key: `se-${se.length}`, pri: 5, title: `${se.length} missed serves this set`,
-      why: `Call for serves in play.${who.length ? ' Repeat misses: ' + who.join(', ') + '.' : ''}` });
+      why: `Call for serves in play. ${SERVE_ROUTINE}${missedReminder}${who.length ? ' Repeat misses: ' + who.join(', ') + '.' : ''}` });
   }
   // They are beating themselves.
   const theirErr = R.filter(r => r.team === 'them' && isErr(r)).length;
   if (theirErr >= T.theirErr && theirErr >= 0.4 * S.us)
     out.push({ key: `their-${Math.floor(theirErr / 5)}`, pri: 8, title: `They've given us ${theirErr} of our ${S.us} points`,
-      why: 'Keep the ball in play: tough-but-in serves, no forced swings.' });
+      why: 'Stay disciplined. Play the way we practice.' });
   // Running low on subs.
   if (SUB_LIMIT - S.subs <= T.subsLeft)
     out.push({ key: `subs-${S.subs}`, pri: 9, urgent: true, title: `${SUB_LIMIT - S.subs} subs left`,
@@ -1204,6 +1520,7 @@ function finishTacticalDrag(e,cancel) {
   const d=tacticalDrag;tacticalDrag=null;
   cancel=cancel||d.context!==JSON.stringify([S.order,S.onCourt,S.rotation,S.serving,SYSTEM,ui.timeoutMode,ui.timeoutView]);
   if(cancel)ui.timeoutPositions={...(ui.timeoutPositions||{}),[d.view]:d.before};
+  else if(d.moved)ui.timeoutUndo={view:d.view,positions:clone(d.before)};
   if(editCourt.hasPointerCapture(e.pointerId))editCourt.releasePointerCapture(e.pointerId);
   render();
 }
@@ -1223,6 +1540,7 @@ editCourt.addEventListener('keydown', async e=>{
       if(error) {$('receiveStatus').textContent=`Move blocked: ${error}`;return;}
     }
     const previous=ui.timeoutPositions?.[view]||{};
+    ui.timeoutUndo={view,positions:clone(previous)};
     ui.timeoutPositions={...(ui.timeoutPositions||{}),[view]:{...previous,[slot]:target}};
     render();
     if(view==='receive')$('receiveStatus').textContent='Legal order maintained · adjustment retained for this timeout.';
@@ -1247,11 +1565,29 @@ $('rcvToggle').onclick = () => {
 
 $('timeoutDone').onclick = () => {
   if (!ui.timeoutMode || tacticalDrag) return;
+  markTimeoutClosed(ui.timeoutActionId);
   ui = { ...ui, timeoutMode: false, timeoutView: null, timeoutPasser: null, timeoutPositions: null,
+    timeoutActionId:null,timeoutFocus:null,timeoutResetIndex:0,timeoutUndo:null,
     pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, showBase: false,
     pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false };
   $('receiveStatus').textContent = '';
   render();status('Timeout ended · ready to continue the set.');
+};
+
+document.querySelectorAll('[data-timeout-focus]').forEach(button=>button.onclick=()=>{
+  if(!ui.timeoutMode)return;
+  ui.timeoutFocus=ui.timeoutFocus===button.dataset.timeoutFocus?null:button.dataset.timeoutFocus;
+  ui.timeoutResetIndex=0;saveTimeoutPrefs();render();
+});
+$('timeoutSwapReset').onclick=()=>{
+  if(!ui.timeoutMode)return;
+  ui.timeoutResetIndex=(ui.timeoutResetIndex||0)+1;saveTimeoutPrefs();render();
+};
+$('timeoutUndoPosition').onclick=()=>{
+  if(!ui.timeoutMode||!ui.timeoutUndo)return;
+  const {view,positions}=ui.timeoutUndo;
+  ui.timeoutPositions={...(ui.timeoutPositions||{}),[view]:clone(positions)};
+  ui.timeoutView=view;ui.timeoutUndo=null;render();
 };
 
 $('teamBtn').onclick = () => { if (ui.pendingCode) { commit('us', ui.pendingCode, null); } };
@@ -1653,9 +1989,15 @@ async function start() {
     PAST_SETS=siblings.slice(0,currentIndex).flatMap((r,i)=>{const state=replaySet(r);return state.status==='ended'?[{...state.score,id:r.config.id,number:r.config.setNumber??i+1}]:[];});
     configureLive(record,savedTeams.find(team=>team.id===record.config.teamId));applySettings();
     session=new SetSession(store,record); syncState();
+    const activeNow=session.state.activeActionIds.map(id=>session.record.actions.find(action=>action.id===id)).filter(Boolean);
+    const lastActiveAction=activeNow.at(-1),resumeTimeout=lastActiveAction?.type==='timeout'&&!readTimeoutPrefs(lastActiveAction.id).done;
+    const resumedTimeoutPrefs=resumeTimeout?readTimeoutPrefs(lastActiveAction.id):{};
     ui={pendingCode:null,pendingSlot:null,mode:null,passer:session.state.receivePasser,showBase:false,
       pendingPassRating:null,pendingAttackResult:null,attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false,
-      timeoutMode:false,timeoutView:null,timeoutPasser:null,timeoutPositions:null};
+      timeoutMode:resumeTimeout,timeoutView:resumeTimeout?(session.state.servingTeam==='them'?'receive':'defense'):null,
+      timeoutPasser:resumeTimeout?session.state.receivePasser:null,timeoutPositions:resumeTimeout?{receive:{},defense:{}}:null,
+      timeoutActionId:resumeTimeout?lastActiveAction.id:null,timeoutFocus:resumedTimeoutPrefs.focus??null,
+      timeoutResetIndex:resumedTimeoutPrefs.resetIndex??0,timeoutUndo:null};
     failedCommand=null; document.body.classList.remove('failed'); $('reloadSaved').hidden=true; $('retrySave').hidden=true;
     render();fit();status(session.state.status==='ended'?'Set ended · saved on this device':'Saved on this device');
   } catch(e) {status(e.message,true);document.body.classList.add('failed');$('reloadSaved').hidden=false;}
