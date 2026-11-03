@@ -363,6 +363,13 @@
   .act.suggest { border-color: #d97706; box-shadow: 0 0 0 3px #d97706; }
   /* Court view tools sit in the space beside the (square) court. */
   .court-wrap { position: relative; }
+  .assist-choice { width:min(100%,440px); min-height:50px; display:flex; align-items:center; justify-content:space-between; gap:10px; margin:3px 0 4px; padding:4px 6px; }
+  .assist-choice[hidden] { display:none !important; }
+  .assist-choice span { color:var(--ink-dim); font-size:13px; line-height:1.2; }
+  .assist-choice button { flex:none; min-height:44px; padding:6px 13px; border:1px solid var(--action-attack); border-radius:10px; background:color-mix(in srgb,var(--action-attack) 74%,#111827); color:#fff; font-size:14px; font-weight:850; }
+  .assist-choice button:disabled { opacity:.48; }
+  .court-wrap:has(> #assistChoice:not([hidden])) { --court-reserve:140px; }
+  .court-wrap:has(> .court-tools) > #assistChoice:not([hidden]) { --court-reserve:140px; }
   .court-tools { flex: none; display: flex; align-items: center; gap: 8px; margin-top: 2px; }
   .court-tools .view-pills { display: flex; gap: 8px; }
   .court-tools .pill { min-height: 36px; font-size: 13px; padding: 2px 12px; }
@@ -548,6 +555,7 @@
   .zone.pick .disc { animation: pulse 1s infinite alternate; }
   .zone.selected .disc { outline: 5px solid #fff; outline-offset: 4px; }
   .zone.nopick { opacity: .35; }
+  .zone.assist-hitter { cursor:not-allowed; }
   @keyframes pulse { from { outline: 3px solid #fff; outline-offset: 3px; } to { outline: 6px solid #fff; outline-offset: 6px; } }
   /* Formation bar under the court. Fixed height so the court is the same size
      whether we serve or receive; when we serve, the top of it is the space
@@ -572,6 +580,12 @@
     color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); pointer-events: none;
   }
   .court .court-mark { display: block; }
+  .court.assist-choosing .court-mark { animation: assist-prompt-flash .9s ease-in-out infinite; }
+  @keyframes assist-prompt-flash { 50% { opacity:.48; text-shadow:0 0 9px rgba(255,255,255,.95); } }
+  @media (prefers-reduced-motion: reduce) {
+    .court.assist-choosing .court-mark { animation:none; text-decoration:underline; text-underline-offset:4px; }
+    .zone.pick .disc { animation:none; outline:4px solid #fff; outline-offset:4px; }
+  }
   @media (prefers-reduced-motion: reduce) { .court, .court * { transition: none !important; } }
   .legend {
     display: flex; justify-content: flex-start; gap: 4px 10px; margin: 0; padding: 0; flex-wrap: nowrap; white-space: nowrap;
@@ -1531,6 +1545,10 @@ body.timeout-active .corner { display:none; }
         <h2 class="timeout-rotation-heading" id="timeoutRotationHeading">Current Rotation <small id="timeoutRotationMeta"></small></h2>
         <div class="court" id="court"></div>
         <div class="end-zone"><span id="receiveStatus" role="status" aria-live="polite"></span></div>
+        <div class="assist-choice" id="assistChoice" role="status" aria-live="polite" hidden>
+          <span>Tap the assisting teammate on court, or choose:</span>
+          <button type="button" id="noAssistKill">No Assist · save kill</button>
+        </div>
         <div class="court-tools">
           <span class="tools-lbl">Court view</span>
           <span id="rcvPassers" class="view-pills"></span>
