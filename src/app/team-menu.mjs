@@ -138,6 +138,9 @@ export function rotationReport(ctx) {
 /* Lineup: this set's lineup, current court, planned swaps, libero replacements, and substitutions. */
 export function lineupSheet(ctx) {
   const { record, state } = ctx, c = record.config, { jersey, name } = people(c, ctx.players);
+  const defenseLabels={left:'Left back',middle:'Middle back',right:'Right back'};
+  const defaultLiberoDefenseSpot=c.liberoBaseDefenseSpot??'middle';
+  const currentLiberoDefenseSpot=state.liberoBaseDefenseSpot??defaultLiberoDefenseSpot;
   const start = Object.fromEntries(c.slots.map(s => [s.id, s.playerId]));
   const initial = rotated(c.order, c.startingRotation ?? 1);
   const plans = c.slots.filter(s => s.plan).map(s => `<li>#${esc(jersey(s.plan.frontPlayerId))} front row ⇄ #${esc(jersey(s.plan.backPlayerId))} back row</li>`).join('');
@@ -151,6 +154,7 @@ export function lineupSheet(ctx) {
   }).join('');
   ctx.open(`<h4>Lineup · Set ${c.setNumber ?? 1}</h4>
     <p>${c.system}${c.lineupTemplate ? ` · ${esc(c.lineupTemplate.name)}` : ''} · Setter${c.setters.length > 1 ? 's' : ''} ${c.setters.map(id => `#${esc(jersey(id))} ${name(id)}`).join(', ')}${c.liberos.length ? ` · Libero${c.liberos.length > 1 ? 's' : ''} ${c.liberos.map(id => `#${esc(jersey(id))} ${name(id)}`).join(', ')}` : ''}</p>
+    ${c.liberos.length?`<p>Libero base defense · default: ${defenseLabels[defaultLiberoDefenseSpot]}${currentLiberoDefenseSpot!==defaultLiberoDefenseSpot?` · this set: ${defenseLabels[currentLiberoDefenseSpot]}`:''}</p>`:''}
     <div class="two-courts"><div><h5>Started in R${c.startingRotation ?? 1}</h5>${miniCourt(c, initial, start, { serving: c.firstServe === 'us', label: 'Starting court', roster: ctx.players })}</div>
       <div><h5>Now · R${state.rotation}</h5>${miniCourt(c, state.order, state.onCourt, { serving: state.servingTeam === 'us', label: 'Current court', roster: ctx.players })}</div></div>
     <div class="lineup-facts"><div><h5>Planned swaps</h5>${plans ? `<ul>${plans}</ul>` : '<p>None</p>'}</div>
