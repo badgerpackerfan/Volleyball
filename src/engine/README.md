@@ -46,7 +46,7 @@ Players are **team roster-entry IDs**, not jersey numbers or athlete IDs. Athlet
 
 Opponent substitutions are observational events recorded with `opponent.substitution` and `{ outJersey, inJersey }`. They save the current score and our rotation for context, but do not alter our lineup or apply our team's substitution rules. Together with the rally history, these events preserve the opponent's player changes for later rotation reconstruction.
 
-The optional `order` field specifies the lineup’s base R1 slot order at P1–P6. `startingRotation` (1–6, default 1 for legacy records) rotates that base order to initialize the actual court and rotation label. `state.rotations` counts side-outs during this set; `state.rotation` is the current R1–R6 label. New set setup defaults to R1 when serving and R6 when receiving, with manual and previous-set ending rotation choices. Six regular starters are required; enter a libero as an explicit action before the first rally if needed. Planned setter pairs may include a player currently on the bench; the active setter label is null until the appropriate designated setter is actually on court.
+The optional `order` field specifies the lineup’s base R1 slot order at P1–P6. `liberoBaseDefenseSpot` stores the lineup default (`left`, `middle`, or `right`; legacy sets default to `middle`). `startingRotation` (1–6, default 1 for legacy records) rotates that base order to initialize the actual court and rotation label. `state.rotations` counts side-outs during this set; `state.rotation` is the current R1–R6 label. New set setup defaults to R1 when serving and R6 when receiving, with manual and previous-set ending rotation choices. Six regular starters are required; enter a libero as an explicit action before the first rally if needed. Planned setter pairs may include a player currently on the bench; the active setter label is null until the appropriate designated setter is actually on court.
 
 ## Commands
 
@@ -59,6 +59,7 @@ Every `dispatch(record, command, meta)` returns a new `{ record, state, action }
 | `libero.in` | `{ slotId, outPlayerId, inPlayerId, override? }` | Back-row replacement by a designated libero; validates rally interval and serving rules. |
 | `libero.out` | `{ outPlayerId }` | Restores the covered player; validates the current libero. |
 | `libero.switch` | `{ outPlayerId, inPlayerId }` | Direct switch between designated liberos, preserving the covered player. |
+| `libero.defense-position` | `{ position: 'left' or 'middle' or 'right' }` | Changes the active libero's base-defense spot for this set; the defender already assigned there exchanges spots with the libero. |
 | `timeout` | `{ team }` | Deducts from that team's allowance and records score/rotation context. |
 | `set.end` (legacy) | `{ score: { us, them } }` | Retained only to replay older journals that required confirmation. New winning rallies end the set automatically. |
 | `receive.edit` | `{ key, positions }` | Saves a validated six-position diagram for the current system/rotation/setter and OH/RS choice. `positions: null` resets that diagram. |
@@ -84,7 +85,7 @@ Overridden partner changes preserve **all** historical pairings symmetrically. P
 - Score, serving side/server, six slot positions, current occupants, and rotation/setter position.
 - Rally-time court/back-row snapshots, substitution counts and locks, libero replacements, and timeouts.
 - Planned-swap prompts, paused-plan notices, low-sub warnings, automatic set completion, and receive ratings.
-- Active action IDs, revision, recorded overrides, receive diagrams/choice, and any legacy libero-plan value from older journals.
+- Active action IDs, revision, recorded overrides, receive diagrams/choice, set-level libero base-defense adjustment, and any legacy libero-plan value from older journals.
 
 State snapshots are derived values. `record.config` and the ordered immutable action list are the source of truth. Undo records remain in that list, along with the original actions they reference. Undo applies to the latest active action; undoing a new winning rally reopens the set. Redo and arbitrary historical editing are not implemented yet.
 
