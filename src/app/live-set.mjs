@@ -61,7 +61,7 @@ function configureLive(record, savedTeam=null) {
   const c=record.config;
   ACTIVE_THEME=savedTeam?.teamTheme||c.teamTheme||'evergreen';
   SYSTEM=c.system;SUB_LIMIT=c.rules.substitutionLimit;SET_TARGET=c.rules.target;
-  TEAM_NAMES={us:c.teamName || '8th Grade',them:c.opponentName || 'West Fargo'};
+  TEAM_NAMES={us:c.teamName || '8th Grade',them:c.opponentName || 'Opponent'};
   OPPONENT_SCOUT=normalizeOpponentScout(c.opponentScout);
   playerNumbers=new Map(c.players.map(p=>[p.id,Number(p.jersey)]));
   ROSTER=Object.fromEntries(c.players.map(p=>[Number(p.jersey),{id:p.id,n:esc(p.name || LEGACY_ROSTER[p.jersey]?.n || `Player ${p.jersey}`),r:p.position || LEGACY_ROSTER[p.jersey]?.r || 'OH',available:p.available}]));
@@ -452,7 +452,7 @@ async function perform(cmd, clear=true) {
         themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null };
     syncState();
     if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
-    if(clear) { ui={...ui,pendingCode:null,mode:null,pendingPassRating:null,pendingAttackResult:null,pendingAssist:null,pendingServeZone:false,liberoChoicePlayer:null,liberoOverrideSlot:null}; $('sheet').classList.remove('open'); }
+    if(clear) { ui={...ui,pendingCode:null,mode:null,pendingPassRating:null,pendingAttackResult:null,pendingAssist:null,pendingServeZone:false,liberoChoicePlayer:null,liberoOverrideSlot:null}; if($('sheet').classList.contains('open'))closeSheet(); }
     status(session.state.status==='ended' ? 'Set ended · saved on this device' : 'Saved on this device');
     return true;
   } catch(e) {
@@ -747,7 +747,7 @@ function render() {
   // Court
   const court = $('court');
   if (!court.dataset.built) {
-    court.innerHTML = '<div class="opponent-court-half"></div><div class="net"></div><div class="attack-line"></div><div class="attack-line opponent-attack-line"></div><div class="attack-zone-overlay" id="attackZoneOverlay" role="group" aria-label="Optional target zones on the opponent court" hidden></div><div class="attack-zone-overlay" id="themSourceZoneOverlay" role="group" aria-label="Opponent attack source zones" hidden></div><div class="attack-zone-overlay our-target-zone-overlay" id="themTargetZoneOverlay" role="group" aria-label="Optional opponent attack target zones on our court" hidden></div><div class="attack-zone-overlay" id="serveTargetZoneOverlay" role="group" aria-label="Our serve target zones on the opponent court" hidden></div><span class="court-mark"></span><div class="our-court-half"></div>';
+    court.innerHTML = '<div class="opponent-court-half"></div><div class="net"></div><div class="attack-line"></div><div class="attack-line opponent-attack-line"></div><span class="attack-zone-caption top" id="usTargetCaption" hidden>OPTIONAL TARGET · TAP BEFORE PLAYER</span><div class="attack-zone-overlay" id="attackZoneOverlay" role="group" aria-label="Optional target zones on the opponent court" hidden></div><span class="attack-zone-caption top" id="themSourceCaption" hidden>ATTACK SOURCE · TAP TO RECORD</span><div class="attack-zone-overlay" id="themSourceZoneOverlay" role="group" aria-label="Opponent attack source zones" hidden></div><span class="attack-zone-caption bottom" id="themTargetCaption" hidden>OPTIONAL TARGET · TAP BEFORE SOURCE</span><div class="attack-zone-overlay our-target-zone-overlay" id="themTargetZoneOverlay" role="group" aria-label="Optional opponent attack target zones on our court" hidden></div><span class="attack-zone-caption top" id="serveTargetCaption" hidden>SERVE TARGET</span><div class="attack-zone-overlay" id="serveTargetZoneOverlay" role="group" aria-label="Our serve target zones on the opponent court" hidden></div><span class="court-mark"></span><div class="our-court-half"></div>';
     const zoneLabels={1:'back right',6:'back middle',5:'back left',2:'front right',3:'front middle',4:'front left'};
     const addZoneButtons=(overlay,attribute,zones,label)=>zones.forEach(zone=>{
       const button=document.createElement('button');
@@ -901,6 +901,7 @@ function render() {
   const attackDisabled=timeoutMode||editingReceive||session.state.status==='ended'||!!ui.mode||Boolean(ui.pendingAssist);
   const attackTargetOverlay=$('attackZoneOverlay');
   attackTargetOverlay.hidden=!usAttackTargetMode;
+  $('usTargetCaption').hidden=!usAttackTargetMode;
   attackTargetOverlay.querySelectorAll('[data-us-target]').forEach(button=>{
     const selected=Number(button.dataset.usTarget)===ui.attackTargetZone;
     button.setAttribute('aria-pressed',String(selected));
@@ -923,6 +924,8 @@ function render() {
   const themSourceOverlay=$('themSourceZoneOverlay'), themTargetOverlay=$('themTargetZoneOverlay');
   themSourceOverlay.hidden=!opponentAttackMode;
   themTargetOverlay.hidden=!opponentAttackMode;
+  $('themSourceCaption').hidden=!opponentAttackMode;
+  $('themTargetCaption').hidden=!opponentAttackMode;
   themSourceOverlay.querySelectorAll('[data-them-source]').forEach(button=>{
     button.setAttribute('aria-pressed',String(Number(button.dataset.themSource)===theirSource));
     button.disabled=!opponentAttackMode||attackDisabled;
@@ -945,6 +948,7 @@ function render() {
   });
   const serveTargetOverlay=$('serveTargetZoneOverlay');
   serveTargetOverlay.hidden=!serveTargetMode;
+  $('serveTargetCaption').hidden=!serveTargetMode;
   serveTargetOverlay.querySelectorAll('[data-serve-target]').forEach(button=>{
     button.disabled=!serveTargetMode||attackDisabled;
     button.onclick=()=>{
@@ -979,6 +983,7 @@ function render() {
     hint=`<b>Libero:</b> tap a back-row player for #${ui.liberoChoicePlayer}.${next!=null?` <button type="button" class="libero-inline-choice" id="liberoChoiceNext">Use #${next} instead</button>`:''} <a href="#" id="cx">Cancel</a>`;
   }
   else if (ui.pendingPassRating !== null) hint = `<b>Pass score ${ui.pendingPassRating}</b> — tap the passer on court. <a href="#" id="cx">Cancel</a>`;
+  else if (ui.pendingAttackResult !== null) hint = '<b>Attack selected.</b> Optional target first, then tap the hitter. <a href="#" id="cx">Cancel</a>';
   else if (ui.pendingAssist) hint = '<b>Choose Assister</b> · tap a teammate or <a href="#" id="cx">Cancel</a>.';
   else if (ui.pendingCode) hint = `<b>${codeName(ui.pendingCode)}</b> — tap the player on the court${EARNED.includes(ui.pendingCode) ? '' : ', or Team'}. <a href="#" id="cx">Cancel</a>`;
   else hint = '';
@@ -996,9 +1001,13 @@ function render() {
   if(changeLiberoDefense)changeLiberoDefense.onclick=()=>{ui={...ui,mode:'libero-defense'};render();};
   const overrideLibero=$('liberoOverride');
   if(overrideLibero)overrideLibero.onclick=()=>{const slot=ui.liberoOverrideSlot,libero=ui.liberoChoicePlayer;if(slot!=null&&libero!=null)void liberoIn(slot,libero);};
-  $('hintThem').innerHTML=serveTargetMode
-    ? '<b>Receive Error:</b> tap the serve target zone on the opponent court. <a href="#" id="cxServeZone">Cancel</a>'
-    : '';
+  $('hintThem').innerHTML=opponentAttackMode
+    ? '<b>Attack selected.</b> Optional target first, then tap the source zone. <a href="#" id="cxThemAttack">Cancel</a>'
+    : serveTargetMode
+      ? '<b>Receive Error:</b> tap the serve target zone on the opponent court. <a href="#" id="cxServeZone">Cancel</a>'
+      : '';
+  const cxThemAttack=$('cxThemAttack');
+  if(cxThemAttack)cxThemAttack.onclick=e=>{e.preventDefault();clearUi();};
   const cxServeZone=$('cxServeZone');
   if(cxServeZone)cxServeZone.onclick=e=>{e.preventDefault();clearUi();};
 
@@ -1801,7 +1810,6 @@ async function openCurrentSetLineupSetup(){
   const records=await store.listSets(),match=teamHierarchy(teams,records).find(item=>item.id===team.id)
     ?.matches.find(item=>item.id===session.record.config.matchId);
   if(!match){status('This match is unavailable. Reload the saved set before continuing.',true);return;}
-  clearUi();
   const setNumber=session.record.config.setNumber??1;
   const previousSet=orderMatchSets(match.sets).filter(record=>(record.config.setNumber??1)<setNumber).at(-1)??null;
   await openSetSetup({initial:false,team,match,previousSet,allSets:records,originalRecord:structuredClone(session.record)});
@@ -1831,21 +1839,34 @@ $('toThemBtn').onclick = () => callTimeout('them');
 
 function openOpponentSub() {
   openSheet(`<h4>${esc(TEAM_NAMES.them)} substitution</h4>
-    <p>Record the jersey numbers at ${S.us}–${S.them}. This is saved with the rally history.</p>
+    <p>Choose the player leaving, then enter the replacement’s number. Saved with the rally history at ${S.us}–${S.them}.</p>
     <div class="opponent-sub-fields">
-      <label>New player coming in<input id="opponentSubIn" type="text" inputmode="numeric" maxlength="3" required autocomplete="off"></label>
-      <label>Player coming out<input id="opponentSubOut" type="text" inputmode="numeric" maxlength="3" required autocomplete="off"></label>
+      <button type="button" data-opponent-sub-field="out" aria-pressed="true"><small>PLAYER COMING OUT</small><strong id="opponentSubOutDisplay">—</strong></button>
+      <button type="button" data-opponent-sub-field="in" aria-pressed="false"><small>NEW PLAYER COMING IN</small><strong id="opponentSubInDisplay">—</strong></button>
     </div>
+    <div class="opponent-sub-keypad" aria-label="Jersey number keypad">${Array.from({length:9},(_,index)=>`<button type="button" data-opponent-sub-digit="${index+1}">${index+1}</button>`).join('')}<button type="button" data-opponent-sub-digit="0">0</button><button type="button" data-opponent-sub-edit="back" aria-label="Delete last digit">⌫</button><button type="button" data-opponent-sub-edit="clear">Clear</button></div>
     <div class="sheet-row"><button class="cancel" id="shCancel">Cancel</button><button class="pill" id="recordOpponentSub">Record sub</button></div>`);
-  const out=$('opponentSubOut'), incoming=$('opponentSubIn');
+  let values={out:'',in:''},activeField='out';
+  const paint=()=>{
+    $('opponentSubOutDisplay').textContent=values.out||'—';
+    $('opponentSubInDisplay').textContent=values.in||'—';
+    document.querySelectorAll('[data-opponent-sub-field]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.opponentSubField===activeField)));
+    document.querySelectorAll('[data-opponent-sub-digit]').forEach(button=>button.disabled=values[activeField].length>=2);
+    document.querySelector('[data-opponent-sub-edit="back"]').disabled=!values[activeField];
+    document.querySelector('[data-opponent-sub-edit="clear"]').disabled=!values[activeField];
+  };
+  document.querySelectorAll('[data-opponent-sub-field]').forEach(button=>button.onclick=()=>{activeField=button.dataset.opponentSubField;paint();});
+  document.querySelectorAll('[data-opponent-sub-digit]').forEach(button=>button.onclick=()=>{if(values[activeField].length<2)values[activeField]+=button.dataset.opponentSubDigit;paint();});
+  document.querySelector('[data-opponent-sub-edit="back"]').onclick=()=>{values[activeField]=values[activeField].slice(0,-1);paint();};
+  document.querySelector('[data-opponent-sub-edit="clear"]').onclick=()=>{values[activeField]='';paint();};
   $('recordOpponentSub').onclick=async()=>{
-    const outJersey=out.value.trim(),inJersey=incoming.value.trim();
-    if(!outJersey){out.reportValidity();return;}
-    if(!inJersey){incoming.reportValidity();return;}
-    if(outJersey===inJersey){incoming.setCustomValidity('Enter a different jersey number.');incoming.reportValidity();incoming.setCustomValidity('');return;}
+    const outJersey=values.out?String(Number(values.out)):'',inJersey=values.in?String(Number(values.in)):'';
+    if(!outJersey){activeField='out';paint();status('Choose the jersey number of the player coming out.',true);return;}
+    if(!inJersey){activeField='in';paint();status('Choose the jersey number of the player coming in.',true);return;}
+    if(outJersey===inJersey){activeField='in';paint();status('The incoming and outgoing players must be different.',true);return;}
     await command('opponent.substitution',{outJersey,inJersey});
   };
-  incoming.focus();
+  paint();
 }
 
 function openBench(slot, override) {
@@ -1875,13 +1896,45 @@ function openBench(slot, override) {
 }
 
 function openSheet(html, wide = false, variant = '') {
+  if(!$('sheet').classList.contains('open'))sheetReturnFocus=document.activeElement;
   $('sheetCard').innerHTML = html; $('sheetCard').classList.toggle('wide', wide);
   $('sheetCard').classList.toggle('scouting',variant==='scouting');
-  $('sheetCard').classList.toggle('set-setup',variant==='set-setup'); $('sheet').classList.add('open');
+  $('sheetCard').classList.toggle('set-setup',variant==='set-setup'); $('sheet').classList.add('open');setSheetModal(true);
   const cancel=$('shCancel');if(cancel)cancel.onclick = closeSheet;
+  if($('setupCancel'))return;
+  const heading=$('sheetCard').querySelector('h4');
+  if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
+  else $('sheetCard').querySelector('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')?.focus({preventScroll:true});
 }
-function closeSheet() { if(setupLocked)return; $('sheet').classList.remove('open'); if(setupContext&&!setupContext.initial)setupContext=null; clearUi(); }
+let sheetReturnFocus=null;
+function setSheetModal(open){
+  for(const child of $('ipad').children)if(child!==$('sheet'))child.inert=open;
+  $('sheet').setAttribute('aria-modal',String(open));
+}
+function closeSheet() {
+  if(setupLocked)return;
+  $('sheet').classList.remove('open');setSheetModal(false);
+  if(setupContext&&!setupContext.initial)setupContext=null;
+  const target=sheetReturnFocus;sheetReturnFocus=null;if(target?.isConnected&&!target.inert)target.focus({preventScroll:true});
+}
 $('sheet').onclick = e => { if (e.target.id === 'sheet'&&!setupLocked) closeSheet(); };
+document.addEventListener('keydown',event=>{
+  if(!$('sheet').classList.contains('open')||event.defaultPrevented)return;
+  if(event.key==='Escape'){
+    if(event.target instanceof HTMLElement&&event.target.matches('input,select,textarea'))return;
+    event.preventDefault();
+    if(setupLocked)cancelSetSetup();else closeSheet();
+    return;
+  }
+  if(event.key!=='Tab')return;
+  const focusable=[...$('sheetCard').querySelectorAll('a[href],area[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])')]
+    .filter(element=>!element.hidden&&element.getClientRects().length);
+  if(!focusable.length){event.preventDefault();$('sheetCard').querySelector('h4')?.focus();return;}
+  const first=focusable[0],last=focusable.at(-1),active=document.activeElement;
+  if(!$('sheet').contains(active)||!focusable.includes(active)||event.shiftKey&&active===first||!event.shiftKey&&active===last){
+    event.preventDefault();(event.shiftKey?last:first).focus();
+  }
+});
 
 /* ---------------- Page chrome ---------------- */
 $('optCallouts').onchange = e => document.body.classList.toggle('no-callouts', !e.target.checked);
@@ -1923,6 +1976,12 @@ function setupLineupOptions(team,selected){
   const usable=team.lineups.filter(lineup=>!lineupIssue(team,lineup));
   return `${usable.map(lineup=>`<option value="${esc(lineup.id)}" ${lineup.id===selected?'selected':''}>${esc(lineup.name)} · ${esc(lineup.system)}</option>`).join('')}<option value="custom" ${selected==='custom'?'selected':''}>Custom lineup</option>`;
 }
+function setupOpponentSuggestions(team,records){
+  const names=new Set([...(team.plannedMatches??[]).map(match=>match.opponent),
+    ...records.filter(record=>record.config.teamId===team.id).map(record=>record.config.opponentName)]
+    .map(name=>String(name??'').trim()).filter(Boolean));
+  return `<datalist id="setupOpponentSuggestions">${[...names].sort((a,b)=>a.localeCompare(b)).map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist>`;
+}
 function setupPreviewMarkup(team,lineup,rotation,firstServe){
   const order=[...lineup.starters.slice(rotation-1),...lineup.starters.slice(0,rotation-1)];
   return '<span class="lineup-net" aria-hidden="true">NET</span><span class="lineup-attack-line" aria-hidden="true"></span>'+[4,3,2,5,6,1].map((pos,index)=>{
@@ -1960,23 +2019,31 @@ async function openSetSetup(context){
   const chosenServe=plan.firstServe??originalRecord?.config.firstServe??defaultServe;
   const originalMode=originalRecord?.config.startingRotationSource?.mode??'auto';
   const originalRotation=originalRecord?.config.startingRotation??(chosenServe==='us'?1:6);
+  const canEditOpponentName=Boolean(context.initial&&!match.sets.length);
+  const initialOpponent=match.opponent??'';
+  const scoutingDetailsMarkup=context.initial?`<details class="setup-opponent-scout" id="setupOpponentScoutDetails">
+      <summary>Opponent details and scouting · optional</summary>
+      ${canEditOpponentName?`<label>Opponent name (optional)<input id="setupOpponentName" list="setupOpponentSuggestions" maxlength="100" autocomplete="off" value="${esc(initialOpponent)}"></label>${setupOpponentSuggestions(team,context.allSets??[])}`:`<p class="muted">${esc(match.opponent||'Opponent')} · update their lineup and system as you learn them.</p>`}
+      <div id="setupOpponentScoutEditor"></div>
+    </details>`:'';
   if(context.initial)lockLiveSetForSetup(true);
+  const opponentDisplay=initialOpponent||'Opponent';
   const serveMarkup=plan.firstServe===null
-    ? `<label>First serve<select id="setupFirstServe"><option value="us" ${chosenServe==='us'?'selected':''}>${esc(team.name)} serves</option><option value="them" ${chosenServe==='them'?'selected':''}>${esc(match.opponent)} serves</option></select></label>`
-    : `<p class="setup-serve-fixed"><strong>First serve alternates:</strong> ${esc(plan.firstServe==='us'?team.name:match.opponent)} serves this set.</p>`;
+    ? `<label>First serve<select id="setupFirstServe"><option value="us" ${chosenServe==='us'?'selected':''}>${esc(team.name)} serves</option><option id="setupOpponentServeOption" value="them" ${chosenServe==='them'?'selected':''}>${esc(opponentDisplay)} serves</option></select></label>`
+    : `<p class="setup-serve-fixed"><strong>First serve alternates:</strong> <span id="setupFixedFirstServerName">${esc(plan.firstServe==='us'?team.name:opponentDisplay)}</span> serves this set.</p>`;
   const canCarry=Boolean(previousSet&&replaySet(previousSet).status==='ended');
   const mode=originalMode==='carry'&&canCarry?'carry':originalMode==='manual'?'manual':'auto';
   const rotationOptions=`<option value="auto" ${mode==='auto'?'selected':''}>Automatic · R1 serving / R6 receiving</option><option value="manual" ${mode==='manual'?'selected':''}>Choose a rotation</option><option value="carry" ${mode==='carry'?'selected':''} ${canCarry?'':'disabled'}>${canCarry?`Carry previous set’s ending rotation (R${replaySet(previousSet).rotation})`:'Carry previous set’s ending rotation'}</option>`;
   openSheet(`<form class="set-setup-form" id="setSetupForm"><div class="set-setup-content"><h4>${context.initial?'Choose lineup':`Lineup · Set ${setNumber}`}</h4>
-    <p>${esc(team.name)} vs ${esc(match.opponent)} · Set ${setNumber} of ${match.bestOf}${exhibition?' · Exhibition':''}. The court stays locked until this is saved.</p>
+    <p id="setupMatchDescription">${esc(team.name)} vs ${esc(opponentDisplay)} · Set ${setNumber} of ${match.bestOf}${exhibition?' · Exhibition':''}. The court stays locked until this is saved.</p>
     <div class="set-setup-grid"><div class="set-setup-controls">
       <label>Your lineup<select id="setupLineupSelect">${setupLineupOptions(team,selected)}</select></label>
       <p class="muted" id="setupLineupNote"></p>
       ${serveMarkup}
       <details class="setup-advanced"><summary>Starting rotation · automatic</summary><label>Start choice<select id="setupRotationMode">${rotationOptions}</select></label><label id="setupRotationLabel" hidden>Starting rotation<select id="setupRotation">${[1,2,3,4,5,6].map(number=>`<option value="${number}" ${number===originalRotation?'selected':''}>R${number}</option>`).join('')}</select></label><p id="setupRotationNote" class="muted"></p></details>
       <div class="setup-save-lineup" id="setupSaveLineup"><details><summary>Save a custom lineup for later</summary><label>Lineup name<input id="setupLineupName" maxlength="100" placeholder="Standard 6-2"></label><button type="button" id="setupSaveLineupButton">Save lineup</button></details></div>
-    </div><div class="set-setup-court"><div id="setupLineupPreview" class="lineup-court lineup-preview"></div><div id="setupLineupFields"></div></div></div>
-    </div><p id="setupMessage" class="setup-message" role="status" aria-live="polite"></p>
+    </div><div class="set-setup-court"><div id="setupLineupPreview" class="lineup-court lineup-preview"></div><div id="setupLineupFields"></div></div></div>${scoutingDetailsMarkup}</div>
+    <p id="setupMessage" class="setup-message" role="status" aria-live="polite"></p>
     <div class="sheet-row"><button type="button" class="cancel" id="setupCancel">Cancel</button><button type="submit" class="primary">${context.initial?'Save lineup & open set':'Save lineup'}</button></div>
   </form>`,true,'set-setup');
   const selector=$('setupLineupSelect'),fields=$('setupLineupFields');
@@ -2000,6 +2067,13 @@ async function openSetSetup(context){
     $('setupRotationNote').textContent=rotationMode==='carry'
       ?`Starts in R${rotation}, where the previous set ended.`
       :rotationMode==='manual'?`Starts in R${rotation}.`:'The starting court is chosen automatically from who serves first.';
+    const opponentField=$('setupOpponentName');
+    const opponentName=opponentField?opponentField.value.trim()||'Opponent':match.opponent||'Opponent';
+    $('setupMatchDescription').textContent=`${team.name} vs ${opponentName} · Set ${setNumber} of ${match.bestOf}${exhibition?' · Exhibition':''}. The court stays locked until this is saved.`;
+    const opponentServeOption=$('setupOpponentServeOption');
+    if(opponentServeOption)opponentServeOption.textContent=`${opponentName} serves`;
+    const fixedFirstServer=$('setupFixedFirstServerName');
+    if(fixedFirstServer)fixedFirstServer.textContent=plan.firstServe==='us'?team.name:opponentName;
     const lineup=chosenLineup();
     if(lineup?.starters?.length===6)$('setupLineupPreview').innerHTML=setupPreviewMarkup(currentTeam,lineup,rotation,firstServe);
     $('setupLineupPreview').setAttribute('aria-label',`Starting court in R${rotation}`);
@@ -2012,6 +2086,40 @@ async function openSetSetup(context){
   };
   $('setupFirstServe')?.addEventListener('change',refreshSetup);
   $('setupRotationMode').onchange=refreshSetup;$('setupRotation').onchange=refreshSetup;
+  $('setupOpponentName')?.addEventListener('input',refreshSetup);
+  let scoutingEditorMounted=false;
+  const scoutingDetails=$('setupOpponentScoutDetails'),scoutingRoot=$('setupOpponentScoutEditor');
+  if(scoutingDetails&&scoutingRoot){
+    scoutingDetails.addEventListener('toggle',()=>{
+      if(!scoutingDetails.open||scoutingEditorMounted)return;
+      scoutingEditorMounted=true;
+      mountOpponentScoutEditor(scoutingRoot,match.opponentScout,async scout=>{
+        if(saving)throw new Error('Wait for the current save to finish.');
+        const opponent=$('setupOpponentName')?.value.trim()??match.opponent??'';
+        const hasScout=opponentScoutHasInfo(scout);
+        const existing=(currentTeam.plannedMatches??[]).find(item=>item.id===match.id);
+        const planned={...(existing??{id:match.id,date:match.date,bestOf:match.bestOf}),opponent,
+          ...(hasScout?{opponentScout:scout}:{})};
+        if(!hasScout)delete planned.opponentScout;
+        const plannedMatches=existing
+          ?currentTeam.plannedMatches.map(item=>item.id===match.id?planned:item)
+          :[...(currentTeam.plannedMatches??[]),planned];
+        const updated=validateTeam({...currentTeam,revision:currentTeam.revision+1,plannedMatches});
+        saving=true;document.body.classList.add('saving');status('Saving opponent scouting…');
+        try{
+          await store.saveTeam(updated,currentTeam.revision);
+          currentTeam=updated;setupContext.team=updated;match.opponent=opponent;match.opponentScout=hasScout?scout:null;
+          refreshSetup();$('setupMessage').textContent='Opponent scouting saved. Choose your lineup and first server when ready.';
+          status('Opponent scouting saved on this device');
+        }finally{saving=false;document.body.classList.remove('saving');}
+      });
+      scoutingRoot.addEventListener('click',event=>{
+        if(!event.target.closest('#shCancel'))return;
+        scoutingRoot.replaceChildren();scoutingEditorMounted=false;scoutingDetails.open=false;
+      });
+    });
+  }
+  $('setupOpponentScoutDetails')?.querySelector('summary')?.addEventListener('click',()=>{$('setupMessage').textContent='';});
   $('setupCancel').onclick=cancelSetSetup;
   $('setupLineupName').addEventListener('input',()=>{$('setupMessage').textContent='';});
   $('setupSaveLineupButton').onclick=async()=>{
@@ -2033,7 +2141,8 @@ async function openSetSetup(context){
     const message=$('setupMessage');message.textContent='';
     try{
       const lineup=chosenLineup();
-      const choices={...lineup,bestOf:match.bestOf,opponent:match.opponent,date:match.date,
+      const opponent=$('setupOpponentName')?.value.trim()??match.opponent??'';
+      const choices={...lineup,bestOf:match.bestOf,opponent,date:match.date,
         firstServe:plan.firstServe??$('setupFirstServe').value,exhibition,opponentScout:match.opponentScout,
         rotationMode:$('setupRotationMode').value,rotation:Number($('setupRotation').value),previousSet,
         ...(selectedLineupId!=='custom'?{lineupId:selectedLineupId}:{})};
