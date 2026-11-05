@@ -109,8 +109,8 @@ export function teamHierarchy(teams, records) {
       match.sets=orderMatchSets(match.sets);
       // Once a set exists its saved snapshot is authoritative; before that, the saved schedule.
       const first=match.sets[0]?.config;
-      match.opponent=first?(first.opponentName||'West Fargo'):match.planned.opponent;
-      match.date=first?(first.matchDate||''):match.planned.date;
+      match.opponent=first?(first.opponentName??''):(match.planned?.opponent??'');
+      match.date=first?(first.matchDate||''):(match.planned?.date??'');
       match.bestOf=match.sets.find(r=>r.config.bestOf)?.config.bestOf??(first?null:match.planned.bestOf);
       match.wins={us:0,them:0};match.inProgress=false;
       for(const record of match.sets){
