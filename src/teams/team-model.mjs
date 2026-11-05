@@ -47,7 +47,9 @@ export function validateTeam(input) {
   need(Array.isArray(t.plannedMatches),'Saved matches must be a list.');
   const matchIds=new Set();
   t.plannedMatches=t.plannedMatches.map(m=>{
-    const match={id:text(m.id,'Match ID'),opponent:text(m.opponent,'Opponent name'),date:m.date,bestOf:m.bestOf,
+    const opponent=String(m.opponent??'').trim();
+    need(opponent.length<=100,'Opponent name must be up to 100 characters.');
+    const match={id:text(m.id,'Match ID'),opponent,date:m.date,bestOf:m.bestOf,
       ...(m.opponentScout?{opponentScout:normalizeOpponentScout(m.opponentScout)}:{})};
     need(/^\d{4}-\d{2}-\d{2}$/.test(match.date)&&Number.isFinite(Date.parse(match.date)),'Choose the match date.');
     need([3,5].includes(match.bestOf),'Choose best of 3 or best of 5.');
@@ -58,7 +60,8 @@ export function validateTeam(input) {
 }
 export function makeMatchSet(team, choices, identity) {
   const t=validateTeam(team);
-  const opponent=text(choices.opponent,'Opponent name');
+  const opponent=String(choices.opponent??'').trim();
+  need(opponent.length<=100,'Opponent name must be up to 100 characters.');
   need(/^\d{4}-\d{2}-\d{2}$/.test(choices.date)&&Number.isFinite(Date.parse(choices.date)),'Choose the match date.');
   need(Array.isArray(choices.starters)&&choices.starters.length===6,'Choose six starters.');
   const setNumber=identity.setNumber ?? 1;
