@@ -105,6 +105,7 @@ const PASS_LABEL = { OH: 'OH passes', RS: 'RS passes' };
 const PASS_RATINGS = [[3,'Perfect','All attack options'],[2,'Playable','Some attack options'],
   [1,'High ball','Limited attack'],[0,'No play','Overpass or forced free ball']];
 const SERVE_TIP = 'Server steps behind the end line. The other five cover the court.';
+const LIBERO_DEFENSE_LABEL = { left: 'Left back', middle: 'Middle back', right: 'Right back' };
 
 // Rotational position of a point on the 360 grid (row by the attack line, column by thirds).
 function gridPos(x, y) {
@@ -122,13 +123,60 @@ function mappedSpots(rot, frame) {
   return spots;
 }
 
+// Map each base-defense back-row role to the active lineup slot that occupies it.
+function baseDefenseSpotSlots(key) {
+  const rot=FORMATIONS[key],result={};
+  if(!rot?.base)return result;
+  for(const role in rot.base){
+    const [x,y]=rot.base[role];
+    if(y<=120)continue;
+    const spot=x<120?'left':x<240?'middle':'right';
+    const [sx,sy]=rot.start[role];
+    result[String(slotAt(gridPos(sx,sy)))]=spot;
+  }
+  return result;
+}
+
+function swapDefenseAssignments(assignments, first, second) {
+  if(!first||!second||first===second)return assignments;
+  [assignments[first],assignments[second]]=[assignments[second],assignments[first]];
+  return assignments;
+}
+
+function visibleDefenseSpot(slot, spots) {
+  const point=spots?.[slot];
+  if(!point||point.top<35)return null;
+  return point.left<33.333?'left':point.left<66.667?'middle':'right';
+}
+
 function baseDefenseLayout() {
   const activeSetterPos=setterPos();
   const backRowSetterPos=activeSetterPos && isFront(activeSetterPos)
     ? (activeSetterPos + 2) % 6 + 1 : activeSetterPos;
   const key = RECEIVE_KEY[backRowSetterPos] || ROTATION_KEY[rotNum()];
   const rot = FORMATIONS[key];
-  return rot?.base ? { key, spots: mappedSpots(rot, rot.base) } : null;
+  if(!rot?.base)return null;
+  const spots=mappedSpots(rot,rot.base);
+  if(S.libero){
+    const defaultAssignments=baseDefenseSpotSlots(key),liberoSlot=String(S.libero.slot);
+    const assignments={...defaultAssignments};
+    const defaultTarget=Object.keys(assignments).find(slot=>assignments[slot]===S.liberoDefaultDefenseSpot);
+    swapDefenseAssignments(assignments,liberoSlot,defaultTarget);
+    const exactCurrentRotation=S.liberoDefenseAssignments
+      &&S.liberoDefenseAssignmentRotation===S.rotation
+      &&S.liberoDefenseAssignmentRotationCount===S.rotations;
+    if(exactCurrentRotation){
+      Object.assign(assignments,S.liberoDefenseAssignments);
+    }else if(S.liberoBaseDefenseSpot!==S.liberoDefaultDefenseSpot){
+      const target=Object.keys(assignments).find(slot=>assignments[slot]===S.liberoBaseDefenseSpot);
+      swapDefenseAssignments(assignments,liberoSlot,target);
+    }
+    const coordinateBySpot=Object.fromEntries(Object.entries(defaultAssignments)
+      .map(([slot,spot])=>[spot,spots[slot]]));
+    for(const [slot,spot] of Object.entries(assignments))
+      if(coordinateBySpot[spot])spots[slot]={...coordinateBySpot[spot]};
+  }
+  return { key, spots };
 }
 
 // The formation for the current moment: serve receive when they serve, the
@@ -329,6 +377,11 @@ function syncState() {
   const lastLibero=s.liberoReplacements.at(-1)??null;
   S = { order:s.order.map(Number), onCourt:Object.fromEntries(Object.entries(s.onCourt).map(([k,v])=>[k,numberFor(v)])),
     libero:s.libero ? {slot:Number(s.libero.slotId), player:numberFor(s.libero.playerId),replaced:numberFor(s.libero.replacedPlayerId)} : null,
+    liberoBaseDefenseSpot:s.liberoBaseDefenseSpot??session.record.config.liberoBaseDefenseSpot??'middle',
+    liberoDefaultDefenseSpot:session.record.config.liberoBaseDefenseSpot??'middle',
+    liberoDefenseAssignments:s.liberoDefenseAssignments??null,
+    liberoDefenseAssignmentRotation:s.liberoDefenseAssignmentRotation??null,
+    liberoDefenseAssignmentRotationCount:s.liberoDefenseAssignmentRotationCount??null,
     lastLiberoSlot:lastLibero?Number(lastLibero.slotId):null,
     lastLiberoPlayer:lastLibero?numberFor(lastLibero.playerId):null,
     partner:Object.fromEntries(Object.entries(s.partners).map(([k,v])=>[numberFor(k),v.length===1 ? numberFor(v[0]) : null])),
@@ -360,6 +413,7 @@ function actionLabel(a) {
   }
   if(a.type==='opponent.substitution') return `Opponent sub #${a.payload.inJersey} for #${a.payload.outJersey}`;
   return {'substitution':'Substitution','libero.in':'Libero in','libero.out':'Libero out','libero.switch':'Libero switch',
+    'libero.defense-position':`Libero base defense · ${LIBERO_DEFENSE_LABEL[a.payload.position]??a.payload.position}`,
     'timeout':'Timeout','receive.edit':'Receive formation','receive.select':'Receive formation choice','libero.plan':'Legacy libero plan','set.end':'End set',
     'rally.edit':a.payload.delete ? 'Deleted rally' : 'Rally edit','correction':'Score fix'}[a.type] || a.type;
 }
@@ -732,10 +786,11 @@ function render() {
   const timeoutView = ui.timeoutView || (S.serving === 'them' ? 'receive' : 'defense');
   const form = formation(timeoutMode && timeoutView === 'receive');
   const assistSelecting=Boolean(ui.pendingAssist)&&!timeoutMode;
+  const chooseLiberoDefense=!timeoutMode&&ui.mode==='libero-defense'&&Boolean(S.libero);
   const assistBaseSpots=assistSelecting?form?.base?.spots:null;
   const autoBaseDefense=!timeoutMode&&!ui.showBase&&(S.passRatedThisRally||S.attackTrackedThisRally)&&Boolean(form?.base?.spots);
-  const rcv = form && !form.none && !ui.showBase && !autoBaseDefense ? form : null;
-  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : assistBaseSpots || (autoBaseDefense ? form.base.spots : rcv?.spots);
+  const rcv = form && !form.none && !ui.showBase && !autoBaseDefense && !chooseLiberoDefense ? form : null;
+  const activeSpots = timeoutMode ? timeoutSpots(form, timeoutView) : assistBaseSpots || (chooseLiberoDefense ? form.base?.spots : autoBaseDefense ? form.base.spots : rcv?.spots);
   const usAttackTargetMode=!timeoutMode&&!assistSelecting&&(ui.pendingAttackResult!==null||ui.attackTargetZone!==null);
   const opponentAttackMode=!timeoutMode&&ui.themAttackResult!==null;
   const serveTargetMode=!timeoutMode&&ui.pendingServeZone;
@@ -796,13 +851,13 @@ function render() {
 
   // Court view (label on the court; controls in the Us pad)
   const mode = S.serving === 'them' ? 'SERVE RECEIVE' : 'SERVING';
-  const viewTitle = assistSelecting ? 'CHOOSE ASSISTER' : timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : autoBaseDefense ? 'BASE DEFENSE' : !rcv ? 'ROTATION SPOTS' : mode;
+  const viewTitle = assistSelecting ? 'CHOOSE ASSISTER' : chooseLiberoDefense ? 'CHOOSE LIBERO POSITION' : timeoutMode ? `TIMEOUT · ${timeoutView === 'receive' ? 'SERVE RECEIVE' : 'BASE DEFENSE'}` : autoBaseDefense ? 'BASE DEFENSE' : !rcv ? 'ROTATION SPOTS' : mode;
   court.querySelector('.court-mark').textContent = `${viewTitle} · ${rotLabel().replace(' · ', ' · ')}`;
   court.setAttribute('aria-label',assistSelecting?'Choose Assister. Tap an assisting teammate on court, or choose No Assist below.':viewTitle);
   const tools = document.querySelector('.court-tools'), inCourt = !timeoutMode && document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
   if (!inCourt && tools.parentElement === court) $('courtWrap').appendChild(tools);
-  tools.hidden=attackTargetMode||assistSelecting||ui.mode==='libero';
+  tools.hidden=attackTargetMode||assistSelecting||ui.mode==='libero'||ui.mode==='libero-defense';
   const assistChoice=$('assistChoice'),noAssistKill=$('noAssistKill');
   assistChoice.hidden=!assistSelecting;
   noAssistKill.disabled=!assistSelecting||saving||session.state.status==='ended';
@@ -815,7 +870,7 @@ function render() {
       if (ui.timeoutPasser !== b.dataset.pass) { ui.timeoutPasser = b.dataset.pass; ui.timeoutPositions.receive = {}; ui.timeoutUndo=null; render(); }
     } else selectReceive(b.dataset.pass);
   });
-  $('rcvPassers').hidden = autoBaseDefense || assistSelecting || (timeoutMode && timeoutView !== 'receive');
+  $('rcvPassers').hidden = autoBaseDefense || assistSelecting || chooseLiberoDefense || (timeoutMode && timeoutView !== 'receive');
   $('rcvToggle').hidden = timeoutMode;
   $('rcvToggle').textContent = 'Rotation spots';
   $('rcvToggle').setAttribute('aria-pressed', ui.showBase ? 'true' : 'false');
@@ -921,13 +976,18 @@ function render() {
   });
   let hint;
   if (ui.mode === 'sub') hint = '<b>Sub:</b> tap the player coming out. <a href="#" id="cx">Cancel</a>';
+  else if (ui.mode === 'libero-defense'&&S.libero) {
+    hint=`<b>Choose libero position:</b> tap the back-row defender at the desired spot. They will exchange spots. <a href="#" id="cx">Cancel</a>`;
+  }
   else if (ui.mode === 'libero'&&ui.liberoOverrideSlot!=null) {
     const slot=ui.liberoOverrideSlot,libero=ui.liberoChoicePlayer;
     hint=`<b>Wait one rally before #${libero} re-enters.</b> Put her in for #${S.onCourt[slot]} anyway? <button type="button" class="libero-inline-choice confirm" id="liberoOverride">Override · libero in</button> <a href="#" id="cx">Cancel</a>`;
   }
   else if (ui.mode === 'libero'&&S.libero) {
     const next=availableLiberoChoices(S.libero.player)[0];
-    hint=`<b>Libero:</b> tap #${S.libero.player} on court to send her out.${next!=null?` <button type="button" class="libero-inline-choice" id="liberoSwitch">Switch to #${next}</button>`:''} <a href="#" id="cx">Cancel</a>`;
+    const defenseSpot=LIBERO_DEFENSE_LABEL[S.liberoBaseDefenseSpot]||LIBERO_DEFENSE_LABEL.middle;
+    const isDefault=S.liberoBaseDefenseSpot===S.liberoDefaultDefenseSpot;
+    hint=`<b>Libero:</b> tap #${S.libero.player} on court to send her out. <button type="button" class="libero-inline-choice" id="liberoDefenseChange">Defense · ${defenseSpot}${isDefault?'':' · adjusted'}</button>${next!=null?` <button type="button" class="libero-inline-choice" id="liberoSwitch">Switch to #${next}</button>`:''} <a href="#" id="cx">Cancel</a>`;
   }
   else if (ui.mode === 'libero') {
     const next=availableLiberoChoices(ui.liberoChoicePlayer)[0];
@@ -948,6 +1008,8 @@ function render() {
   };
   const switchLibero=$('liberoSwitch');
   if(switchLibero)switchLibero.onclick=()=>{const next=availableLiberoChoices(S.libero.player)[0];if(next!=null)void liberoSwitch(next);};
+  const changeLiberoDefense=$('liberoDefenseChange');
+  if(changeLiberoDefense)changeLiberoDefense.onclick=()=>{ui={...ui,mode:'libero-defense'};render();};
   const overrideLibero=$('liberoOverride');
   if(overrideLibero)overrideLibero.onclick=()=>{const slot=ui.liberoOverrideSlot,libero=ui.liberoChoicePlayer;if(slot!=null&&libero!=null)void liberoIn(slot,libero);};
   $('hintThem').innerHTML=serveTargetMode
@@ -1390,6 +1452,7 @@ function formMark(p,pos) {
 
 function canPick(pos, slot) {
   if (ui.pendingAssist) return slot !== ui.pendingAssist.hitterSlot;
+  if (ui.mode === 'libero-defense') return Boolean(S.libero&&visibleDefenseSpot(slot,baseDefenseLayout()?.spots));
   if (ui.mode === 'libero') {
     if(S.libero)return slot===S.libero.slot;
     const check=liberoEntryCheck(slot,ui.liberoChoicePlayer);
@@ -1443,6 +1506,19 @@ function onTile(pos, slot) {
     if (slot === ui.pendingAssist.hitterSlot) return;
     const assistPlayerId=playerId(S.onCourt[slot]);
     if(assistPlayerId)savePendingKill(assistPlayerId);
+    return;
+  }
+  if(ui.mode==='libero-defense'&&S.libero){
+    const layout=baseDefenseLayout();
+    const spot=visibleDefenseSpot(slot,layout?.spots);
+    if(!spot)return;
+    if(spot===S.liberoBaseDefenseSpot){clearUi();return;}
+    const assignments=Object.fromEntries(Object.keys(baseDefenseSpotSlots(layout.key))
+      .map(slotId=>[slotId,visibleDefenseSpot(slotId,layout.spots)]));
+    const targetSlot=String(slot),liberoSlot=String(S.libero.slot);
+    swapDefenseAssignments(assignments,liberoSlot,targetSlot);
+    const nextSpot=assignments[liberoSlot];
+    void command('libero.defense-position',{position:nextSpot,assignments});
     return;
   }
   if (ui.mode === 'sub') { ui.mode = null; openBench(slot); return; }
@@ -1931,8 +2007,8 @@ async function openSetSetup(context){
     $('setupSaveLineup').hidden=saved;
     $('setupLineupPreview').hidden=!saved;
     $('setupLineupNote').textContent=saved
-      ?`${currentTeam.lineups.find(lineup=>lineup.id===selectedLineupId)?.name??'Saved lineup'} selected.`
-      :'Set the six players, system, setters, and liberos for this set.';
+      ?`${currentTeam.lineups.find(lineup=>lineup.id===selectedLineupId)?.name??'Saved lineup'} selected · libero base-defense default: ${LIBERO_DEFENSE_LABEL[currentTeam.lineups.find(lineup=>lineup.id===selectedLineupId)?.liberoBaseDefenseSpot??'middle']}.`
+      :'Set the six players, system, setters, liberos, and libero base-defense default for this set.';
     const firstServe=plan.firstServe??$('setupFirstServe')?.value??chosenServe;
     const rotationMode=$('setupRotationMode').value;
     $('setupRotationLabel').hidden=rotationMode!=='manual';
