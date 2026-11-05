@@ -554,6 +554,7 @@
   }
   .zone.pick .disc { animation: pulse 1s infinite alternate; }
   .zone.selected .disc { outline: 5px solid #fff; outline-offset: 4px; }
+  .zone.libero-default .disc { box-shadow: 0 0 0 4px color-mix(in srgb,var(--accent) 88%,white); }
   .zone.nopick { opacity: .35; }
   .zone.assist-hitter { cursor:not-allowed; }
   @keyframes pulse { from { outline: 3px solid #fff; outline-offset: 3px; } to { outline: 6px solid #fff; outline-offset: 6px; } }
@@ -743,30 +744,11 @@
   .ovr { font-size: 14px; font-weight: 700; color: var(--ink-dim); text-decoration: underline; padding: 0 6px; }
   .ovr.on { text-decoration: none; color: #b45309; }
   .sheet .cancel { margin-top: 14px; width: 100%; height: 56px; border-radius: var(--radius); border: 1px solid var(--line); font-weight: 800; font-size: 17px; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .two button { height: 110px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 22px; font-weight: 800; }
-  .two button small { display: block; font-size: 14px; color: var(--ink-dim); font-weight: 700; }
-  .two button:disabled { opacity: .3; }
-
-  .lib-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 10px; }
-  .lib-table th { text-align: right; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); padding: 2px 6px; }
-  .lib-table td { padding: 4px 6px; border-top: 1px solid var(--line); }
-  .lib-table td + td { text-align: right; font-variant-numeric: tabular-nums; }
-  .lib-table tr.b td { font-weight: 800; }
-  .lib-table tr.grp td { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); padding-top: 10px; border-top: 0; }
-  .lib-rec { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-left: 5px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.4; margin-bottom: 10px; }
   .lib-plan { display: flex; gap: 8px; margin-bottom: 12px; }
   .sheet .card { max-height: 960px; overflow-y: auto; }
-  .lib-plan .libero-plan-choice { display: flex; flex: 1; align-items: center; justify-content: center; min-width: 0; min-height: 58px; padding: 5px 8px; white-space: normal; background: #000; border-color: #000; color: #fff; }
-  .lib-plan .libero-plan-choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .libero-plan-note { margin: 0 0 10px !important; font-size: 13px !important; line-height: 1.35; }
-  .libero-plan-note.warning,.libero-plan-warning { padding: 9px 11px; border-left: 4px solid #b76b12; border-radius: 8px; background: color-mix(in srgb,#d97706 12%,var(--card)); color: color-mix(in srgb,#8a4b08 85%,var(--ink)) !important; }
-  .libero-plan-warning { margin: 0 0 10px !important; font-size: 13px !important; font-weight: 750; line-height: 1.35; }
-  .libero-actions { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0 0 10px; }
-  .libero-actions.two { grid-template-columns: 1fr 1fr; }
-  .libero-actions button { min-width: 0; min-height: 52px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-size: 16px; font-weight: 850; }
-  .libero-actions #libIn { border-color: var(--accent); background: var(--accent); color: #fff; }
-  .libero-actions button:disabled { opacity: .45; }
+  .libero-inline-choice { display:inline-flex; min-height:34px; align-items:center; justify-content:center; margin:2px 3px; padding:3px 9px; border:1px solid var(--accent); border-radius:9px; background:var(--card); color:var(--accent); font-size:12px; font-weight:850; white-space:nowrap; }
+  .libero-inline-choice.confirm { background:var(--accent); color:#fff; }
+  .libero-inline-choice:disabled { opacity:.45; }
 
   .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .menu-list button { text-align: left; padding: 12px 14px; min-height: 68px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 2px; }
