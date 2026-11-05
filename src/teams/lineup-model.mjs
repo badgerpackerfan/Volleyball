@@ -9,6 +9,7 @@ export function lineupConfig(team, lineup) {
   }
   return {
     system:lineup.system,
+    liberoBaseDefenseSpot:lineup.liberoBaseDefenseSpot??'middle',
     players:team.players.map(p=>({id:p.id,athleteId:p.athleteId,jersey:p.jersey,name:p.name,position:p.position,available:true})),
     slots,
     setters:[...lineup.setters],liberos:[...lineup.liberos],
@@ -20,8 +21,10 @@ export function validateLineup(team, input) {
   if(!Array.isArray(input.starters)||input.starters.length!==6||!Array.isArray(input.setters)||!Array.isArray(input.liberos))throw new Error('Choose six starters, the setter(s), and any liberos.');
   const ids=new Set(team.players.map(p=>p.id));
   if([...input.starters,...input.setters,...input.liberos].some(id=>!ids.has(id)))throw new Error('Choose roster players for every lineup slot; a saved player may have been removed.');
-  createSet({id:'lineup-check',teamId:team.id,matchId:'lineup-check',firstServe:'us',...lineupConfig(team,input)});
-  return {id:input.id,name:input.name.trim(),system:input.system,starters:[...input.starters],setters:[...input.setters],liberos:[...input.liberos]};
+  const liberoBaseDefenseSpot=input.liberoBaseDefenseSpot??'middle';
+  if(!['left','middle','right'].includes(liberoBaseDefenseSpot))throw new Error('Choose a libero base-defense position.');
+  createSet({id:'lineup-check',teamId:team.id,matchId:'lineup-check',firstServe:'us',...lineupConfig(team,{...input,liberoBaseDefenseSpot})});
+  return {id:input.id,name:input.name.trim(),system:input.system,starters:[...input.starters],setters:[...input.setters],liberos:[...input.liberos],liberoBaseDefenseSpot};
 }
 export function lineupIssue(team, lineup) {
   try{validateLineup(team,lineup);return null;}catch(e){return e.message;}
@@ -42,5 +45,5 @@ export function startingRotation({mode='auto',firstServe,rotation,previousSet}) 
 }
 export function lineupFromSet(record) {
   const c=record.config;
-  return {system:c.system,starters:c.order.map(id=>c.slots.find(s=>s.id===id).playerId),setters:[...c.setters],liberos:[...c.liberos]};
+  return {system:c.system,starters:c.order.map(id=>c.slots.find(s=>s.id===id).playerId),setters:[...c.setters],liberos:[...c.liberos],liberoBaseDefenseSpot:c.liberoBaseDefenseSpot??'middle'};
 }
