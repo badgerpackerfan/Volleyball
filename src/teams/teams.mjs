@@ -111,23 +111,23 @@ function deleteTeam(team){
   {teamId:team.id,teamRevision:revision},()=>{go();notice(`${team.name} deleted.`);});
 }
 function deleteMatch(team,match){
- remove(`Delete the match vs ${match.opponent}${match.date?' on '+match.date:''}${match.sets.length?` and its ${plural(match.sets.length,'set')}`:''}?`,
-  {teamId:team.id,matchId:match.id},()=>{go(team.id);notice(`Match vs ${match.opponent} deleted.`);});
+ const opponent=match.opponent||'Opponent';
+ remove(`Delete the match vs ${opponent}${match.date?' on '+match.date:''}${match.sets.length?` and its ${plural(match.sets.length,'set')}`:''}?`,
+  {teamId:team.id,matchId:match.id},()=>{go(team.id);notice(`Match vs ${opponent} deleted.`);});
 }
 function editMatchDetails(team,match){
  dirty=false;notice();
- bar('Edit match details',match.opponent,{label:match.opponent,action:()=>go(team.id,match.id)});
+ bar('Edit match details',match.opponent||'Opponent',{label:match.opponent||'Match',action:()=>go(team.id,match.id)});
  $('content').innerHTML=`<form id="matchDetailsForm"><p class="help">Changing the opponent or date updates every saved set in this match and keeps the existing rally statistics.</p>
-  <div class="grid"><label>Opponent<input id="matchOpponent" required maxlength="100" value="${esc(match.opponent)}"></label><label>Match date<input id="matchDate" type="date" value="${esc(match.date)}"></label></div>
+  <div class="grid"><label>Opponent (optional)<input id="matchOpponent" maxlength="100" value="${esc(match.opponent)}"></label><label>Match date<input id="matchDate" type="date" value="${esc(match.date)}"></label></div>
   <div class="actions form-actions"><button type="submit" class="primary">Save match details</button><button type="button" id="cancelMatchDetails">Cancel</button></div></form>`;
  $('matchDetailsForm').oninput=()=>{dirty=true;};
  $('cancelMatchDetails').onclick=()=>{dirty=false;go(team.id,match.id);};
  $('matchDetailsForm').onsubmit=e=>{e.preventDefault();save(async()=>{
   const opponent=$('matchOpponent').value.trim(),date=$('matchDate').value||match.date||'';
-  if(!opponent)throw new Error('Enter an opponent.');
   await withFreshStore(()=>store.updateMatchDetails({teamId:team.id,matchId:match.id,teamRevision:team.revision,
    expectedSetIds:match.sets.map(record=>record.config.id),opponent,date}));
-  dirty=false;await load();go(team.id,match.id);notice(`Match details updated for vs ${opponent}.`);
+  dirty=false;await load();go(team.id,match.id);notice(opponent?`Match details updated for vs ${opponent}.`:'Match details updated.');
  });};
 }
 async function load(){
@@ -403,9 +403,9 @@ function home(){
     const exportAvailable=Boolean(reportsAvailable&&!m.inProgress);
     const exhibitions=m.sets.filter(record=>isExhibitionSet(record,m.sets)).length;
     const resultLabel=!m.sets.length?'Saved match':m.winner?(m.winner==='us'?'Match won':'Match lost')+(m.inProgress?' · exhibition set in progress':''):m.inProgress?'Set in progress':'All recorded sets finished';
-    return item(team.color,`<h3>${esc(m.opponent)}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}${exhibitions?` · ${plural(exhibitions,'exhibition set')}`:''}`:'Not started'}</p><p class="muted">${resultLabel}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
+    return item(team.color,`<h3>${esc(m.opponent||'Opponent')}</h3><p>${esc(m.date)||'Date not recorded'} · ${m.sets.length?`${plural(m.sets.length,'set')} · Sets ${m.wins.us}–${m.wins.them}${exhibitions?` · ${plural(exhibitions,'exhibition set')}`:''}`:'Not started'}</p><p class="muted">${resultLabel}${m.bestOf?` · Best of ${m.bestOf}`:''}</p>`,
      `<button data-match="${esc(m.id)}" class="primary">Open match</button>${reportsAvailable?`<button data-match-summary="${esc(m.id)}">Match Summary</button><button data-rotation-report="${esc(m.id)}">Rotation Report</button>`:''}${exportAvailable?`<button data-export-match="${esc(m.id)}">Export Match</button>`:''}<button data-delete-match="${esc(m.id)}" class="danger">Delete match</button>`,'match-card');
-   }).join(''):'<div class="card"><p>No matches yet. Choose New match to set up the opponent and first set.</p></div>'}</div>
+   }).join(''):'<div class="card"><p>No matches yet. Choose New match to set up the date, format, and first set. Opponent details are optional.</p></div>'}</div>
    <h2 class="list-title">Practices</h2>
    <div class="list">${teamPractices.length?teamPractices.map(p=>item(team.color,`<h3>Practice · ${esc(p.date)}</h3><p>${plural(p.events.length,'recorded result')} · ${new Date(p.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</p>`,
     `<button data-practice="${esc(p.id)}" class="primary">Open practice</button><button data-delete-practice="${esc(p.id)}" class="danger">Delete practice</button>`,'practice-card')).join(''):'<div class="card"><p>No practices recorded yet. Start a practice to track serves and serve receive for this roster.</p></div>'}</div>`;
@@ -437,7 +437,7 @@ function home(){
  const next=match.sets.length+1;
  const optionalThird=match.bestOf===3&&next===3&&match.sets.length===2&&Boolean(match.winner);
  const canStartNext=team.editable&&!match.inProgress&&match.bestOf&&next<=match.bestOf&&(!match.winner||optionalThird);
- bar(match.opponent,[team.name,match.date].filter(Boolean).join(' · '),{label:team.name,action:()=>go(team.id)});
+  bar(match.opponent||'Opponent',[team.name,match.date].filter(Boolean).join(' · '),{label:team.name,action:()=>go(team.id)});
  $('content').innerHTML=`<div class="card match-summary" style="--team-color:${team.color}"><p class="set-score">Sets ${match.wins.us}–${match.wins.them}</p><p>${match.winner?`<strong class="match-result">${match.winner==='us'?'Match won':'Match lost'}</strong> · `:''}${match.bestOf?`Best of ${match.bestOf}`:'Match format not set'}</p></div>
   <div class="toolbar">${canStartNext?`<button id="nextSet" class="primary" ${team.players.length<6?'disabled':''}>${optionalThird?'Record optional set 3':match.sets.length?`Set up set ${next}`:'Set up set 1'}</button>`:''}${team.editable?'<button id="editMatchDetails">Edit match details</button>':''}<button id="deleteMatch" class="danger">Delete match</button></div>
   ${match.inProgress?`<p class="muted">${match.winner?'Official result decided; finish the exhibition set in progress to complete its stats.':'Finish the set in progress before starting another set in this match.'}</p>`:''}
@@ -540,24 +540,20 @@ function matchSetup(team,match=null){
  notice();
  const today=new Date(),date=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
  bar('New match',team.name,{label:team.name,action:()=>go(team.id)});
- $('content').innerHTML=`<form id="newMatchForm"><p class="help">Enter the match details first. Choose your lineup and first server when the live set opens.</p>
-  <div class="grid"><label>Opponent<input id="newMatchOpponent" required maxlength="100" autocomplete="off"></label>
-   <label>Match date<input id="newMatchDate" type="date" required value="${date}"></label>
+ $('content').innerHTML=`<form id="newMatchForm"><p class="help">Enter the match date and format. Choose your lineup and first server when the live set opens; opponent details are optional there.</p>
+  <div class="grid"><label>Match date<input id="newMatchDate" type="date" required value="${date}"></label>
    <label>Match format<select id="newMatchBestOf"><option value="3">Best of 3</option><option value="5">Best of 5</option></select></label></div>
   <div class="actions form-actions"><button type="submit" class="primary">Create match · choose lineup</button><button type="button" id="cancelNewMatch">Cancel</button></div></form>`;
  $('cancelNewMatch').onclick=()=>go(team.id);
  $('newMatchForm').onsubmit=e=>{e.preventDefault();
-  const opponent=$('newMatchOpponent').value.trim();
-  if(!opponent){$('newMatchOpponent').setCustomValidity('Enter the opponent name.');$('newMatchOpponent').reportValidity();$('newMatchOpponent').setCustomValidity('');return;}
   if(!$('newMatchDate').reportValidity())return;
   save(async()=>{
-   const entry={id:identity(),opponent,date:$('newMatchDate').value,bestOf:Number($('newMatchBestOf').value)};
+   const entry={id:identity(),opponent:'',date:$('newMatchDate').value,bestOf:Number($('newMatchBestOf').value)};
    const updated=validateTeam({...team,revision:team.revision+1,plannedMatches:[...team.plannedMatches,entry]});
    await withFreshStore(()=>store.saveTeam(updated,team.revision));
    dirty=false;location.href=`./index.html?setup=1&team=${encodeURIComponent(team.id)}&match=${encodeURIComponent(entry.id)}`;
   });
  };
- $('newMatchOpponent').focus();
 }
 window.addEventListener('beforeunload',e=>{if(dirty||busy){e.preventDefault();e.returnValue='';}});
 // Let committed navigation leave normally.
