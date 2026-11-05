@@ -747,8 +747,11 @@
   .lib-plan { display: flex; gap: 8px; margin-bottom: 12px; }
   .sheet .card { max-height: 960px; overflow-y: auto; }
   .libero-inline-choice { display:inline-flex; min-height:34px; align-items:center; justify-content:center; margin:2px 3px; padding:3px 9px; border:1px solid var(--accent); border-radius:9px; background:var(--card); color:var(--accent); font-size:12px; font-weight:850; white-space:nowrap; }
+  .libero-inline-choice.defense { display:flex; width:100%; min-height:44px; margin:6px 0 3px; padding:7px 10px; border-width:2px; background:color-mix(in srgb,var(--accent) 11%,var(--card)); font-size:14px; white-space:normal; text-align:center; }
+  .libero-inline-choice.switch { min-height:40px; font-size:13px; }
   .libero-inline-choice.confirm { background:var(--accent); color:#fff; }
   .libero-inline-choice:disabled { opacity:.45; }
+  .act.has-libero small { max-width:100%; padding:0 2px; font-size:11px; line-height:1.05; }
 
   .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .menu-list button { text-align: left; padding: 12px 14px; min-height: 68px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 2px; }
