@@ -6,7 +6,7 @@ export function mountLineupEditor(root,team,initial={},onChange=()=>{}) {
     <fieldset><legend>Lineup in R1</legend><p class="help">Assign six different players in your base R1 order. The net is at the top. Your starting rotation is chosen separately for each set.</p>
     <p class="muted">Tap a player circle to choose a player.</p>
     <div class="lineup-court"><span class="lineup-net" aria-hidden="true">NET</span><span class="lineup-attack-line" aria-hidden="true"></span>${[4,3,2,5,6,1].map((n,i)=>`<label class="lineup-player ${n===1||n===5||n===6?'back':''}" style="--column:${i%3};--row:${Math.floor(i/3)}"><span class="lineup-position">P${n}</span><span class="lineup-disc"><span class="lineup-number" aria-hidden="true">+</span><span class="lineup-chevron" aria-hidden="true">⌄</span><select required data-slot="${n}" aria-label="Position ${n} player">${options(team.players,'Choose player')}</select></span><span class="lineup-name" aria-hidden="true">Choose player</span></label>`).join('')}</div></fieldset>
-    <fieldset><legend>Setters and liberos</legend><div class="grid"><label>Setter 1<select id="setter1" required></select></label><label id="secondSetterLabel">Setter 2<select id="setter2" required></select></label><label>Libero 1<select id="libero1"></select></label><label>Libero 2<select id="libero2"></select></label></div><p class="muted">Setters must be opposite each other. In a 6–2, Setter 2 can be a bench player who replaces the opposite slot when it is in the back row. A setter cannot also be a libero. Designated liberos start off court.</p></fieldset>`;
+    <fieldset><legend>Setters and liberos</legend><div class="grid"><label>Setter 1<select id="setter1" required></select></label><label id="secondSetterLabel">Setter 2<select id="setter2" required></select></label><label>Libero 1<select id="libero1"></select></label><label>Libero 2<select id="libero2"></select></label><label>Libero base-defense default<select id="liberoBaseDefenseSpot"><option value="left">Left back</option><option value="middle">Middle back</option><option value="right">Right back</option></select></label></div><p class="muted">Setters must be opposite each other. In a 6–2, Setter 2 can be a bench player who replaces the opposite slot when it is in the back row. A setter cannot also be a libero. Designated liberos start off court. The selected back-row spot is the lineup default; you can adjust it during a set.</p></fieldset>`;
   const q=id=>root.querySelector('#'+id);
   const starters=()=>[1,2,3,4,5,6].map(n=>root.querySelector(`[data-slot="${n}"]`).value);
   function paintCourt(){
@@ -48,9 +48,10 @@ export function mountLineupEditor(root,team,initial={},onChange=()=>{}) {
     q('setter2').value=value.setters?.[1]||'';
     q('libero1').value=value.liberos?.[0]||'';refresh();
     q('libero2').value=value.liberos?.[1]||'';refresh();
+    q('liberoBaseDefenseSpot').value=value.liberoBaseDefenseSpot||'middle';
     paintCourt();
   }
-  function read(){return {system:q('system').value,starters:starters(),setters:[q('setter1').value,...(q('system').value==='5-1'?[]:[q('setter2').value])],liberos:[q('libero1').value,q('libero2').value].filter(Boolean)};}
+  function read(){return {system:q('system').value,starters:starters(),setters:[q('setter1').value,...(q('system').value==='5-1'?[]:[q('setter2').value])],liberos:[q('libero1').value,q('libero2').value].filter(Boolean),liberoBaseDefenseSpot:q('liberoBaseDefenseSpot').value};}
   root.addEventListener('change',e=>{if(e.target.matches('[data-slot],#system,#setter1,#setter2,#libero1,#libero2'))refresh();paintCourt();onChange(read());});
   write(initial);
   return {read,write};
