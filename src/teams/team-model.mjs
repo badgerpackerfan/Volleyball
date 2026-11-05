@@ -38,6 +38,8 @@ export function validateTeam(input) {
     need(!lineupIds.has(lineup.id)&&!lineupNames.has(lineup.name.toLowerCase()),'Use a different name for each saved lineup.');
     need(['6-2','5-1','4-2'].includes(lineup.system)&&Array.isArray(lineup.starters)&&lineup.starters.length===6
       && Array.isArray(lineup.setters)&&Array.isArray(lineup.liberos),'Invalid saved lineup.');
+    lineup.liberoBaseDefenseSpot??='middle';
+    need(['left','middle','right'].includes(lineup.liberoBaseDefenseSpot),'Choose a libero base-defense position.');
     lineupIds.add(lineup.id);lineupNames.add(lineup.name.toLowerCase());
   }
   // Matches saved ahead of time (a season schedule). Set 1 later uses the same match ID.
