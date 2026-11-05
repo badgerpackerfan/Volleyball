@@ -64,7 +64,7 @@ Every `dispatch(record, command, meta)` returns a new `{ record, state, action }
 | `receive.edit` | `{ key, positions }` | Saves a validated six-position diagram for the current system/rotation/setter and OH/RS choice. `positions: null` resets that diagram. |
 | `receive.select` | `{ passer: 'OH' or 'RS' }` | Persists the chosen receive diagram; unavailable while serving or with a front-row setter. |
 | `receive.rating` | `{ playerId, rating: 0–3 }` | Records an on-court player's serve-receive rating while the opponent is serving. |
-| `libero.plan` | `{ role: 'mid', 'oh', or 'none' }` | Records the coach's libero-plan choice. |
+| `libero.plan` (legacy) | `{ role: 'mid', 'oh', or 'none' }` | Replay compatibility for older saved sets. The current live UI does not create or depend on this action. |
 | `undo` | `{}` | Appends an undo reference to the latest active action and replays the remainder. |
 
 Team values are `us` and `them`. The UI resolves those IDs to actual names. Codes include the fixed paper legend plus OE (Other Error), NET, and VIO; legacy BKE, BHE, and DigE records remain readable. Configurable code lists remain future work.
@@ -84,7 +84,7 @@ Overridden partner changes preserve **all** historical pairings symmetrically. P
 - Score, serving side/server, six slot positions, current occupants, and rotation/setter position.
 - Rally-time court/back-row snapshots, substitution counts and locks, libero replacements, and timeouts.
 - Planned-swap prompts, paused-plan notices, low-sub warnings, automatic set completion, and receive ratings.
-- Active action IDs, revision, recorded overrides, receive diagrams/choice, and libero plan.
+- Active action IDs, revision, recorded overrides, receive diagrams/choice, and any legacy libero-plan value from older journals.
 
 State snapshots are derived values. `record.config` and the ordered immutable action list are the source of truth. Undo records remain in that list, along with the original actions they reference. Undo applies to the latest active action; undoing a new winning rally reopens the set. Redo and arbitrary historical editing are not implemented yet.
 
