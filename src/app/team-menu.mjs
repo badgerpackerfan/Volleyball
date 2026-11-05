@@ -135,24 +135,29 @@ export function rotationReport(ctx) {
     <button class="cancel" id="shCancel">${esc(ctx.closeLabel || 'Close')}</button>`, true);
 }
 
-/* Lineup: this set's lineup, current court, planned swaps, libero plan, and substitutions. */
+/* Lineup: this set's lineup, current court, planned swaps, libero replacements, and substitutions. */
 export function lineupSheet(ctx) {
   const { record, state } = ctx, c = record.config, { jersey, name } = people(c, ctx.players);
   const start = Object.fromEntries(c.slots.map(s => [s.id, s.playerId]));
   const initial = rotated(c.order, c.startingRotation ?? 1);
   const plans = c.slots.filter(s => s.plan).map(s => `<li>#${esc(jersey(s.plan.frontPlayerId))} front row ⇄ #${esc(jersey(s.plan.backPlayerId))} back row</li>`).join('');
   const subs = state.substitutions.map(s => `<li>${s.score.us}–${s.score.them} · R${s.rotation}: #${esc(jersey(s.inPlayerId))} in for #${esc(jersey(s.outPlayerId))}${s.planned ? ' (planned)' : ''}${s.overridden ? ' (override)' : ''}</li>`).join('');
-  const libero = { mid: 'For the middles', oh: 'For the outsides', none: 'No libero' }[state.liberoFor];
+  const liberoEvents = state.liberoReplacements.map(event => {
+    const timing=`${event.score.us}–${event.score.them} · R${event.rotation}`;
+    const player=`#${esc(jersey(event.playerId))}`;
+    if(event.type==='out')return `<li>${timing}: ${player} out, #${esc(jersey(event.replacedPlayerId))} back in${event.reason==='front-row-rotation'?' (front-row rotation)':''}</li>`;
+    if(event.type==='switch')return `<li>${timing}: switch #${esc(jersey(event.outPlayerId))} to ${player}</li>`;
+    return `<li>${timing}: ${player} in for #${esc(jersey(event.replacedPlayerId))}</li>`;
+  }).join('');
   ctx.open(`<h4>Lineup · Set ${c.setNumber ?? 1}</h4>
     <p>${c.system}${c.lineupTemplate ? ` · ${esc(c.lineupTemplate.name)}` : ''} · Setter${c.setters.length > 1 ? 's' : ''} ${c.setters.map(id => `#${esc(jersey(id))} ${name(id)}`).join(', ')}${c.liberos.length ? ` · Libero${c.liberos.length > 1 ? 's' : ''} ${c.liberos.map(id => `#${esc(jersey(id))} ${name(id)}`).join(', ')}` : ''}</p>
     <div class="two-courts"><div><h5>Started in R${c.startingRotation ?? 1}</h5>${miniCourt(c, initial, start, { serving: c.firstServe === 'us', label: 'Starting court', roster: ctx.players })}</div>
       <div><h5>Now · R${state.rotation}</h5>${miniCourt(c, state.order, state.onCourt, { serving: state.servingTeam === 'us', label: 'Current court', roster: ctx.players })}</div></div>
     <div class="lineup-facts"><div><h5>Planned swaps</h5>${plans ? `<ul>${plans}</ul>` : '<p>None</p>'}</div>
-      <div><h5>Libero plan</h5><p>${c.liberos.length ? libero : 'No libero designated'}</p>${c.liberos.length ? '<button class="pill" id="lineupLibero">Change libero plan</button>' : ''}</div>
+      <div><h5>Libero replacements</h5>${c.liberos.length ? `<p>Designated: ${c.liberos.map(id=>`#${esc(jersey(id))}`).join(', ')}</p>${liberoEvents?`<ul>${liberoEvents}</ul>`:'<p>No libero changes</p>'}` : '<p>No libero designated</p>'}</div>
       <div><h5>Substitutions · ${state.substitutionsUsed} of ${c.rules.substitutionLimit} used</h5>${subs ? `<ul>${subs}</ul>` : '<p>None yet</p>'}</div></div>
     ${ctx.canEditLineup?'<p>You can change the lineup or first serve until the first point is played.</p><button class="pill" id="editSetLineup">Change lineup / first serve</button>':''}
     <button class="cancel" id="shCancel">Close</button>`);
-  document.getElementById('lineupLibero')?.addEventListener('click', ctx.openLiberoPlan);
   document.getElementById('editSetLineup')?.addEventListener('click', ctx.openLineupSetup);
 }
 
