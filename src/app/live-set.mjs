@@ -257,10 +257,32 @@ function subBlocked(pIn, pOut) {
   return checkCommand(session.record, {type:'substitution',payload:{slotId:slot,outPlayerId:playerId(pOut),inPlayerId:playerId(pIn)}}).error?.message || null;
 }
 function liberoIn(slot, lib) {
-  return command('libero.in', {slotId:String(slot),outPlayerId:playerId(S.onCourt[slot]),inPlayerId:playerId(lib)});
+  return command('libero.in', {slotId:String(slot),outPlayerId:playerId(S.onCourt[slot]),inPlayerId:playerId(lib),
+    ...(ui.liberoOverrideSlot===slot?{override:{reason:'Coach confirmed early libero re-entry'}}:{})});
 }
 function liberoOut() { return command('libero.out', {outPlayerId:playerId(S.libero.player)}); }
 function liberoSwitch(lib) { return command('libero.switch', {outPlayerId:playerId(S.libero.player),inPlayerId:playerId(lib)}); }
+function availableLiberoChoices(exclude=null) {
+  return LIBEROS.filter(player=>player!==exclude&&ROSTER[player]?.available!==false);
+}
+function orderedLiberoChoices(exclude=null) {
+  const choices=availableLiberoChoices(exclude);
+  return choices.includes(S.lastLiberoPlayer)
+    ? [S.lastLiberoPlayer,...choices.filter(player=>player!==S.lastLiberoPlayer)]
+    : choices;
+}
+function preferredLiberoChoice(exclude=null) {
+  return orderedLiberoChoices(exclude)[0]??null;
+}
+function liberoEntryCheck(slot,libero) {
+  if(libero==null||!Object.hasOwn(S.onCourt,slot)||isFront(posOf(slot)))
+    return {allowed:false,error:{code:'LIBERO_POSITION',message:'Choose a back-row player.'}};
+  return checkCommand(session.record,{type:'libero.in',payload:{slotId:String(slot),
+    outPlayerId:playerId(S.onCourt[slot]),inPlayerId:playerId(libero)}});
+}
+function eligibleLiberoForSlot(slot) {
+  return orderedLiberoChoices().find(libero=>liberoEntryCheck(slot,libero).allowed)??null;
+}
 
 function syncState() {
   const s = session.state;
@@ -304,18 +326,22 @@ function syncState() {
     ...timeouts.map(t=>[t.actionId,{kind:'timeout',...t}]),
   ]);
   const timeline=s.activeActionIds.flatMap(id=>visibleEvents.has(id)?[visibleEvents.get(id)]:[]);
+  const lastLibero=s.liberoReplacements.at(-1)??null;
   S = { order:s.order.map(Number), onCourt:Object.fromEntries(Object.entries(s.onCourt).map(([k,v])=>[k,numberFor(v)])),
     libero:s.libero ? {slot:Number(s.libero.slotId), player:numberFor(s.libero.playerId),replaced:numberFor(s.libero.replacedPlayerId)} : null,
+    lastLiberoSlot:lastLibero?Number(lastLibero.slotId):null,
+    lastLiberoPlayer:lastLibero?numberFor(lastLibero.playerId):null,
     partner:Object.fromEntries(Object.entries(s.partners).map(([k,v])=>[numberFor(k),v.length===1 ? numberFor(v[0]) : null])),
     rotations:s.rotations, rotation:s.rotation, serving:s.servingTeam, us:s.score.us, them:s.score.them,
-    subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them, liberoFor:s.liberoFor,
-    liberoPlanChosen:activeActions.some(action=>action.type==='libero.plan'),
+    subs:s.substitutionsUsed, toUs:s.timeoutsRemaining.us, toThem:s.timeoutsRemaining.them,
     rallies,timeouts,receiveRatings,attackEvents,timeline,passRatedThisRally,attackTrackedThisRally,
     banners:s.prompts.filter(p=>p.type==='planned-swap').map(p=>({kind:'swap',slot:Number(p.slotId),in:numberFor(p.inPlayerId),
       out:numberFor(p.outPlayerId),text:`Planned swap: #${numberFor(p.inPlayerId)} in for #${numberFor(p.outPlayerId)}`,sub:'Confirm when the players exchange.'})) };
-  if (LIBEROS.length && !s.libero && s.liberoFor !== 'none' && SLOTS[S.order[0]].role === s.liberoFor
-      && s.status === 'live' && dismissedLiberoPromptContext!==promptContext)
-    S.banners.push({kind:'libero',slot:S.order[0],promptContext,text:`Libero in for #${S.onCourt[S.order[0]]}?`});
+  const rememberedSlot=S.lastLiberoSlot,rememberedLibero=rememberedSlot==null?null:eligibleLiberoForSlot(rememberedSlot);
+  if (rememberedSlot!=null && rememberedLibero!=null && !s.libero && s.status==='live'
+      && dismissedLiberoPromptContext!==promptContext)
+    S.banners.push({kind:'libero',slot:rememberedSlot,libero:rememberedLibero,promptContext,
+      text:`Libero in for #${S.onCourt[rememberedSlot]}?`});
   receiveEdits = clone(s.receiveEdits);
   if(ui) ui.passer=s.receivePasser;
   history = activeActions.map(action=>({desc:actionLabel(action)}));
@@ -334,7 +360,7 @@ function actionLabel(a) {
   }
   if(a.type==='opponent.substitution') return `Opponent sub #${a.payload.inJersey} for #${a.payload.outJersey}`;
   return {'substitution':'Substitution','libero.in':'Libero in','libero.out':'Libero out','libero.switch':'Libero switch',
-    'timeout':'Timeout','receive.edit':'Receive formation','receive.select':'Receive formation choice','libero.plan':'Libero plan','set.end':'End set',
+    'timeout':'Timeout','receive.edit':'Receive formation','receive.select':'Receive formation choice','libero.plan':'Legacy libero plan','set.end':'End set',
     'rally.edit':a.payload.delete ? 'Deleted rally' : 'Rally edit','correction':'Score fix'}[a.type] || a.type;
 }
 function status(message, error=false) {
@@ -387,7 +413,7 @@ async function perform(cmd, clear=true) {
         themAttackResult: null, themAttackSourceZone: null, themAttackTargetZone: null };
     syncState();
     if(!wasEnded&&session.state.status==='ended')nextSetup=nextSetSetupHref(session.record);
-    if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,pendingAssist:null,pendingServeZone:false}; $('sheet').classList.remove('open'); }
+    if(clear) { ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,pendingAssist:null,pendingServeZone:false,liberoChoicePlayer:null,liberoOverrideSlot:null}; $('sheet').classList.remove('open'); }
     status(session.state.status==='ended' ? 'Set ended · saved on this device' : 'Saved on this device');
     return true;
   } catch(e) {
@@ -745,7 +771,9 @@ function render() {
     let cls = `zone ${i < 3 ? 'front' : 'backrow'}`;
     if (rcv || timeoutMode) cls += ' rcv';
     if (timeoutMode) cls += ' tactical';
-    if (ui.pendingSlot === slot || ui.attackPlayerSlot === slot) cls += ' selected';
+    if (ui.pendingSlot === slot || ui.attackPlayerSlot === slot
+        || (ui.mode==='libero'&&ui.liberoOverrideSlot===Number(slot))) cls += ' selected';
+    if(ui.mode==='libero'&&!S.libero&&S.lastLiberoSlot===Number(slot)&&!isFront(pos))cls+=' libero-default';
     if (needPlayer) cls += canPick(pos, slot) ? ' pick' : ' nopick';
     if (ui.pendingAssist?.hitterSlot === slot) cls += ' assist-hitter';
     z.className = cls;
@@ -774,7 +802,7 @@ function render() {
   const tools = document.querySelector('.court-tools'), inCourt = !timeoutMode && document.body.classList.contains('tools-in');
   if (inCourt && tools.parentElement !== court) court.appendChild(tools);
   if (!inCourt && tools.parentElement === court) $('courtWrap').appendChild(tools);
-  tools.hidden=attackTargetMode||assistSelecting;
+  tools.hidden=attackTargetMode||assistSelecting||ui.mode==='libero';
   const assistChoice=$('assistChoice'),noAssistKill=$('noAssistKill');
   assistChoice.hidden=!assistSelecting;
   noAssistKill.disabled=!assistSelecting||saving||session.state.status==='ended';
@@ -893,7 +921,18 @@ function render() {
   });
   let hint;
   if (ui.mode === 'sub') hint = '<b>Sub:</b> tap the player coming out. <a href="#" id="cx">Cancel</a>';
-  else if (ui.mode === 'libero') hint = '<b>Libero:</b> tap the back-row player the libero replaces. <a href="#" id="cx">Cancel</a>';
+  else if (ui.mode === 'libero'&&ui.liberoOverrideSlot!=null) {
+    const slot=ui.liberoOverrideSlot,libero=ui.liberoChoicePlayer;
+    hint=`<b>Wait one rally before #${libero} re-enters.</b> Put her in for #${S.onCourt[slot]} anyway? <button type="button" class="libero-inline-choice confirm" id="liberoOverride">Override · libero in</button> <a href="#" id="cx">Cancel</a>`;
+  }
+  else if (ui.mode === 'libero'&&S.libero) {
+    const next=availableLiberoChoices(S.libero.player)[0];
+    hint=`<b>Libero:</b> tap #${S.libero.player} on court to send her out.${next!=null?` <button type="button" class="libero-inline-choice" id="liberoSwitch">Switch to #${next}</button>`:''} <a href="#" id="cx">Cancel</a>`;
+  }
+  else if (ui.mode === 'libero') {
+    const next=availableLiberoChoices(ui.liberoChoicePlayer)[0];
+    hint=`<b>Libero:</b> tap a back-row player for #${ui.liberoChoicePlayer}.${next!=null?` <button type="button" class="libero-inline-choice" id="liberoChoiceNext">Use #${next} instead</button>`:''} <a href="#" id="cx">Cancel</a>`;
+  }
   else if (ui.pendingPassRating !== null) hint = `<b>Pass score ${ui.pendingPassRating}</b> — tap the passer on court. <a href="#" id="cx">Cancel</a>`;
   else if (ui.pendingAssist) hint = '<b>Choose Assister</b> · tap a teammate or <a href="#" id="cx">Cancel</a>.';
   else if (ui.pendingCode) hint = `<b>${codeName(ui.pendingCode)}</b> — tap the player on the court${EARNED.includes(ui.pendingCode) ? '' : ', or Team'}. <a href="#" id="cx">Cancel</a>`;
@@ -901,6 +940,16 @@ function render() {
   else hint = '';
   $('hintUs').innerHTML = hint;
   const cx = $('cx'); if (cx) cx.onclick = e => { e.preventDefault(); clearUi(); };
+  const liberoChoiceNext=$('liberoChoiceNext');
+  if(liberoChoiceNext)liberoChoiceNext.onclick=()=>{
+    const next=availableLiberoChoices(ui.liberoChoicePlayer)[0];
+    if(next!=null)ui={...ui,liberoChoicePlayer:next,liberoOverrideSlot:null};
+    render();
+  };
+  const switchLibero=$('liberoSwitch');
+  if(switchLibero)switchLibero.onclick=()=>{const next=availableLiberoChoices(S.libero.player)[0];if(next!=null)void liberoSwitch(next);};
+  const overrideLibero=$('liberoOverride');
+  if(overrideLibero)overrideLibero.onclick=()=>{const slot=ui.liberoOverrideSlot,libero=ui.liberoChoicePlayer;if(slot!=null&&libero!=null)void liberoIn(slot,libero);};
   $('hintThem').innerHTML=serveTargetMode
     ? '<b>Receive Error:</b> tap the serve target zone on the opponent court. <a href="#" id="cxServeZone">Cancel</a>'
     : '';
@@ -911,9 +960,15 @@ function render() {
   $('actSub').classList.toggle('on', ui.mode === 'sub');
   $('actSub').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist);
   $('actTheirSub').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || session.state.status==='ended';
-  $('actLib').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || !LIBEROS.length;
+  $('actLib').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist)
+    || (!S.libero&&!availableLiberoChoices().length);
   $('actLib').classList.toggle('on', ui.mode === 'libero' || !!S.libero);
-  $('actLibSm').textContent = S.libero ? `#${S.libero.player} in for #${S.libero.replaced}` : `Off · plan: ${S.liberoFor === 'none' ? 'none' : PAIR_NAME[S.liberoFor]}`;
+  const rememberedTarget=S.lastLiberoSlot!=null&&!isFront(posOf(S.lastLiberoSlot))?S.onCourt[S.lastLiberoSlot]:null;
+  const rememberedChoice=rememberedTarget!=null?eligibleLiberoForSlot(S.lastLiberoSlot):null;
+  if(S.libero)$('actLibSm').textContent=`#${S.libero.player} in for #${S.libero.replaced}`;
+  else if(rememberedTarget!=null)$('actLibSm').textContent=rememberedChoice!=null
+    ? `Next #${rememberedChoice} · for #${rememberedTarget}` : `Last #${S.lastLiberoPlayer} · for #${rememberedTarget}`;
+  else $('actLibSm').textContent=S.lastLiberoPlayer!=null?`Last libero #${S.lastLiberoPlayer}`:'Off · choose on court';
   $('toUsBtn').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || !S.toUs; $('toThemBtn').disabled = timeoutMode || editingReceive || Boolean(ui.pendingAssist) || !S.toThem;
 
   // Log
@@ -988,7 +1043,7 @@ function render() {
     const yes = d.querySelector('.yes');
     if (yes) yes.onclick = () => {
       if (b.kind === 'swap') doSub(b.slot, b.in, null, true);
-      if (b.kind === 'libero') liberoIn(b.slot, LIBEROS[0]);
+      if (b.kind === 'libero') liberoIn(b.slot, b.libero);
       render();
     };
     bn.appendChild(d);
@@ -998,54 +1053,6 @@ function render() {
     for(const id of ['actSub','actTheirSub','actLib','toUsBtn','toThemBtn','teamBtn','editReceive']) $(id).disabled=true;
   }
 
-}
-
-/* ---------------- Libero plan: should she play, and for whom? ----------------
-   The libero only ever plays back row, so compare everyone on the same thing:
-   back-row passing/defense errors (Receive, Dig, Ball Handling) per back-row
-   rally, this season plus tonight. The pair with the worse rate gains the most. */
-// Demo only: season-to-date before tonight, [back-row rallies, errors there].
-const PAIR_NAME = {mid:'middles',oh:'outsides'};
-function plannedLiberoEntry() {
-  if(!S.liberoPlanChosen)return {warning:'No libero plan selected. Choose Middles or Outsides first.'};
-  if(S.liberoFor==='none')return {warning:'The current plan is “No libero”. Choose Middles or Outsides to put the libero in.'};
-  const slots=Object.keys(S.onCourt).filter(slot=>SLOTS[slot]?.role===S.liberoFor&&!isFront(posOf(Number(slot))));
-  if(slots.length!==1)return {warning:slots.length
-    ?`The current rotation has ${slots.length} back-row ${PAIR_NAME[S.liberoFor]} players. The libero entry needs exactly one.`
-    :`No back-row ${PAIR_NAME[S.liberoFor]} player is on court in this rotation.`};
-  const libero=LIBEROS.find(player=>player!==S.libero?.player&&ROSTER[player]?.available!==false);
-  if(libero==null)return {warning:'No designated libero is available to enter.'};
-  const slot=slots[0],jersey=S.onCourt[slot];
-  const payload={slotId:String(slot),outPlayerId:playerId(jersey),inPlayerId:playerId(libero)};
-  const check=checkCommand(session.record,{type:'libero.in',payload});
-  if(!check.allowed)return {warning:check.error.message};
-  return {slot:Number(slot),jersey,libero};
-}
-function openLiberoPlan() {
-  const other=LIBEROS.find(l=>l!==S.libero?.player);
-  const entry=S.libero?null:plannedLiberoEntry();
-  const chosen=S.liberoPlanChosen;
-  const planNote=!chosen
-    ?'No libero plan selected yet. Choose Middles or Outsides before putting the libero in.'
-    :'';
-  openSheet(`<h4>Libero plan</h4><p>${S.libero ? `#${S.libero.player} is in for #${S.libero.replaced}.` : 'Libero is off the court.'}</p>
-    <div class="lib-plan" role="group" aria-label="Choose the libero plan">${['mid','oh','none'].map(role=>{const selected=chosen&&S.liberoFor===role;return `<button type="button" class="pill libero-plan-choice" data-plan="${role}" aria-pressed="${selected}">${PAIR_NAME[role] || 'No libero'}</button>`;}).join('')}</div>
-    ${planNote?`<p class="libero-plan-note warning" role="status">${esc(planNote)}</p>`:''}
-    <div class="libero-actions${S.libero?' two':''}">${S.libero ? `<button type="button" id="libOut">Libero out</button><button type="button" id="libSw" ${other == null ? 'disabled' : ''}>Switch to #${other ?? '—'}</button>` : `<button type="button" id="libIn" ${entry?.slot==null?'disabled':''}>${entry?.slot==null?'Put libero in':`Put libero in for #${entry.jersey}`}</button>`}</div>
-    ${!S.libero&&chosen&&entry?.warning?`<p class="libero-plan-warning" role="alert">${esc(entry.warning)}</p>`:''}
-    <button class="cancel" id="shCancel">Close</button>`);
-  $('sheetCard').querySelectorAll('[data-plan]').forEach(b=>b.onclick=async()=>{
-    if(b.dataset.plan===S.liberoFor||saving)return;
-    if(await command('libero.plan',{role:b.dataset.plan},false))openLiberoPlan();
-  });
-  if(S.libero) { $('libOut').onclick=liberoOut; $('libSw').onclick=()=>liberoSwitch(other); }
-  else $('libIn').onclick=async()=>{
-    if(saving)return;
-    const target=plannedLiberoEntry();
-    if(target.slot==null){openLiberoPlan();return;}
-    const saved=await liberoIn(target.slot,target.libero);
-    if(!saved&&!document.body.classList.contains('failed'))openLiberoPlan();
-  };
 }
 
 /* ---------------- Form: recent performance by skill ----------------
@@ -1383,7 +1390,11 @@ function formMark(p,pos) {
 
 function canPick(pos, slot) {
   if (ui.pendingAssist) return slot !== ui.pendingAssist.hitterSlot;
-  if (ui.mode === 'libero') return !isFront(pos) && !(S.libero && S.libero.slot === slot);
+  if (ui.mode === 'libero') {
+    if(S.libero)return slot===S.libero.slot;
+    const check=liberoEntryCheck(slot,ui.liberoChoicePlayer);
+    return check.allowed||check.error?.code==='LIBERO_REENTRY';
+  }
   return true;
 }
 
@@ -1400,7 +1411,8 @@ function passRatingForCurrentPoint() {
 }
 
 function clearUi() { ui = { ...ui, pendingCode: null, pendingSlot: null, mode: null, pendingPassRating: null, pendingAttackResult:null,pendingAssist:null,
-  attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false }; render(); }
+  attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false,
+  liberoChoicePlayer:null,liberoOverrideSlot:null }; render(); }
 
 /* ---------------- Interaction ---------------- */
 function onCode(team, code) {
@@ -1435,9 +1447,20 @@ function onTile(pos, slot) {
   }
   if (ui.mode === 'sub') { ui.mode = null; openBench(slot); return; }
   if (ui.mode === 'libero') {
-    if (!canPick(pos, slot)) return;
-    const avail = LIBEROS.filter(l => !(S.libero && S.libero.player === l));
-    liberoIn(slot, avail[0]); render(); return;
+    if (!canPick(pos, slot)) {
+      if(!S.libero) {
+        const libero=ui.liberoChoicePlayer??preferredLiberoChoice();
+        const check=liberoEntryCheck(slot,libero);
+        if(check.error?.message)status(check.error.message,true);
+      }
+      return;
+    }
+    if(S.libero) { if(slot===S.libero.slot)void liberoOut(); return; }
+    const libero=ui.liberoChoicePlayer??preferredLiberoChoice();
+    const check=liberoEntryCheck(slot,libero);
+    if(check.allowed) { void liberoIn(slot,libero); return; }
+    if(check.error?.code==='LIBERO_REENTRY') { ui={...ui,liberoOverrideSlot:Number(slot)};render();return; }
+    status(check.error?.message||'That libero entry is unavailable.',true);return;
   }
   if (ui.pendingPassRating !== null) {
     const rosterId=playerId(S.onCourt[slot]);
@@ -1652,16 +1675,17 @@ $('actSub').onclick = () => { ui = { ...ui, pendingCode: null, pendingSlot: null
 $('actTheirSub').onclick = () => { clearUi(); openOpponentSub(); };
 
 $('actLib').onclick = () => {
-  if (ui.mode === 'libero') { ui = { ...ui, mode: null, pendingPassRating: null }; render(); return; }
-  ui={...ui,pendingCode:null,pendingSlot:null,mode:null,pendingPassRating:null,pendingAttackResult:null,
-    attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false};
-  openLiberoPlan();
+  if (ui.mode === 'libero') { clearUi(); return; }
+  ui={...ui,pendingCode:null,pendingSlot:null,mode:'libero',pendingPassRating:null,pendingAttackResult:null,
+    attackPlayerSlot:null,attackTargetZone:null,themAttackResult:null,themAttackSourceZone:null,themAttackTargetZone:null,pendingServeZone:false,
+    liberoChoicePlayer:S.libero?null:preferredLiberoChoice(),liberoOverrideSlot:null};
+  render();
 };
 
 function callTimeout(team) { return command('timeout', {team}); }
 const TEAM_MENU = [
   ['rotation-report', 'Rotation report', "The paper sheet’s six columns, with +/- per rotation"],
-  ['lineup', 'Lineup', "This set’s lineup, planned swaps and libero plan"],
+  ['lineup', 'Lineup', "This set’s lineup, current court, and libero replacements"],
   ['edit-rallies', 'Edit rallies', 'Fix or delete any logged rally'],
   ['fix-score', 'Fix score / rotation / server', 'Match the official scoresheet'],
   ['match-summary', 'Match summary', 'Set scores, key stats, rotation tables'],
@@ -1731,7 +1755,6 @@ const menuContext = {
   open: (html, wide) => openSheet(html, wide), close: () => closeSheet(),
   command: (type, payload) => command(type, payload), check: cmd => checkCommand(session.record, cmd),
   openLineupSetup: () => { void openCurrentSetLineupSetup(); },
-  openLiberoPlan: () => openLiberoPlan(),
   settings: () => ({...SETTINGS}), saveSettings: next => { SETTINGS = next; saveSettings(next); applySettings(); render(); },
 };
 function applySettings() {
@@ -1767,7 +1790,7 @@ function openOpponentSub() {
 
 function openBench(slot, override) {
   const out = S.onCourt[slot];
-  if (S.libero && S.libero.slot === slot) { openLiberoPlan(); return; }
+  if (S.libero && S.libero.slot === slot) { void liberoOut(); return; }
   const onCourt = new Set(Object.values(S.onCourt));
   const bench = Object.keys(ROSTER).map(Number)
     .filter(p => ROSTER[p].available && !onCourt.has(p) && !LIBEROS.includes(p) && !(S.libero && S.libero.replaced === p))
