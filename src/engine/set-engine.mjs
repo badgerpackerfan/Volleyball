@@ -15,7 +15,7 @@ const POSITIONS = [1, 2, 3, 4, 5, 6];
 const BACK = [5, 6, 1];
 const FRONT = [4, 3, 2];
 const TYPES = new Set(['rally', 'substitution', 'libero.in', 'libero.out',
-  'libero.switch', 'timeout', 'set.end', 'undo', 'receive.edit', 'receive.select', 'receive.rating', 'attack.attempt', 'libero.plan',
+  'libero.switch', 'libero.defense-position', 'timeout', 'set.end', 'undo', 'receive.edit', 'receive.select', 'receive.rating', 'attack.attempt', 'libero.plan',
   'opponent.substitution', 'rally.edit', 'correction']);
 // Historical edits and scoresheet corrections are allowed after the set has ended.
 const AFTER_END = new Set(['undo', 'rally.edit', 'correction']);
@@ -132,6 +132,9 @@ function normalizeConfig(input) {
   unique(c.liberos, 'Liberos'); c.liberos.forEach(p => available(c, p));
   requireThat(!c.slots.some(s => c.liberos.includes(s.playerId)), 'INVALID_LIBEROS',
     'Start with six regular players; enter the libero with a separate action.');
+  c.liberoBaseDefenseSpot ??= 'middle';
+  requireThat(['left','middle','right'].includes(c.liberoBaseDefenseSpot), 'INVALID_LIBERO_DEFENSE_POSITION',
+    'The libero base-defense position must be left, middle, or right.');
   const slotPlayers = new Map();
   for (const s of c.slots) {
     const ids = new Set([s.playerId]);
@@ -184,6 +187,8 @@ function initialState(c) {
     libero: null, lastLiberoExit: Object.fromEntries(c.liberos.map(p => [p, null])),
     rallies: [], attackAttempts: [], substitutions: [], opponentSubstitutions: [], liberoReplacements: [], timeouts: [], overrides: [], corrections: [],
     pendingSetWinner: null, winner: null, receiveEdits: {}, receivePasser: null, receiveRatings: [], liberoFor: 'mid',
+    liberoBaseDefenseSpot: c.liberoBaseDefenseSpot,
+    liberoDefenseAssignments: null, liberoDefenseAssignmentRotation: null, liberoDefenseAssignmentRotationCount: null,
   };
 }
 function winnerAt(score, rules) {
@@ -329,6 +334,9 @@ function removeLibero(s, a, reason) {
   s.lastLiberoExit[replacement.playerId] = s.rallies.length;
   s.liberoReplacements.push({ ...context(s, a), type: 'out', ...replacement, reason });
   s.libero = null;
+  s.liberoDefenseAssignments = null;
+  s.liberoDefenseAssignmentRotation = null;
+  s.liberoDefenseAssignmentRotationCount = null;
 }
 function applyLibero(c, s, a) {
   const p = a.payload;
@@ -418,6 +426,26 @@ function apply(c, state, action) {
       requireThat(['mid', 'oh', 'none'].includes(action.payload.role), 'INVALID_PLAN', 'Choose middles, outsides, or no libero.');
       state.liberoFor = action.payload.role;
       break;
+    case 'libero.defense-position': {
+      requireThat(state.libero !== null, 'LIBERO_NOT_ACTIVE', 'Enter a libero before changing her base-defense position.');
+      requireThat(['left','middle','right'].includes(action.payload.position), 'INVALID_LIBERO_DEFENSE_POSITION',
+        'Choose left back, middle back, or right back.');
+      object(action.payload.assignments,'Libero defense assignments');
+      const backSlots=BACK.map(position=>state.order[position-1]);
+      const assignmentSlots=Object.keys(action.payload.assignments);
+      const assignmentPositions=Object.values(action.payload.assignments);
+      requireThat(assignmentSlots.length===3&&backSlots.every(slotId=>own(action.payload.assignments,slotId))
+        &&assignmentPositions.length===3&&new Set(assignmentPositions).size===3
+        &&['left','middle','right'].every(position=>assignmentPositions.includes(position)),
+        'INVALID_LIBERO_DEFENSE_POSITION','Assign each back-row player to a different defensive spot.');
+      requireThat(action.payload.assignments[state.libero.slotId]===action.payload.position,
+        'INVALID_LIBERO_DEFENSE_POSITION','The libero must occupy the selected defensive spot.');
+      state.liberoBaseDefenseSpot = action.payload.position;
+      state.liberoDefenseAssignments = json(action.payload.assignments);
+      state.liberoDefenseAssignmentRotation = state.rotation;
+      state.liberoDefenseAssignmentRotationCount = state.rotations;
+      break;
+    }
     case 'rally': applyRally(c, state, action); break;
     case 'substitution': applySubstitution(c, state, action); break;
     case 'opponent.substitution': applyOpponentSubstitution(state, action); break;
